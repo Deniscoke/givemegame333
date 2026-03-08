@@ -1,0 +1,199 @@
+{
+  "meta": {
+    "nazev": "Rámcový vzdělávací program pro základní vzdělávání",
+    "zkratka": "RVP ZV",
+    "vydal": "MŠMT ČR",
+    "verze": "2024",
+    "popis": "Strukturovaná mapa klíčových kompetencí a vzdělávacích oblastí dle RVP ZV pro mapování herních aktivit."
+  },
+
+  "stupne": {
+    "prvni": {
+      "nazev": "1. stupeň ZŠ",
+      "rocniky": [1, 2, 3, 4, 5],
+      "vek": { "min": 6, "max": 11 }
+    },
+    "druhy": {
+      "nazev": "2. stupeň ZŠ",
+      "rocniky": [6, 7, 8, 9],
+      "vek": { "min": 11, "max": 15 }
+    }
+  },
+
+  "kompetence": {
+    "k-uceni": {
+      "nazev": "Kompetence k učení",
+      "ikona": "bi-book",
+      "barva": "#4A90D9",
+      "popis": "Žák vyhledává informace, organizuje vlastní učení a hodnotí výsledky své práce.",
+      "indikatory": [
+        "Vyhledává a třídí informace",
+        "Organizuje vlastní učení",
+        "Hodnotí výsledky své práce",
+        "Propojuje poznatky z různých oblastí",
+        "Experimentuje a vyvozuje závěry"
+      ]
+    },
+    "k-reseni-problemu": {
+      "nazev": "Kompetence k řešení problémů",
+      "ikona": "bi-puzzle",
+      "barva": "#E8A838",
+      "popis": "Žák identifikuje problém, navrhuje řešení a analyzuje důsledky.",
+      "indikatory": [
+        "Rozpozná a pojmenuje problém",
+        "Navrhuje způsoby řešení",
+        "Volí vhodné postupy",
+        "Ověřuje správnost řešení",
+        "Kriticky myslí a činí uvážlivá rozhodnutí"
+      ]
+    },
+    "komunikativni": {
+      "nazev": "Kompetence komunikativní",
+      "ikona": "bi-chat-dots",
+      "barva": "#50C878",
+      "popis": "Žák vyjadřuje myšlenky, diskutuje a argumentuje.",
+      "indikatory": [
+        "Formuluje a vyjadřuje své myšlenky",
+        "Naslouchá druhým",
+        "Zapojuje se do diskuse",
+        "Využívá různé formy komunikace",
+        "Argumentuje a obhajuje svůj názor"
+      ]
+    },
+    "socialni-personalni": {
+      "nazev": "Kompetence sociální a personální",
+      "ikona": "bi-people",
+      "barva": "#DA70D6",
+      "popis": "Žák spolupracuje, respektuje ostatní a buduje zdravé vztahy.",
+      "indikatory": [
+        "Účinně spolupracuje ve skupině",
+        "Přispívá k diskusi v malé skupině",
+        "Respektuje různé názory",
+        "Ovládá a řídí své jednání",
+        "Vytváří pozitivní atmosféru v týmu"
+      ]
+    },
+    "obcanske": {
+      "nazev": "Kompetence občanské",
+      "ikona": "bi-flag",
+      "barva": "#FF6B6B",
+      "popis": "Žák respektuje zákony, chápe společenské hodnoty a chová se zodpovědně.",
+      "indikatory": [
+        "Respektuje přesvědčení druhých",
+        "Chápe základní principy demokracie",
+        "Zodpovědně se chová v krizových situacích",
+        "Respektuje kulturní rozdíly",
+        "Chrání životní prostředí"
+      ]
+    },
+    "pracovni": {
+      "nazev": "Kompetence pracovní",
+      "ikona": "bi-tools",
+      "barva": "#8B7355",
+      "popis": "Žák plánuje práci, dodržuje bezpečnost a rozvíjí pracovní návyky.",
+      "indikatory": [
+        "Používá bezpečně materiály a nástroje",
+        "Plánuje a organizuje práci",
+        "Adaptuje se na změněné podmínky",
+        "Využívá znalosti v běžné praxi",
+        "Přistupuje k práci zodpovědně"
+      ]
+    },
+    "digitalni": {
+      "nazev": "Digitální kompetence",
+      "ikona": "bi-laptop",
+      "barva": "#17A2B8",
+      "popis": "Žák ovládá digitální technologie, pracuje s informacemi a tvoří digitální obsah.",
+      "indikatory": [
+        "Ovládá běžné digitální technologie",
+        "Vyhledává a kriticky hodnotí informace",
+        "Tvoří digitální obsah",
+        "Komunikuje bezpečně online",
+        "Řeší problémy s využitím technologií"
+      ]
+    }
+  },
+
+  "vzdelavaci_oblasti": {
+    "jazyk": {
+      "nazev": "Jazyk a jazyková komunikace",
+      "ikona": "bi-translate",
+      "barva": "#4A90D9",
+      "predmety": ["Český jazyk a literatura", "Cizí jazyk"]
+    },
+    "matematika": {
+      "nazev": "Matematika a její aplikace",
+      "ikona": "bi-calculator",
+      "barva": "#E8A838",
+      "predmety": ["Matematika"]
+    },
+    "ict": {
+      "nazev": "Informatika",
+      "ikona": "bi-laptop",
+      "barva": "#17A2B8",
+      "predmety": ["Informatika"]
+    },
+    "clovek-svet": {
+      "nazev": "Člověk a jeho svět",
+      "ikona": "bi-globe-europe-africa",
+      "barva": "#50C878",
+      "predmety": ["Prvouka", "Přírodověda", "Vlastivěda"],
+      "stupen": "prvni"
+    },
+    "clovek-spolecnost": {
+      "nazev": "Člověk a společnost",
+      "ikona": "bi-bank",
+      "barva": "#8B7355",
+      "predmety": ["Dějepis", "Výchova k občanství"]
+    },
+    "clovek-priroda": {
+      "nazev": "Člověk a příroda",
+      "ikona": "bi-tree",
+      "barva": "#228B22",
+      "predmety": ["Fyzika", "Chemie", "Přírodopis", "Zeměpis"]
+    },
+    "umeni-kultura": {
+      "nazev": "Umění a kultura",
+      "ikona": "bi-palette",
+      "barva": "#DA70D6",
+      "predmety": ["Hudební výchova", "Výtvarná výchova"]
+    },
+    "clovek-zdravi": {
+      "nazev": "Člověk a zdraví",
+      "ikona": "bi-heart-pulse",
+      "barva": "#FF6B6B",
+      "predmety": ["Výchova ke zdraví", "Tělesná výchova"]
+    },
+    "clovek-prace": {
+      "nazev": "Člověk a svět práce",
+      "ikona": "bi-tools",
+      "barva": "#CD853F",
+      "predmety": ["Pracovní činnosti"]
+    }
+  },
+
+  "prurezova_temata": {
+    "osobnostni-vychova": "Osobnostní a sociální výchova",
+    "demokraticke-obcanstvi": "Výchova demokratického občana",
+    "mysleni-eu": "Výchova k myšlení v evropských a globálních souvislostech",
+    "multikulturni": "Multikulturní výchova",
+    "environmentalni": "Environmentální výchova",
+    "medialni": "Mediální výchova"
+  },
+
+  "hodnoceni": {
+    "typy": [
+      { "id": "znamky", "nazev": "Klasifikace (známky 1–5)" },
+      { "id": "slovni", "nazev": "Slovní hodnocení" },
+      { "id": "portfolio", "nazev": "Portfolio žáka" },
+      { "id": "sebahodnoceni", "nazev": "Sebehodnocení" },
+      { "id": "vrstevnicke", "nazev": "Vrstevnické hodnocení" }
+    ],
+    "principy": [
+      "Hodnocení podporuje učení",
+      "Poskytuje konstruktivní zpětnou vazbu",
+      "Hodnotí proces i výsledek",
+      "Respektuje individuální tempo žáka"
+    ]
+  }
+}

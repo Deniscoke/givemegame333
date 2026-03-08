@@ -1,0 +1,402 @@
+[
+  {
+    "id": "game-001",
+    "title": "Stínová honěná štafeta",
+    "pitch": "Rychlá venkovní hra, kde hráči mohou být chyceni pouze tehdy, když se jejich stín dotýká země — mraky se stanou vaším nejlepším přítelem!",
+    "playerCount": { "min": 6, "max": 30 },
+    "ageRange": { "min": 6, "max": 12 },
+    "duration": { "min": 15, "max": 30 },
+    "setting": "outdoor",
+    "materials": ["kužely nebo značky pro hranice", "stopky", "barevné rozlišováky (volitelné)"],
+    "instructions": [
+      "Vyznačte velký obdélníkový hrací prostor kužely.",
+      "Vyberte 2 hráče jako „Lovce stínů" — nosí barevné rozlišováky.",
+      "Všichni ostatní hráči jsou „Běžci".",
+      "Lovci stínů mohou chytit Běžce pouze tak, že šlápnou na jejich stín.",
+      "Pokud je Běžec chycen, stojí na místě a počítá do 10, poté se vrací do hry.",
+      "Každé 3 minuty se Lovci stínů vymění.",
+      "Hráč, který byl chycen nejméněkrát, vyhrává."
+    ],
+    "learningGoals": ["prostorová orientace", "strategické myšlení", "kardiovaskulární zdatnost", "pochopení světla a stínů"],
+    "reflectionPrompts": [
+      "Jak poloha slunce ovlivnila vaši strategii?",
+      "Co jste si všimli ohledně délky stínu v různou denní dobu?",
+      "Jak vám týmová spolupráce pomohla vyhnout se chycení?"
+    ],
+    "safetyNotes": ["Zajistěte rovný terén bez překážek", "Vyhněte se hraní v extrémním horku — stíny jsou nejkratší v poledne", "Mějte k dispozici vodu"],
+    "adaptationTips": ["Pro mladší hráče zvětšete hrací prostor", "Přidejte „bezpečné zóny" označené stínem pro přístupnost", "Vnitřní varianta: použijte baterky v přítmí"],
+    "facilitatorNotes": "Tato hra přirozeně učí přírodovědné koncepty o světle a stínech. Použijte reflexní otázky k propojení fyzické aktivity s výukou o poloze slunce a tvorbě stínů.",
+    "rvp": {
+      "kompetence": ["k-uceni", "k-reseni-problemu", "socialni-personalni", "pracovni"],
+      "oblasti": ["clovek-zdravi", "clovek-priroda", "clovek-svet"],
+      "stupen": ["prvni", "druhy"],
+      "prurezova_temata": ["osobnostni-vychova"],
+      "ocekavane_vystupy": [
+        "Žák využívá poznatky o světle a stínu v praxi",
+        "Žák rozvíjí pohybové dovednosti a vytrvalost",
+        "Žák spolupracuje v týmu a dodržuje pravidla"
+      ],
+      "doporucene_hodnoceni": ["slovni", "sebahodnoceni"]
+    }
+  },
+  {
+    "id": "game-002",
+    "title": "Stavitelé příběhů",
+    "pitch": "Týmy hází velkou pěnovou kostkou pokrytou příběhovými prvky a závodí, kdo vytvoří nejkreativnější společný příběh — představivost se potkává s improvizací!",
+    "playerCount": { "min": 4, "max": 20 },
+    "ageRange": { "min": 8, "max": 14 },
+    "duration": { "min": 20, "max": 40 },
+    "setting": "indoor",
+    "materials": ["3 velké pěnové kostky s příběhovými nápovědami na každé straně", "papír a tužky pro každý tým", "časovač", "tabule na skóre"],
+    "instructions": [
+      "Rozdělte hráče do týmů po 3–5.",
+      "Každé kolo jeden člen týmu hodí všemi 3 kostkami.",
+      "Kostky ukazují: POSTAVA (hrdina, záporák, zvíře...), PROSTŘEDÍ (les, vesmírná loď, škola...), PROBLÉM (ztracený poklad, rozbitý most, záhada...).",
+      "Týmy mají 3 minuty na vytvoření krátkého příběhu s využitím všech 3 prvků.",
+      "Jeden člen týmu představí příběh ostatním.",
+      "Ostatní týmy hlasují (nemohou hlasovat pro vlastní tým) o kreativitě, humoru a soudržnosti.",
+      "Odehrajte 3–5 kol. Nejvyšší celkové skóre vyhrává."
+    ],
+    "learningGoals": ["tvůrčí psaní", "veřejné vystupování", "spolupráce", "narativní struktura"],
+    "reflectionPrompts": [
+      "Který příběhový prvek bylo nejtěžší zahrnout? Proč?",
+      "Jak se váš tým dohodl na směru příběhu?",
+      "Co dělá příběh zajímavým pro posluchače?"
+    ],
+    "safetyNotes": ["Zajistěte, aby pěnové kostky byly dostatečně měkké pro vnitřní použití", "Stanovte pravidla respektujícího naslouchání před začátkem"],
+    "adaptationTips": ["Pro mladší hráče použijte obrázkové kostky místo slov", "Přidejte 4. kostku s prvky „zvratu" pro pokročilé skupiny", "Umožněte kreslení místo psaní pro vizuální typy"],
+    "facilitatorNotes": "Zdůrazněte, že neexistují špatné příběhy. Cílem je kreativní vyjadřování, ne dokonalost. Zvažte vystavení napsaných příběhů na třídní „stěně příběhů" po skončení hry.",
+    "rvp": {
+      "kompetence": ["komunikativni", "k-uceni", "socialni-personalni", "k-reseni-problemu"],
+      "oblasti": ["jazyk", "umeni-kultura"],
+      "stupen": ["prvni", "druhy"],
+      "prurezova_temata": ["osobnostni-vychova", "medialni"],
+      "ocekavane_vystupy": [
+        "Žák tvoří vlastní literární text na dané téma",
+        "Žák prezentuje svou práci před skupinou",
+        "Žák spolupracuje na společném tvůrčím projektu"
+      ],
+      "doporucene_hodnoceni": ["slovni", "vrstevnicke", "portfolio"]
+    }
+  },
+  {
+    "id": "game-003",
+    "title": "Únik z ekosystému",
+    "pitch": "Kooperativní logická hra, kde hráči musí vyvážit virtuální ekosystém rozhodováním o potravních řetězcích, počasí a lidském dopadu, než vyprší čas.",
+    "playerCount": { "min": 3, "max": 8 },
+    "ageRange": { "min": 10, "max": 16 },
+    "duration": { "min": 30, "max": 60 },
+    "setting": "indoor",
+    "materials": ["herní deska ekosystému (tištěná nebo nakreslená)", "karty druhů (30 karet)", "karty událostí (20 karet)", "žetony populace", "časovač", "záznamy rozhodnutí"],
+    "instructions": [
+      "Připravte herní desku ekosystému s počátečními druhy a žetony populace.",
+      "Každé kolo představuje jedno „roční období" — vytáhněte kartu události (sucho, nový predátor, lidský zásah atd.).",
+      "Hráči diskutují a hlasují o společné reakci pomocí dostupných karet akcí.",
+      "Upravte žetony populace podle pravidel ekosystému.",
+      "Pokud vyhynou 3 jakékoliv druhy, tým prohrává.",
+      "Přežijte 8 ročních období (2 celé roky) a vyhráváte.",
+      "Zaznamenejte všechna rozhodnutí do záznamu pro reflexi."
+    ],
+    "learningGoals": ["systémové myšlení", "ekologická gramotnost", "příčiny a důsledky", "společné rozhodování"],
+    "reflectionPrompts": [
+      "Která rozhodnutí měla nečekané důsledky?",
+      "Jak tato hra souvisí s reálnými environmentálními výzvami?",
+      "Co byste udělali jinak, kdybyste hráli znovu?"
+    ],
+    "safetyNotes": ["Žádná fyzická bezpečnostní rizika — jde o stolní hru", "Buďte citliví k eko-úzkosti: problémy rámujte jako řešitelné"],
+    "adaptationTips": ["Zjednodušte potravní řetězec pro mladší hráče", "Přidejte karty ekonomického dopadu pro starší žáky", "Vytvořte verze specifické pro biomy (oceán, poušť, deštný prales)"],
+    "facilitatorNotes": "Tato hra výborně funguje jako vícesezónní projekt. Nechte žáky prozkoumat reálné ekosystémy před hraním, pak porovnejte jejich herní rozhodnutí s reálnými ochranářskými snahami.",
+    "rvp": {
+      "kompetence": ["k-reseni-problemu", "k-uceni", "komunikativni", "obcanske"],
+      "oblasti": ["clovek-priroda", "clovek-svet", "clovek-spolecnost"],
+      "stupen": ["druhy"],
+      "prurezova_temata": ["environmentalni", "osobnostni-vychova", "demokraticke-obcanstvi"],
+      "ocekavane_vystupy": [
+        "Žák vysvětlí základní vztahy v ekosystému",
+        "Žák posoudí vliv lidské činnosti na životní prostředí",
+        "Žák navrhne řešení environmentálního problému"
+      ],
+      "doporucene_hodnoceni": ["slovni", "portfolio", "sebahodnoceni"]
+    }
+  },
+  {
+    "id": "game-004",
+    "title": "Závod lidských kalkulaček",
+    "pitch": "Dynamická štafeta, kde týmy řeší matematické příklady svým tělem — doslova se stávají čísly a operacemi!",
+    "playerCount": { "min": 10, "max": 30 },
+    "ageRange": { "min": 7, "max": 12 },
+    "duration": { "min": 20, "max": 35 },
+    "setting": "outdoor",
+    "materials": ["velké karty s čísly (0–9, dvě sady)", "karty operací (+, -, ×)", "karta rovnítka", "značky pro zónu odpovědí", "píšťalka"],
+    "instructions": [
+      "Každý tým dostane kompletní sadu číselných karet (0–9) a karet operací.",
+      "Vedoucí vyhlásí výsledek matematického příkladu (např. „Ukažte mi 24!").",
+      "Týmy musí sestavit své lidské držitele karet, aby vytvořili platnou rovnici rovnající se danému číslu (např. 3 × 8 = 24).",
+      "Tým, který jako první správně sestaví rovnici, získává bod.",
+      "Hráči držící karty musí stát ve správném pořadí v zóně odpovědí.",
+      "Odehrajte 10 kol se stoupající obtížností.",
+      "Bonusové body za nalezení více platných rovnic."
+    ],
+    "learningGoals": ["počítání zpaměti", "číselný smysl", "týmová práce pod tlakem", "hledání více řešení"],
+    "reflectionPrompts": [
+      "Jaké strategie si váš tým postupně vyvinul?",
+      "Bylo snazší vymyslet řešení se sčítáním nebo násobením? Proč?",
+      "Jak komunikace pomohla vašemu týmu být rychlejší?"
+    ],
+    "safetyNotes": ["Zajistěte volné běžecké dráhy", "Pokud možno, hrajte na měkkém povrchu nebo trávě", "Sledujte srážky při nadšení"],
+    "adaptationTips": ["Pro mladší děti použijte pouze sčítání a odčítání", "Pro pokročilé skupiny přidejte zlomky nebo mocniny", "Sedavá verze: hráči drží karty u lavic pro třídu"],
+    "facilitatorNotes": "Začněte s jednoduššími cíli (jednociferné výsledky) a zvyšujte složitost. Fyzický pohyb pomáhá kinestetickým žákům zapojit se do abstraktních matematických konceptů. Udržujte energii vysokou s odpočítáváním!",
+    "rvp": {
+      "kompetence": ["k-uceni", "k-reseni-problemu", "socialni-personalni", "pracovni"],
+      "oblasti": ["matematika", "clovek-zdravi"],
+      "stupen": ["prvni", "druhy"],
+      "prurezova_temata": ["osobnostni-vychova"],
+      "ocekavane_vystupy": [
+        "Žák provádí početní operace zpaměti",
+        "Žák hledá různá řešení matematického problému",
+        "Žák spolupracuje v týmu při řešení úloh"
+      ],
+      "doporucene_hodnoceni": ["slovni", "sebahodnoceni"]
+    }
+  },
+  {
+    "id": "game-005",
+    "title": "Kompas pocitů",
+    "pitch": "Reflexní kruhová hra, kde hráči navigují emocionální situace pomocí velkého podlahového kompasu — sever pro radost, jih pro smutek, východ pro nadšení, západ pro klid.",
+    "playerCount": { "min": 5, "max": 15 },
+    "ageRange": { "min": 5, "max": 10 },
+    "duration": { "min": 15, "max": 25 },
+    "setting": "indoor",
+    "materials": ["velký podlahový kompas (z pásky nebo vytištěný)", "kartičky situací (30+)", "plakát se slovníkem pocitů", "tichá hudba na pozadí (volitelné)"],
+    "instructions": [
+      "Vytvořte velký kompas na podlaze pomocí pásky: S=Radost, J=Smutek, V=Nadšení, Z=Klid.",
+      "Hráči stojí ve středu kompasu.",
+      "Přečtěte kartičku situace (např. „Tvůj nejlepší kamarád se stěhuje do jiného města").",
+      "Každý hráč se přesune směrem, který odpovídá jeho pocitu.",
+      "Hráči stojící na podobných místech mohou sdílet, proč se tak cítí.",
+      "Zdůrazněte: NEEXISTUJÍ špatné odpovědi — pocity jsou osobní.",
+      "Po sdílení se všichni vrátí do středu pro další situaci."
+    ],
+    "learningGoals": ["emoční gramotnost", "rozvoj empatie", "sebeuvědomění", "respektující komunikace"],
+    "reflectionPrompts": [
+      "Překvapila vás nějaká situace tím, jak jste se cítili?",
+      "Všimli jste si, že ostatní cítili jinak ohledně stejné věci?",
+      "Jak nám porozumění vlastním pocitům pomáhá v každodenním životě?"
+    ],
+    "safetyNotes": ["Vytvořte bezpečné prostředí bez posuzování", "Umožněte hráčům „přeskočit" jakoukoli situaci", "Mějte k dispozici klidné místo pro kohokoli, kdo potřebuje pauzu"],
+    "adaptationTips": ["Přidejte SV/SZ/JV/JZ pro smíšené pocity u starších dětí", "Použijte obrázkové situace pro předčtenáře", "Kombinujte s psaním deníku pro hlubší reflexi"],
+    "facilitatorNotes": "Tato hra vyžaduje důvěrné skupinové prostředí. Zvažte zahřívací aktivitu předem. Ukažte vlastní zranitelnost sdílením svých pocitů u první situace. Vždy validujte všechny emocionální reakce.",
+    "rvp": {
+      "kompetence": ["socialni-personalni", "komunikativni", "obcanske"],
+      "oblasti": ["clovek-zdravi", "clovek-svet"],
+      "stupen": ["prvni"],
+      "prurezova_temata": ["osobnostni-vychova", "multikulturni"],
+      "ocekavane_vystupy": [
+        "Žák pojmenuje a rozlišuje základní emoce",
+        "Žák respektuje odlišné pocity druhých",
+        "Žák vyjádří vlastní pocity vhodným způsobem"
+      ],
+      "doporucene_hodnoceni": ["slovni", "sebahodnoceni"]
+    }
+  },
+  {
+    "id": "game-006",
+    "title": "Architekti pokladových map",
+    "pitch": "Týmy navrhují a tvoří skutečné mapy pokladů pro sebe navzájem a kombinují geometrii, kompasové směry a kreativní řešení problémů do epické venkovní výpravy!",
+    "playerCount": { "min": 6, "max": 24 },
+    "ageRange": { "min": 8, "max": 13 },
+    "duration": { "min": 40, "max": 60 },
+    "setting": "outdoor",
+    "materials": ["velké archy papíru", "barevné fixy", "kompasy (jeden na tým)", "malé poklady nebo žetony k ukrytí", "měřicí pásmo", "podložka na psaní pro každý tým"],
+    "instructions": [
+      "Rozdělte se do týmů po 3–6 hráčích.",
+      "Fáze 1 (15 min): Každý tým ukryje svůj „poklad" někde v hracím prostoru a vytvoří podrobnou mapu.",
+      "Mapy musí obsahovat: kompasovou růžici, alespoň 3 orientační body, měřítko a 5+ směrových indicií.",
+      "Fáze 2: Týmy si vymění mapy s jiným týmem.",
+      "Fáze 3 (20 min): Týmy podle přijaté mapy hledají ukrytý poklad.",
+      "Boduje se: kvalita mapy (hodnocení ostatními), čas nalezení pokladu a kreativní design indicií.",
+      "Společný rozbor srovnávající strategie tvorby map."
+    ],
+    "learningGoals": ["základy kartografie", "prostorové uvažování", "navigace s kompasem", "technická komunikace"],
+    "reflectionPrompts": [
+      "Co dělalo některé mapy snáze sledovatelnými než jiné?",
+      "Jak je tvorba map podobná dávání ústních pokynů?",
+      "Co byste na svém návrhu mapy zlepšili?"
+    ],
+    "safetyNotes": ["Definujte jasné hranice hracího prostoru", "Zajistěte dozor dospělých po celém prostoru", "Upozorněte na zakázané zóny"],
+    "adaptationTips": ["Pro mladší hráče předkreslete základní mapy a nechte je přidat indicie", "Přidejte GPS souřadnice pro technologicky zdatné skupiny", "Vnitřní verze: použijte třídu nebo školní chodby"],
+    "facilitatorNotes": "Tato hra má přirozené propojení na zeměpis, matematiku (měřítko/měření) a výtvarnou výchovu. Zvažte fotografování map pro třídní nástěnku nebo digitální portfolio. Fáze tvorby mapy je stejně vzdělávací jako samotný hon za pokladem.",
+    "rvp": {
+      "kompetence": ["k-uceni", "k-reseni-problemu", "komunikativni", "pracovni"],
+      "oblasti": ["matematika", "clovek-svet", "clovek-priroda", "umeni-kultura"],
+      "stupen": ["prvni", "druhy"],
+      "prurezova_temata": ["osobnostni-vychova", "environmentalni"],
+      "ocekavane_vystupy": [
+        "Žák vytvoří jednoduchou mapu s měřítkem a legendou",
+        "Žák se orientuje podle kompasu a mapy",
+        "Žák spolupracuje na tvůrčím projektu"
+      ],
+      "doporucene_hodnoceni": ["slovni", "vrstevnicke", "portfolio"]
+    }
+  },
+  {
+    "id": "game-007",
+    "title": "Slovní řetěz bojovníků",
+    "pitch": "Rychlá jazyková hra, kde týmy tvoří co nejdelší řetězy slov — každé nové slovo musí začínat posledním písmenem předchozího!",
+    "playerCount": { "min": 4, "max": 20 },
+    "ageRange": { "min": 7, "max": 13 },
+    "duration": { "min": 10, "max": 20 },
+    "setting": "indoor",
+    "materials": ["tabule nebo velký papír", "fixy", "časovač", "kartičky s tématy (volitelné)"],
+    "instructions": [
+      "Rozdělte hráče do 2–4 týmů.",
+      "Vedoucí vylosuje téma kola (např. „zvířata", „jídlo", „města").",
+      "Každý tým má 2 minuty na zapsání co nejdelšího řetězu slov na dané téma.",
+      "Každé slovo musí začínat posledním písmenem předchozího (např. pes → slon → nosorožec).",
+      "Opakování slov je zakázáno.",
+      "Za každé správné slovo v řetězu tým získá 1 bod.",
+      "Bonusový bod za slova delší než 8 písmen.",
+      "Odehrajte 5 kol s různými tématy."
+    ],
+    "learningGoals": ["slovní zásoba", "pravopis", "rychlé myšlení", "kategorizace"],
+    "reflectionPrompts": [
+      "Která kategorie byla nejtěžší? Proč?",
+      "Jak jste se v týmu rozhodovali o dalším slově?",
+      "Objevili jste nějaká nová slova, která jste předtím neznali?"
+    ],
+    "safetyNotes": ["Stanovte pravidla slušného vyjadřování", "Podporujte pozitivní atmosféru"],
+    "adaptationTips": ["Pro mladší děti vynechte omezení tématem", "Pro pokročilé: slova musí mít alespoň 5 písmen", "Anglická verze pro hodiny cizího jazyka"],
+    "facilitatorNotes": "Výborná zahřívací aktivita na začátek hodiny. Podporuje automatizaci pravopisu a rozšiřování slovní zásoby přirozenou, hravou formou.",
+    "rvp": {
+      "kompetence": ["komunikativni", "k-uceni", "socialni-personalni"],
+      "oblasti": ["jazyk"],
+      "stupen": ["prvni", "druhy"],
+      "prurezova_temata": ["osobnostni-vychova"],
+      "ocekavane_vystupy": [
+        "Žák aktivně rozšiřuje svou slovní zásobu",
+        "Žák správně používá pravopis českých slov",
+        "Žák spolupracuje s ostatními při plnění jazykového úkolu"
+      ],
+      "doporucene_hodnoceni": ["slovni", "sebahodnoceni"]
+    }
+  },
+  {
+    "id": "game-008",
+    "title": "Digitální detektivové",
+    "pitch": "Týmy řeší záhadu pomocí indicií ukrytých v QR kódech, webových stránkách a digitálních nástrojích — kombinace informatiky s kritickým myšlením!",
+    "playerCount": { "min": 4, "max": 16 },
+    "ageRange": { "min": 10, "max": 15 },
+    "duration": { "min": 30, "max": 50 },
+    "setting": "indoor",
+    "materials": ["tablety nebo telefony (1 na tým)", "vytištěné QR kódy (10+)", "pracovní listy s úkoly", "obálky s indiciemi", "přístup k internetu"],
+    "instructions": [
+      "Připravte místnost s rozmístěnými QR kódy a obálkami.",
+      "Každý QR kód odkazuje na webovou stránku s indicií nebo úkolem.",
+      "Týmy po 2–4 hráčích postupně skenují kódy a řeší úkoly.",
+      "Úkoly zahrnují: ověření informace na internetu, rozluštění šifry, vyhledání v online encyklopedii.",
+      "Každý splněný úkol odhalí část finální odpovědi.",
+      "Tým, který jako první složí celou odpověď, vyhrává.",
+      "Na závěr diskuze o důvěryhodnosti online zdrojů."
+    ],
+    "learningGoals": ["digitální gramotnost", "kritické hodnocení zdrojů", "práce s technologiemi", "logické myšlení"],
+    "reflectionPrompts": [
+      "Jak jste poznali, že je informace na internetu důvěryhodná?",
+      "Které digitální nástroje vám nejvíce pomohly?",
+      "Co vás překvapilo při hledání informací online?"
+    ],
+    "safetyNotes": ["Zajistěte bezpečný přístup k internetu", "Předem zkontrolujte všechny odkazy v QR kódech", "Stanovte pravidla bezpečného chování online"],
+    "adaptationTips": ["Pro mladší hráče zjednodušte úkoly a předpřipravte odkazy", "Pro pokročilé přidejte úkoly na tvorbu vlastního obsahu", "Offline verze: nahraďte QR kódy tištěnými šiframi"],
+    "facilitatorNotes": "Tato hra přirozeně rozvíjí digitální kompetence dle RVP. Důraz klaďte na mediální gramotnost a schopnost rozlišit spolehlivé a nespolehlivé zdroje informací.",
+    "rvp": {
+      "kompetence": ["digitalni", "k-uceni", "k-reseni-problemu", "komunikativni"],
+      "oblasti": ["ict", "jazyk"],
+      "stupen": ["druhy"],
+      "prurezova_temata": ["medialni", "osobnostni-vychova"],
+      "ocekavane_vystupy": [
+        "Žák vyhledává informace na internetu a ověřuje jejich pravdivost",
+        "Žák používá digitální technologie k řešení úkolů",
+        "Žák rozlišuje důvěryhodné a nedůvěryhodné zdroje"
+      ],
+      "doporucene_hodnoceni": ["slovni", "portfolio", "vrstevnicke"]
+    }
+  },
+  {
+    "id": "game-009",
+    "title": "Živý dějepis",
+    "pitch": "Hráči se stávají historickými postavami a v improvizovaných scénkách řeší klíčové momenty dějin — dějepis, který se prožívá!",
+    "playerCount": { "min": 6, "max": 25 },
+    "ageRange": { "min": 11, "max": 15 },
+    "duration": { "min": 30, "max": 45 },
+    "setting": "indoor",
+    "materials": ["kartičky s historickými postavami", "kartičky s historickými událostmi", "jednoduché kostýmní doplňky (volitelné)", "velký papír na časovou osu"],
+    "instructions": [
+      "Každý hráč si vylosuje kartu s historickou postavou a krátkou charakteristikou.",
+      "Vedoucí přečte historickou událost (např. „Bitva na Bílé hoře" nebo „Sametová revoluce").",
+      "Hráči mají 5 minut na přípravu krátké scénky (2–3 min), kde představí reakci své postavy na danou událost.",
+      "Po každé scénce ostatní kladou otázky „postavám".",
+      "Společně vytvoříme časovou osu hlavních událostí na velký papír.",
+      "Na závěr diskuze: Co byste udělali jinak na místě dané postavy?"
+    ],
+    "learningGoals": ["historické povědomí", "empatie s historickými aktéry", "prezentační dovednosti", "kritické hodnocení událostí"],
+    "reflectionPrompts": [
+      "Jak se cítila vaše postava v dané situaci?",
+      "Měla vaše postava jiné možnosti? Jaké?",
+      "Jak tento historický moment ovlivnil dnešní dobu?"
+    ],
+    "safetyNotes": ["Dbejte na citlivé zacházení s kontroverzními historickými tématy", "Zdůrazněte, že jde o vzdělávací simulaci"],
+    "adaptationTips": ["Pro mladší žáky vyberte jednodušší a pozitivnější historické události", "Přidejte rekvizity pro větší autenticitu", "Alternativa: místo scénky pište dopisy z pohledu postavy"],
+    "facilitatorNotes": "Hra kombinuje dramatickou výchovu s dějepisem. Pomáhá žákům pochopit historické události z perspektivy reálných lidí. Připravte si záchranné „nápovědy" pro žáky, kteří si nejsou jistí svou rolí.",
+    "rvp": {
+      "kompetence": ["komunikativni", "socialni-personalni", "obcanske", "k-uceni"],
+      "oblasti": ["clovek-spolecnost", "umeni-kultura", "jazyk"],
+      "stupen": ["druhy"],
+      "prurezova_temata": ["demokraticke-obcanstvi", "mysleni-eu", "osobnostni-vychova"],
+      "ocekavane_vystupy": [
+        "Žák popíše klíčové události českých a světových dějin",
+        "Žák posoudí jednání historických aktérů v kontextu doby",
+        "Žák prezentuje svůj názor s využitím historických argumentů"
+      ],
+      "doporucene_hodnoceni": ["slovni", "vrstevnicke", "portfolio"]
+    }
+  },
+  {
+    "id": "game-010",
+    "title": "Přírodní laboratoř",
+    "pitch": "Venkovní průzkumnická hra, kde týmy sbírají vzorky, pozorují přírodu a provádějí jednoduché experimenty přímo v terénu!",
+    "playerCount": { "min": 4, "max": 20 },
+    "ageRange": { "min": 6, "max": 12 },
+    "duration": { "min": 30, "max": 50 },
+    "setting": "outdoor",
+    "materials": ["lupy", "sáčky na vzorky", "pracovní listy s úkoly", "tužky", "určovací klíče (rostliny/hmyz)", "měřicí pásmo"],
+    "instructions": [
+      "Vyznačte průzkumnou oblast v přírodě (park, les, zahrada).",
+      "Každý tým dostane sadu pomůcek a pracovní list s 8 úkoly.",
+      "Úkoly: najděte 3 různé typy listů, změřte obvod stromu, pozorujte hmyz 5 minut, nakreslete půdní profil, atd.",
+      "Týmy mají 25 minut na splnění co nejvíce úkolů.",
+      "Po návratu každý tým představí své nejzajímavější pozorování.",
+      "Společný rozbor: Co jsme se dozvěděli o přírodě kolem nás?",
+      "Bonusové body za vlastní zajímavé objevy."
+    ],
+    "learningGoals": ["přírodovědné pozorování", "klasifikace", "měření", "environmentální povědomí"],
+    "reflectionPrompts": [
+      "Co vás na přírodě kolem vás nejvíce překvapilo?",
+      "Jak se liší příroda v různých částech průzkumné oblasti?",
+      "Proč je důležité chránit přírodu kolem nás?"
+    ],
+    "safetyNotes": ["Předem zkontrolujte průzkumnou oblast", "Upozorněte na jedovaté rostliny a nebezpečný hmyz", "Zajistěte, aby žáci nevzorkovali chráněné druhy", "Mějte lékárničku"],
+    "adaptationTips": ["Pro mladší děti připravte jednodušší obrázkové pracovní listy", "Pro starší žáky přidejte mikroskop a složitější úkoly", "Varianta pro město: zkoumejte městskou přírodu"],
+    "facilitatorNotes": "Ideální pro projektové dny nebo terénní výuku. Propojuje přírodopis, matematiku (měření) a výtvarnou výchovu (kresby). Sbírky vzorků mohou sloužit k dalšímu zkoumání ve třídě.",
+    "rvp": {
+      "kompetence": ["k-uceni", "k-reseni-problemu", "pracovni", "obcanske"],
+      "oblasti": ["clovek-priroda", "clovek-svet", "matematika"],
+      "stupen": ["prvni", "druhy"],
+      "prurezova_temata": ["environmentalni", "osobnostni-vychova"],
+      "ocekavane_vystupy": [
+        "Žák pozoruje a popíše přírodní jevy ve svém okolí",
+        "Žák třídí organismy podle jednoduchých kritérií",
+        "Žák provádí jednoduchá měření a záznamy"
+      ],
+      "doporucene_hodnoceni": ["slovni", "portfolio", "sebahodnoceni"]
+    }
+  }
+]
