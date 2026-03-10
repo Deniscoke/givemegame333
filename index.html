@@ -18,6 +18,17 @@
 				<span class="brand-give">gIVE</span><span class="brand-me">ME</span><span class="brand-game">GAME</span><span class="brand-io">.IO</span>
 			</div>
 
+			<!-- COIN DISPLAY -->
+			<div class="coin-display" id="coin-display" title="gIVEMECOIN">
+				<span class="coin-icon">🪙</span>
+				<span class="coin-count" id="coin-count">0</span>
+			</div>
+
+			<!-- ROBOT CHALLENGE BUTTON -->
+			<button class="btn-robot-challenge" id="btn-robot-challenge" onclick="App.RobotChallenge.open()" title="Robot Challenge — earn coins!">
+				🤖 <span data-i18n="robot_challenge">Challenge</span>
+			</button>
+
 			<!-- LANGUAGE SELECTOR -->
 			<div class="lang-selector" id="lang-selector">
 				<button class="btn-lang" data-lang="sk" title="Slovenčina">SK</button>
@@ -71,6 +82,14 @@
 							<span class="mode-emoji">🎪</span>
 							<span class="mode-name" data-i18n="mode_circus">Cirkus</span>
 						</button>
+					<button class="btn-mode" data-mode="cooking" onclick="App.setMode('cooking')">
+							<span class="mode-emoji">🍳</span>
+							<span class="mode-name" data-i18n="mode_cooking">Vaření</span>
+						</button>
+						<button class="btn-mode" data-mode="meditation" onclick="App.setMode('meditation')">
+							<span class="mode-emoji">🧘</span>
+							<span class="mode-name" data-i18n="mode_meditation">Meditace</span>
+						</button>
 					</div>
 				</div>
 
@@ -107,6 +126,7 @@
 						<label class="filter-label" data-i18n="players">Počet hráčů</label>
 						<select id="filter-players" class="form-select">
 							<option value="" data-i18n="any_option">Libovolný</option>
+							<option value="solo" data-i18n="players_solo">Sólo (1)</option>
 							<option value="small" data-i18n="players_small">Malý (2–5)</option>
 							<option value="medium" data-i18n="players_medium">Střední (6–15)</option>
 							<option value="large" data-i18n="players_large">Velký (16–30)</option>
@@ -171,6 +191,29 @@
 							<option value="deep" data-i18n="depth_deep">Hluboká</option>
 						</select>
 					</div>
+					<!-- CUISINE TYPE (cooking only) -->
+					<div class="filter-group filter-cooking-only" id="filter-group-cuisine" style="display:none;">
+						<label class="filter-label" data-i18n="cuisine_type">Typ kuchyně</label>
+						<select id="filter-cuisine" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="sweet" data-i18n="cuisine_sweet">Sladká</option>
+							<option value="savory" data-i18n="cuisine_savory">Slaná</option>
+							<option value="healthy" data-i18n="cuisine_healthy">Zdravá</option>
+							<option value="international" data-i18n="cuisine_international">Světová</option>
+						</select>
+					</div>
+
+					<!-- FOCUS TYPE (meditation only) -->
+					<div class="filter-group filter-meditation-only" id="filter-group-focus" style="display:none;">
+						<label class="filter-label" data-i18n="focus_type">Zaměření</label>
+						<select id="filter-focus" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolné</option>
+							<option value="breath" data-i18n="focus_breath">Dech</option>
+							<option value="body" data-i18n="focus_body">Tělo</option>
+							<option value="visualization" data-i18n="focus_visualization">Vizualizace</option>
+							<option value="movement" data-i18n="focus_movement">Pohyb (jóga)</option>
+						</select>
+					</div>
 				</div>
 
 				<!-- RVP FILTERS (classroom mode primarily, but available always) -->
@@ -204,17 +247,23 @@
 						<label class="filter-label" data-i18n="edu_area">Vzdělávací oblast</label>
 						<select id="filter-oblast" class="form-select">
 							<option value="" data-i18n="any_option_f">Libovolná</option>
-							<option value="jazyk">Jazyk a jazyková komunikace</option>
-							<option value="matematika">Matematika a její aplikace</option>
-							<option value="ict">Informatika</option>
-							<option value="clovek-svet">Člověk a jeho svět</option>
-							<option value="clovek-spolecnost">Člověk a společnost</option>
-							<option value="clovek-priroda">Člověk a příroda</option>
-							<option value="umeni-kultura">Umění a kultura</option>
-							<option value="clovek-zdravi">Člověk a zdraví</option>
-							<option value="clovek-prace">Člověk a svět práce</option>
+							<option value="jazyk" data-i18n="edu_jazyk">Jazyk a jazyková komunikace</option>
+							<option value="matematika" data-i18n="edu_matematika">Matematika a její aplikace</option>
+							<option value="ict" data-i18n="edu_ict">Informatika</option>
+							<option value="clovek-svet" data-i18n="edu_clovek_svet">Člověk a jeho svět</option>
+							<option value="clovek-spolecnost" data-i18n="edu_clovek_spolecnost">Člověk a společnost</option>
+							<option value="clovek-priroda" data-i18n="edu_clovek_priroda">Člověk a příroda</option>
+							<option value="umeni-kultura" data-i18n="edu_umeni_kultura">Umění a kultura</option>
+							<option value="clovek-zdravi" data-i18n="edu_clovek_zdravi">Člověk a zdraví</option>
+							<option value="clovek-prace" data-i18n="edu_clovek_prace">Člověk a svět práce</option>
 						</select>
 					</div>
+				</div>
+
+				<!-- DESCRIPTION / POPIS -->
+				<div class="panel-section">
+					<label class="panel-label"><i class="bi bi-pencil-square"></i> <span data-i18n="description_label">Popis</span></label>
+					<textarea id="filter-description" class="form-textarea" rows="2" maxlength="200" data-i18n-placeholder="description_placeholder" placeholder="Krátký popis nebo zadání hry..."></textarea>
 				</div>
 
 				<!-- GENERATE BUTTON -->
@@ -228,13 +277,15 @@
 				</button>
 
 				<!-- ENGINE STATUS -->
-				<div class="panel-section panel-status">
-					<label class="panel-label"><i class="bi bi-cpu"></i> Engine</label>
-					<div class="engine-indicator">
-						<span class="engine-dot local" id="engine-dot"></span>
-						<span class="engine-name" id="engine-name" data-i18n="engine_local">Lokální generátor</span>
+				<div class="panel-section panel-engine">
+					<label class="panel-label"><i class="bi bi-cpu"></i> <span data-i18n="engine_label">IndieWeb Engine</span></label>
+					<div class="engine-info" id="engine-info">
+						<span class="engine-indicator engine-ai" id="engine-indicator">🤖 AI Engine</span>
 					</div>
-					<div class="engine-note" id="engine-note" data-i18n="engine_note">AI režim dostupný po nastavení serveru</div>
+					<div class="knowledge-status" id="knowledge-status" style="display:none;" title="Source of Knowledge">
+						<i class="bi bi-database"></i>
+						<span id="knowledge-count">0</span> <span data-i18n="knowledge_files">files</span>
+					</div>
 				</div>
 			</aside>
 
@@ -265,6 +316,14 @@
 						<div class="game-mode-badge" id="game-mode-badge"></div>
 						<h2 id="game-title" class="game-title"></h2>
 						<div class="game-badges" id="game-badges"></div>
+					</div>
+					<!-- TIMER BLOCK -->
+					<div id="game-timer-block" class="game-timer-block" style="display:none;">
+						<div class="timer-display" id="timer-display">00:00</div>
+						<button class="btn btn-retro btn-timer-ready" id="btn-timer-ready" onclick="App.Timer.start()">
+							<i class="bi bi-play-fill"></i> <span data-i18n="timer_ready">READY</span>
+						</button>
+						<span class="timer-status" id="timer-status"></span>
 					</div>
 
 					<div id="game-pitch" class="game-pitch"></div>
@@ -448,6 +507,8 @@
 					<p><strong>📚 Třída</strong> — <span data-i18n="help_mode_classroom">Vzdělávací hry s vazbou na kurikulum.</span></p>
 					<p><strong>🪞 Reflexe</strong> — <span data-i18n="help_mode_reflection">Hry pro budování důvěry, empatie a sebepoznání.</span></p>
 					<p><strong>🎪 Cirkus</strong> — <span data-i18n="help_mode_circus">Pohybové aktivity inspirované cirkusovou pedagogikou.</span></p>
+				<p><strong>🍳 Vaření</strong> — <span data-i18n="help_mode_cooking">Kulinářské aktivity a kreativní recepty.</span></p>
+					<p><strong>🧘 Meditace</strong> — <span data-i18n="help_mode_meditation">Mindfulness cvičení pro zdraví a klid.</span></p>
 				</div>
 				<div class="help-section">
 					<div class="help-title" data-i18n="help_how">Jak používat</div>
@@ -487,11 +548,48 @@
 		</div>
 	</div>
 
+	<!-- ═══════════════════ ROBOT CHALLENGE MODAL ═══════════════════ -->
+	<div id="robot-challenge-overlay" class="robot-overlay" style="display:none;">
+		<div class="robot-card">
+			<!-- Header -->
+			<div class="robot-header">
+				<div class="robot-brand">
+					<span class="robot-shield">🛡️</span>
+					<span class="robot-title">RobotCheck</span>
+				</div>
+				<div class="robot-secure">● <span data-i18n="robot_secure">Secure</span></div>
+			</div>
+
+			<!-- Progress -->
+			<div class="robot-progress" id="robot-progress" style="display:none;">
+				<div class="robot-progress-bar">
+					<div class="robot-progress-fill" id="robot-progress-fill"></div>
+				</div>
+				<span class="robot-progress-text" id="robot-progress-text">1/3</span>
+				<span class="robot-attempts" id="robot-attempts">●●● 3</span>
+			</div>
+
+			<!-- Challenge content area -->
+			<div class="robot-content" id="robot-content">
+				<!-- JS fills this dynamically -->
+			</div>
+
+			<!-- Footer -->
+			<div class="robot-footer">
+				<span>Protected by gIVEMEGAME™</span>
+			</div>
+		</div>
+	</div>
+
 	<!-- Toast -->
 	<div id="toast" class="toast"></div>
 
+	<!-- ═══════════════════ CURSOR EFFECT CANVAS ═══════════════════ -->
+	<canvas id="cursor-canvas" class="cursor-canvas"></canvas>
+
 	<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
 	<script src="script.js"></script>
+	<script type="module" src="cursor-effect.js"></script>
 
 </body>
 </html>

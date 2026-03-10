@@ -16,19 +16,41 @@
 // GameAPI — Směrovač generování
 // ─────────────────────────────────────────────────
 const GameAPI = (() => {
-	let engineMode = 'local';
+	let engineMode = 'ai'; // default: vždy AI
 
 	async function generateGame(filters) {
-		if (engineMode === 'ai') {
+		// Vždy skúsime AI prvý; ak server neodpovie, fallback na local
+		try {
 			return await generateWithAI(filters);
+		} catch (err) {
+			console.warn('[GameAPI] AI zlyhalo, fallback na lokálny engine:', err.message);
+			return generateLocally(filters);
 		}
-		return generateLocally(filters);
 	}
 
 	async function generateWithAI(filters) {
-		console.warn('[GameAPI] AI režim je mockovaný. Používám lokální generátor.');
-		await new Promise(resolve => setTimeout(resolve, 800));
-		return generateLocally(filters);
+		console.log('[GameAPI] Generujem cez AI...', filters);
+
+		try {
+			const res = await fetch('/api/generate-game', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ filters })
+			});
+
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				throw new Error(err.error || `Server vrátil ${res.status}`);
+			}
+
+			const game = await res.json();
+			console.log(`[GameAPI] AI hra: "${game.title}"`, game);
+			return game;
+
+		} catch (err) {
+			console.error('[GameAPI] AI generovanie zlyhalo:', err.message);
+			throw err;
+		}
 	}
 
 	function generateLocally(filters) {
@@ -38,13 +60,36 @@ const GameAPI = (() => {
 	function setMode(mode) {
 		engineMode = mode;
 		console.log(`[GameAPI] Režim enginu: ${mode}`);
+
+		// Aktualizácia UI indikátora
+		const indicator = document.getElementById('engine-indicator');
+		if (indicator) {
+			indicator.className = 'engine-indicator ' + (mode === 'ai' ? 'engine-ai' : 'engine-local');
+		}
 	}
 
 	function getMode() {
 		return engineMode;
 	}
 
-	return { generateGame, generateWithAI, generateLocally, setMode, getMode };
+	// Kontrola dostupnosti servera
+	async function checkServer() {
+		try {
+			const res = await fetch('/api/status');
+			if (res.ok) {
+				const data = await res.json();
+				return data;
+			}
+		} catch (e) {
+			// Server nebeží
+		}
+		return null;
+	}
+
+	return {
+		generateGame, generateWithAI, generateLocally,
+		setMode, getMode, checkServer
+	};
 })();
 
 
@@ -94,6 +139,18 @@ const GameData = (() => {
 	function scoreMatch(game, filters) {
 		let score = 0;
 
+		// Režim (nejvyšší priorita)
+		if (filters.mode && game.mode) {
+			if (game.mode === filters.mode || game.mode === 'universal') score += 6;
+			else score -= 3;
+		}
+
+		// Energie
+		if (filters.energy && game.energyLevel) {
+			if (game.energyLevel === filters.energy) score += 4;
+			else score -= 1;
+		}
+
 		// Prostředí
 		if (filters.setting && filters.setting !== 'any') {
 			if (game.setting === filters.setting) score += 3;
@@ -122,6 +179,16 @@ const GameData = (() => {
 			if (filters.duration === 'quick' && dur <= 20) score += 3;
 			else if (filters.duration === 'medium' && dur <= 40 && dur >= 15) score += 3;
 			else if (filters.duration === 'long' && dur >= 30) score += 3;
+		}
+
+		// Typ aktivity (circus režim)
+		if (filters.activity && game.activityType) {
+			if (game.activityType === filters.activity) score += 4;
+		}
+
+		// Emoční hloubka (reflection režim)
+		if (filters.depth && game.emotionalDepth) {
+			if (game.emotionalDepth === filters.depth) score += 4;
 		}
 
 		// RVP: Stupeň
@@ -479,23 +546,68 @@ const App = (() => {
 	// ─── Inicializace ───
 	async function init() {
 		await GameData.load();
+		Coins.load();
 		bindKeyboard();
 		bindModalClicks();
-		GameUI.setStatus('PŘIPRAVEN');
+		bindLangButtons();
+		setMode('party'); // Výchozí režim
+		await setLang(currentLang); // Načíst a aplikovat překlady
+
+		// Vždy AI engine — skontroluj stav servera pre info
+		const indicator = document.getElementById('engine-indicator');
+		const serverStatus = await GameAPI.checkServer();
+		if (serverStatus && serverStatus.hasApiKey) {
+			if (indicator) indicator.textContent = `🤖 ${t('engine_label', 'IndieWeb Engine')} ✅`;
+			console.log('[App] AI server pripojený — API kľúč OK.');
+		} else {
+			if (indicator) indicator.textContent = `🤖 ${t('engine_label', 'IndieWeb Engine')} ⚠️`;
+			console.warn('[App] AI server nedostupný — pri generovaní sa použije lokálny fallback.');
+		}
+
+		// ── Knowledge status ──
+		try {
+			const knowledgeRes = await fetch('/api/knowledge');
+			if (knowledgeRes.ok) {
+				const kd = await knowledgeRes.json();
+				const knowledgeEl = document.getElementById('knowledge-status');
+				const countEl = document.getElementById('knowledge-count');
+				if (kd.fileCount > 0 && knowledgeEl && countEl) {
+					countEl.textContent = kd.fileCount;
+					knowledgeEl.style.display = 'flex';
+					console.log(`[App] Knowledge base: ${kd.fileCount} súborov (${kd.totalChars} chars).`);
+				}
+			}
+		} catch (e) { /* silently ignore — knowledge is optional */ }
+
+		isInitializing = false; // Allow coin awards + cursor effects from now on
+		GameUI.setStatus(t('status_ready', 'Ready'));
 		console.log('[App] gIVEMEGAME.IO inicializováno.');
 	}
 
 	// ─── Sběr filtrů ───
 	function getFilters() {
+		// Získaj ai_language z i18n cache pre AI generovanie
+		const tr = translationCache[currentLang];
+		const aiLanguage = tr?._meta?.ai_language || 'English';
+
 		return {
+			mode: currentMode,
+			lang: currentLang,
+			aiLanguage: aiLanguage,
 			ageMin: document.getElementById('filter-age-min').value,
 			ageMax: document.getElementById('filter-age-max').value,
 			players: document.getElementById('filter-players').value,
 			duration: document.getElementById('filter-duration').value,
 			setting: getActiveSetting(),
+			energy: document.getElementById('filter-energy').value,
+			activity: document.getElementById('filter-activity')?.value || '',
+			depth: document.getElementById('filter-depth')?.value || '',
+			cuisine: document.getElementById('filter-cuisine')?.value || '',
+			focus: document.getElementById('filter-focus')?.value || '',
 			stupen: document.getElementById('filter-stupen').value,
 			kompetence: document.getElementById('filter-kompetence').value,
-			oblast: document.getElementById('filter-oblast').value
+			oblast: document.getElementById('filter-oblast').value,
+			description: document.getElementById('filter-description')?.value?.trim() || ''
 		};
 	}
 
@@ -506,15 +618,25 @@ const App = (() => {
 	}
 
 	// ─── Generování ───
-	async function generate() {
+	async function generate(costAction = 'generate') {
 		if (isGenerating) return;
+
+		// Check if player can afford the generation cost
+		if (!Coins.canAfford(costAction)) {
+			GameUI.toast(`🪙 ${t('not_enough_coins', 'Nedostatek coinů!')} (${Coins.getCost(costAction)} potřeba, máš ${Coins.getBalance()})`);
+			return;
+		}
+
 		isGenerating = true;
+
+		// Deduct coins immediately
+		Coins.spend(costAction);
 
 		const btn = document.getElementById('btn-generate');
 		const btnText = document.getElementById('generate-text');
 		btn.classList.add('generating');
-		btnText.textContent = 'GENERUJI...';
-		GameUI.setStatus('GENERUJI...');
+		btnText.textContent = t('status_generating', 'GENERATING...');
+		GameUI.setStatus(t('status_generating', 'GENERATING...'));
 
 		GameUI.showScreen('loading');
 
@@ -530,16 +652,23 @@ const App = (() => {
 			GameUI.renderQuickView(game);
 			GameUI.addToHistory(game);
 			GameUI.updateStats(stats.generated, stats.exported);
-			GameUI.setStatus('HRA PŘIPRAVENA');
+			GameUI.setStatus(t('status_game_ready', 'GAME READY'));
+
+			// Setup timer based on game duration
+			Timer.setup(game.duration);
 		} catch (err) {
 			console.error('[App] Generování selhalo:', err);
 			GameUI.showScreen('welcome');
-			GameUI.toast('Generování selhalo. Zkuste to znovu!');
-			GameUI.setStatus('CHYBA');
+
+			// Chyba — ale vďaka fallbacku v GameAPI sa sem dostaneme len zriedka
+			let errorMsg = t('status_error', 'ERROR') + ' — ' + err.message;
+
+			GameUI.toast(errorMsg);
+			GameUI.setStatus(t('status_error', 'ERROR'));
 		} finally {
 			isGenerating = false;
 			btn.classList.remove('generating');
-			btnText.textContent = 'GENEROVAT HRU';
+			btnText.textContent = t('generate', 'GENERATE GAME');
 		}
 	}
 
@@ -554,7 +683,7 @@ const App = (() => {
 		document.getElementById('filter-oblast').value = '';
 		Filters.setSetting('any');
 
-		await generate();
+		await generate('surprise'); // Uses cheaper "surprise" cost (50 coins)
 	}
 
 	// ─── Export ───
@@ -585,16 +714,16 @@ const App = (() => {
 		stats.exported++;
 		GameUI.updateStats(stats.generated, stats.exported);
 		GameUI.closeModal('export-modal');
-		GameUI.toast(`Exportováno jako ${format.toUpperCase()}!`);
+		GameUI.toast(t('toast_exported', 'Exported as {format}!').replace('{format}', format.toUpperCase()));
 	}
 
 	function copyGame() {
 		if (!currentGame) return;
 		const text = gameToText(currentGame);
 		navigator.clipboard.writeText(text).then(() => {
-			GameUI.toast('Hra zkopírována do schránky!');
+			GameUI.toast(t('toast_copied', 'Game copied to clipboard!'));
 		}).catch(() => {
-			GameUI.toast('Kopírování selhalo — zkuste export.');
+			GameUI.toast(t('toast_copy_fail', 'Copy failed — try export.'));
 		});
 	}
 
@@ -735,6 +864,8 @@ const App = (() => {
 				surprise();
 			} else if (e.key === 't' || e.key === 'T') {
 				GameUI.toggleTheme();
+			} else if (e.key === 'm' || e.key === 'M') {
+				Music.toggle();
 			} else if (e.ctrlKey && e.key === 'c') {
 				if (currentGame) {
 					e.preventDefault();
@@ -753,6 +884,822 @@ const App = (() => {
 		});
 	}
 
+	// ─── Režimy aplikace ───
+	let currentMode = 'party';
+	let isInitializing = true; // Skip coin award + cursor burst on first setMode
+	const MODES = ['party', 'classroom', 'reflection', 'circus', 'cooking', 'meditation'];
+
+	function setMode(mode) {
+		if (!MODES.includes(mode)) return;
+		currentMode = mode;
+
+		// Přepni CSS třídu na body
+		MODES.forEach(m => document.body.classList.remove(`mode-${m}`));
+		document.body.classList.add(`mode-${mode}`);
+
+		// Přepni aktivní tlačítko
+		document.querySelectorAll('.btn-mode').forEach(btn => {
+			btn.classList.toggle('active', btn.dataset.mode === mode);
+		});
+
+		// Zobraz/skryj specifické filtry
+		const filterVisibility = {
+			'filter-group-activity': mode === 'circus',
+			'filter-group-depth': mode === 'reflection',
+			'filter-group-cuisine': mode === 'cooking',
+			'filter-group-focus': mode === 'meditation'
+		};
+		Object.entries(filterVisibility).forEach(([id, show]) => {
+			const el = document.getElementById(id);
+			if (el) el.style.display = show ? '' : 'none';
+		});
+
+		// RVP filtry zvýrazni v classroom režimu
+		const rvpSection = document.getElementById('rvp-filters-section');
+		if (rvpSection) {
+			rvpSection.style.opacity = mode === 'classroom' ? '1' : '0.6';
+		}
+
+		// Aktualizuj mode badge na game kartě
+		const badge = document.getElementById('game-mode-badge');
+		if (badge) {
+			const modeEmojis = { party: '🎉', classroom: '📚', reflection: '🪞', circus: '🎪', cooking: '🍳', meditation: '🧘' };
+			const modeName = t(`mode_${mode}`, mode);
+			badge.innerHTML = `<span class="mode-emoji-badge">${modeEmojis[mode]}</span> ${modeName}`;
+			badge.className = `game-mode-badge badge-${mode}`;
+		}
+
+		// Restart music with new mode's audio profile
+		Music.onModeChange();
+
+		// Award coin for mode click (farming mechanic) — skip during init
+		if (!isInitializing) {
+			Coins.award('mode_click');
+			// Dispatch CustomEvent for cursor effect (ESM module bridge)
+			document.dispatchEvent(new CustomEvent('givemegame:modechange', { detail: { mode } }));
+		}
+
+		console.log(`[App] Režim: ${mode}`);
+		GameUI.toast(`${t('mode', 'Režim')}: ${t(`mode_${mode}`, mode)}`);
+	}
+
+	function getMode() { return currentMode; }
+
+	// ─── Hudební modul (Web Audio API) — per-mode audio profiles ───
+	const Music = (() => {
+		let audioCtx = null;
+		let isPlaying = false;
+		let gainNode = null;
+		let intervalId = null;
+
+		// Per-mode audio profiles: scale, waveType, tempo, noteDuration, volume
+		const modeProfiles = {
+			party: {
+				scale: [329.63, 392.00, 440.00, 523.25, 587.33, 659.25],  // E major — bright & energetic
+				wave: 'square',
+				interval: [600, 900],      // Fast tempo
+				duration: [0.3, 0.6],      // Short punchy notes
+				gain: 0.06,
+				attack: 0.02,
+				detune: 15                  // Slight detuning for rawness
+			},
+			classroom: {
+				scale: [261.63, 293.66, 329.63, 392.00, 440.00],  // C pentatonic — calm & focused
+				wave: 'sine',
+				interval: [2000, 3000],    // Slow, non-distracting
+				duration: [1.5, 3.0],      // Long smooth notes
+				gain: 0.06,
+				attack: 0.2,
+				detune: 0
+			},
+			reflection: {
+				scale: [174.61, 207.65, 220.00, 261.63, 293.66, 329.63],  // Low A minor — ambient & introspective
+				wave: 'sine',
+				interval: [3000, 5000],    // Very slow, meditative
+				duration: [3.0, 5.0],      // Long ambient pads
+				gain: 0.05,
+				attack: 0.5,               // Very slow attack — dreamy
+				detune: 0
+			},
+			circus: {
+				scale: [293.66, 349.23, 392.00, 440.00, 523.25, 587.33],  // D mixolydian — playful & quirky
+				wave: 'triangle',
+				interval: [800, 1800],     // Irregular, playful timing
+				duration: [0.4, 1.2],      // Mixed short & medium
+				gain: 0.07,
+				attack: 0.05,
+				detune: 25                  // More detuning for circus feel
+			},
+			cooking: {
+				scale: [293.66, 329.63, 369.99, 440.00, 493.88, 554.37],  // D major — warm & cheerful
+				wave: 'triangle',
+				interval: [1200, 2200],    // Medium-paced, kitchen rhythm
+				duration: [0.6, 1.4],      // Bouncy moderate notes
+				gain: 0.06,
+				attack: 0.08,
+				detune: 8                   // Slight warmth
+			},
+			meditation: {
+				scale: [130.81, 164.81, 196.00, 220.00, 261.63],  // C minor pentatonic — deep & calming
+				wave: 'sine',
+				interval: [4000, 7000],    // Very slow, breathing pace
+				duration: [4.0, 7.0],      // Ultra-long ambient tones
+				gain: 0.04,
+				attack: 0.8,               // Extremely slow attack — ethereal
+				detune: 0
+			}
+		};
+
+		function init() {
+			if (audioCtx) return;
+			audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+			gainNode = audioCtx.createGain();
+			gainNode.gain.value = 0.06;
+			gainNode.connect(audioCtx.destination);
+		}
+
+		function playNote(freq, duration, profile) {
+			if (!audioCtx || !isPlaying) return;
+			const osc = audioCtx.createOscillator();
+			const noteGain = audioCtx.createGain();
+
+			osc.type = profile.wave;
+			osc.frequency.value = freq;
+			if (profile.detune) osc.detune.value = (Math.random() - 0.5) * profile.detune;
+
+			const now = audioCtx.currentTime;
+			noteGain.gain.setValueAtTime(0, now);
+			noteGain.gain.linearRampToValueAtTime(0.3, now + profile.attack);
+			noteGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+			osc.connect(noteGain);
+			noteGain.connect(gainNode);
+
+			osc.start();
+			osc.stop(now + duration);
+		}
+
+		function startLoop() {
+			if (intervalId) return;
+			const play = () => {
+				if (!isPlaying) return;
+				const profile = modeProfiles[currentMode] || modeProfiles.party;
+				const scale = profile.scale;
+				const freq = scale[Math.floor(Math.random() * scale.length)];
+				const dur = profile.duration[0] + Math.random() * (profile.duration[1] - profile.duration[0]);
+
+				// Update master gain to match mode
+				if (gainNode) gainNode.gain.value = profile.gain;
+
+				playNote(freq, dur, profile);
+
+				// Schedule next note with mode-specific timing
+				const nextIn = profile.interval[0] + Math.random() * (profile.interval[1] - profile.interval[0]);
+				intervalId = setTimeout(play, nextIn);
+			};
+			play();
+		}
+
+		function stopLoop() {
+			if (intervalId) {
+				clearTimeout(intervalId);
+				intervalId = null;
+			}
+		}
+
+		// Restart loop when mode changes (if music is playing)
+		function onModeChange() {
+			if (!isPlaying) return;
+			stopLoop();
+			startLoop();
+		}
+
+		function toggle() {
+			init();
+			if (audioCtx.state === 'suspended') {
+				audioCtx.resume();
+			}
+
+			isPlaying = !isPlaying;
+			const btn = document.getElementById('btn-music');
+			const icon = document.getElementById('music-icon');
+
+			if (isPlaying) {
+				btn.classList.add('playing');
+				icon.className = 'bi bi-music-note-beamed';
+				startLoop();
+				GameUI.toast(`🎵 ${t('toast_music_on', 'Music on')}`);
+			} else {
+				btn.classList.remove('playing');
+				icon.className = 'bi bi-music-note';
+				stopLoop();
+				GameUI.toast(`🔇 ${t('toast_music_off', 'Music off')}`);
+			}
+		}
+
+		function getPlaying() { return isPlaying; }
+
+		return { toggle, getPlaying, onModeChange };
+	})();
+
+	// ─── Timer modul ───
+	const Timer = (() => {
+		let timerId = null;
+		let totalSeconds = 0;
+		let remainingSeconds = 0;
+
+		function setup(duration) {
+			// duration = { min: X, max: Y } — use max as countdown
+			const block = document.getElementById('game-timer-block');
+			const display = document.getElementById('timer-display');
+			const btn = document.getElementById('btn-timer-ready');
+			const status = document.getElementById('timer-status');
+			if (!block) return;
+
+			// Clear any running timer
+			stop();
+
+			const minutes = (duration && duration.max) || 15;
+			totalSeconds = minutes * 60;
+			remainingSeconds = totalSeconds;
+
+			display.textContent = formatTime(remainingSeconds);
+			display.className = 'timer-display';
+			btn.disabled = false;
+			btn.style.display = '';
+			status.textContent = t('timer_waiting', '⏳ Press READY to start');
+			block.style.display = '';
+		}
+
+		function start() {
+			if (timerId || remainingSeconds <= 0) return;
+
+			const btn = document.getElementById('btn-timer-ready');
+			const status = document.getElementById('timer-status');
+			if (btn) { btn.disabled = true; btn.style.display = 'none'; }
+			if (status) status.textContent = t('timer_running', '🔥 Game in progress...');
+
+			GameUI.toast(`⏱️ ${t('timer_started', 'Timer started!')} — ${formatTime(remainingSeconds)}`);
+
+			timerId = setInterval(tick, 1000);
+		}
+
+		function tick() {
+			remainingSeconds--;
+			const display = document.getElementById('timer-display');
+
+			if (remainingSeconds <= 0) {
+				complete();
+				return;
+			}
+
+			if (display) {
+				display.textContent = formatTime(remainingSeconds);
+
+				// Color transitions: green → yellow → red
+				const pct = remainingSeconds / totalSeconds;
+				display.className = 'timer-display' +
+					(pct <= 0.15 ? ' timer-critical' :
+					 pct <= 0.35 ? ' timer-warning' : '');
+			}
+		}
+
+		function complete() {
+			stop();
+			const display = document.getElementById('timer-display');
+			const status = document.getElementById('timer-status');
+			if (display) {
+				display.textContent = '🏆 GG!';
+				display.className = 'timer-display timer-done';
+			}
+			if (status) status.textContent = t('timer_complete', '✅ Game over! Coins awarded.');
+
+			// Award coins for completing the timer
+			Coins.award('timer');
+			GameUI.toast(`🪙 ${t('coin_awarded', '+10 gIVEMECOIN!')}`);
+		}
+
+		function stop() {
+			if (timerId) {
+				clearInterval(timerId);
+				timerId = null;
+			}
+		}
+
+		function formatTime(sec) {
+			const m = Math.floor(sec / 60);
+			const s = sec % 60;
+			return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+		}
+
+		return { setup, start, stop };
+	})();
+
+	// ─── Coin systém — gIVEMECOIN ───
+	const Coins = (() => {
+		const STORAGE_KEY = 'givemegame_coins';
+		let balance = 0;
+
+		// Coin rewards per action
+		const rewards = {
+			timer: 500,           // Completing an activity (timer finish)
+			robot_challenge: 75,  // Completing robot challenge
+			mode_click: 1         // Clicking a mode button (farming)
+		};
+
+		// Coin costs per action
+		const costs = {
+			generate: 125,  // Generating a game via AI
+			surprise: 50    // Random "Překvap mě!" generation
+		};
+
+		function load() {
+			try {
+				balance = parseInt(localStorage.getItem(STORAGE_KEY)) || 0;
+			} catch { balance = 0; }
+			updateDisplay();
+		}
+
+		function save() {
+			try { localStorage.setItem(STORAGE_KEY, balance); } catch {}
+		}
+
+		function award(source) {
+			const amount = rewards[source] || 1;
+			balance += amount;
+			save();
+			updateDisplay();
+
+			// Pop animation
+			const display = document.getElementById('coin-display');
+			if (display) {
+				display.classList.remove('coin-awarded');
+				void display.offsetWidth; // Force reflow
+				display.classList.add('coin-awarded');
+			}
+
+			// Coin sound (short retro "pling")
+			playCoinSound();
+
+			console.log(`[Coins] +${amount} (${source}) → balance: ${balance}`);
+		}
+
+		// ─── Mode-specific coin sound profiles ───
+		const coinSoundProfiles = {
+			party: {
+				type: 'square',      // 8-bit arcade vibe
+				notes: [987.77, 1318.51, 1567.98],  // B5→E6→G6 (major fanfare)
+				step: 0.06, volume: 0.08, duration: 0.25
+			},
+			classroom: {
+				type: 'triangle',    // Soft school-bell chime
+				notes: [523.25, 659.25, 783.99],     // C5→E5→G5 (clean major triad)
+				step: 0.07, volume: 0.10, duration: 0.30
+			},
+			reflection: {
+				type: 'sine',        // Warm singing-bowl tone
+				notes: [440, 554.37, 659.25],        // A4→C#5→E5 (gentle A-major)
+				step: 0.10, volume: 0.07, duration: 0.40
+			},
+			circus: {
+				type: 'sawtooth',    // Whimsical calliope organ
+				notes: [783.99, 987.77, 1174.66, 1318.51], // G5→B5→D6→E6 (playful run)
+				step: 0.05, volume: 0.06, duration: 0.28
+			},
+			cooking: {
+				type: 'triangle',    // Kitchen timer ding
+				notes: [1046.50, 1318.51, 1046.50],  // C6→E6→C6 (ding-ding-ding)
+				step: 0.06, volume: 0.09, duration: 0.25
+			},
+			meditation: {
+				type: 'sine',        // Zen bowl — slow, deep, resonant
+				notes: [293.66, 349.23],             // D4→F4 (minor second, contemplative)
+				step: 0.15, volume: 0.06, duration: 0.55
+			}
+		};
+
+		function playCoinSound() {
+			try {
+				const profile = coinSoundProfiles[currentMode] || coinSoundProfiles.party;
+				const ac = new (window.AudioContext || window.webkitAudioContext)();
+				const osc = ac.createOscillator();
+				const gain = ac.createGain();
+				osc.connect(gain);
+				gain.connect(ac.destination);
+
+				osc.type = profile.type;
+
+				// Schedule note sequence
+				profile.notes.forEach((freq, i) => {
+					osc.frequency.setValueAtTime(freq, ac.currentTime + i * profile.step);
+				});
+
+				gain.gain.setValueAtTime(profile.volume, ac.currentTime);
+				gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + profile.duration);
+
+				osc.start(ac.currentTime);
+				osc.stop(ac.currentTime + profile.duration);
+				setTimeout(() => ac.close(), Math.ceil(profile.duration * 1000) + 100);
+			} catch {}
+		}
+
+		function updateDisplay() {
+			const el = document.getElementById('coin-count');
+			if (el) el.textContent = balance;
+		}
+
+		function spend(action) {
+			const cost = costs[action] || 0;
+			if (cost <= 0) return true;
+			if (balance < cost) return false;
+			balance -= cost;
+			save();
+			updateDisplay();
+			console.log(`[Coins] -${cost} (${action}) → balance: ${balance}`);
+			return true;
+		}
+
+		function canAfford(action) {
+			const cost = costs[action] || 0;
+			return balance >= cost;
+		}
+
+		function getCost(action) {
+			return costs[action] || 0;
+		}
+
+		function getBalance() { return balance; }
+
+		return { load, award, spend, canAfford, getCost, getBalance };
+	})();
+
+	// ─── Jazyk / i18n ───
+	let currentLang = 'cs';
+	const translationCache = {};
+
+	// Kľúče, ktorých hodnota obsahuje HTML (použijeme innerHTML namiesto textContent)
+	const HTML_KEYS = new Set(['welcome_text']);
+
+	async function loadTranslations(lang) {
+		if (translationCache[lang]) return translationCache[lang];
+		try {
+			const res = await fetch(`data/i18n/${lang}.json`);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+			translationCache[lang] = data;
+			console.log(`[i18n] Preklady načítané: ${lang} (${Object.keys(data).length} kľúčov)`);
+			return data;
+		} catch (err) {
+			console.warn(`[i18n] Nepodarilo sa načítať ${lang}.json:`, err);
+			return null;
+		}
+	}
+
+	function applyTranslations(translations) {
+		if (!translations) return;
+
+		// 1) data-i18n — textContent alebo innerHTML podľa kľúča
+		document.querySelectorAll('[data-i18n]').forEach(el => {
+			const key = el.getAttribute('data-i18n');
+			if (translations[key] === undefined) return;
+
+			// <option> vnútri <select> — meníme textContent vždy
+			if (el.tagName === 'OPTION') {
+				el.textContent = translations[key];
+				return;
+			}
+
+			if (HTML_KEYS.has(key)) {
+				el.innerHTML = translations[key];
+			} else {
+				el.textContent = translations[key];
+			}
+		});
+
+		// 2) data-i18n-title — title atribút (tooltipy)
+		document.querySelectorAll('[data-i18n-title]').forEach(el => {
+			const key = el.getAttribute('data-i18n-title');
+			if (translations[key] !== undefined) {
+				el.title = translations[key];
+			}
+		});
+	}
+
+	// Helper: preklad kľúča z cache (pre dynamické texty v JS)
+	function t(key, fallback) {
+		const tr = translationCache[currentLang];
+		return (tr && tr[key] !== undefined) ? tr[key] : (fallback || key);
+	}
+
+	async function setLang(lang) {
+		currentLang = lang;
+		document.querySelectorAll('.btn-lang').forEach(btn => {
+			btn.classList.toggle('active', btn.dataset.lang === lang);
+		});
+		document.documentElement.lang = lang;
+		console.log(`[App] Jazyk: ${lang}`);
+
+		const translations = await loadTranslations(lang);
+		applyTranslations(translations);
+
+		const label = translations?._meta?.label || lang.toUpperCase();
+		GameUI.toast(`🌐 ${label}`);
+	}
+
+	// ─── Bind jazykových tlačítek ───
+	function bindLangButtons() {
+		document.querySelectorAll('.btn-lang').forEach(btn => {
+			btn.addEventListener('click', () => setLang(btn.dataset.lang));
+		});
+	}
+
+	// ─── Robot Challenge modul ───
+	const RobotChallenge = (() => {
+		const TOTAL_CHALLENGES = 3;
+		const MAX_ATTEMPTS = 3;
+		const EMOJI_CATEGORIES = {
+			animals: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮'],
+			fruits:  ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🍒','🍑','🥭','🍍'],
+			vehicles:['🚗','🚕','🚙','🚌','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚜'],
+			food:    ['🍕','🍔','🌭','🍟','🌮','🌯','🥪','🍩','🍪','🎂','🧁','🍰'],
+			sports:  ['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','🥊','⛳']
+		};
+		const CATEGORY_LABELS = {
+			animals: () => t('robot_cat_animals', 'animals'),
+			fruits:  () => t('robot_cat_fruits', 'fruits'),
+			vehicles:() => t('robot_cat_vehicles', 'vehicles'),
+			food:    () => t('robot_cat_food', 'food'),
+			sports:  () => t('robot_cat_sports', 'sports')
+		};
+
+		let stage = 'closed'; // closed, checkbox, math, sequence, image-grid, success, failed
+		let currentIdx = 0;
+		let score = 0;
+		let attempts = 0;
+		let imageGrid = [];
+		let targetCategory = '';
+
+		function shuffle(arr) {
+			const a = [...arr];
+			for (let i = a.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[a[i], a[j]] = [a[j], a[i]];
+			}
+			return a;
+		}
+		function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+		function open() {
+			stage = 'checkbox';
+			currentIdx = 0;
+			score = 0;
+			attempts = 0;
+			render();
+			document.getElementById('robot-challenge-overlay').style.display = 'flex';
+		}
+
+		function close() {
+			stage = 'closed';
+			document.getElementById('robot-challenge-overlay').style.display = 'none';
+		}
+
+		function nextChallenge(idx) {
+			const types = shuffle(['math', 'sequence', 'image-grid']);
+			stage = types[idx % types.length];
+			render();
+		}
+
+		function handleSuccess() {
+			score++;
+			currentIdx++;
+			if (currentIdx >= TOTAL_CHALLENGES) {
+				stage = 'success';
+				Coins.award('robot_challenge');
+				render();
+			} else {
+				nextChallenge(currentIdx);
+			}
+		}
+
+		function handleFailure() {
+			attempts++;
+			if (attempts >= MAX_ATTEMPTS) {
+				stage = 'failed';
+				render();
+			} else {
+				// Regenerate same type
+				render();
+			}
+		}
+
+		// ── Generators ──
+		function generateMath() {
+			const a = randInt(2, 15);
+			const b = randInt(2, 15);
+			const ops = [
+				{ s: '+', r: a + b },
+				{ s: '-', r: a - b },
+				{ s: '×', r: a * b }
+			];
+			const op = ops[randInt(0, 2)];
+			const wrong = new Set();
+			while (wrong.size < 3) {
+				const w = op.r + randInt(-5, 5);
+				if (w !== op.r) wrong.add(w);
+			}
+			return {
+				question: `${a} ${op.s} ${b} = ?`,
+				answer: op.r,
+				options: shuffle([op.r, ...Array.from(wrong)])
+			};
+		}
+
+		function generateSequence() {
+			const start = randInt(1, 10);
+			const step = randInt(2, 5);
+			const seq = Array.from({ length: 6 }, (_, i) => start + step * i);
+			const miss = randInt(1, 4);
+			const answer = seq[miss];
+			const wrong = new Set();
+			while (wrong.size < 3) {
+				const w = answer + randInt(-step * 2, step * 2);
+				if (w !== answer && w > 0) wrong.add(w);
+			}
+			return { sequence: seq, missingIndex: miss, answer, options: shuffle([answer, ...Array.from(wrong)]) };
+		}
+
+		function generateImageGrid() {
+			const keys = Object.keys(EMOJI_CATEGORIES);
+			const targetKey = keys[randInt(0, keys.length - 1)];
+			const others = keys.filter(k => k !== targetKey);
+			const targets = shuffle(EMOJI_CATEGORIES[targetKey]).slice(0, randInt(3, 5));
+			const fillerCount = 9 - targets.length;
+			const fillers = [];
+			const usedKeys = shuffle(others).slice(0, 3);
+			for (let i = 0; i < fillerCount; i++) {
+				const k = usedKeys[i % usedKeys.length];
+				fillers.push(EMOJI_CATEGORIES[k][randInt(0, EMOJI_CATEGORIES[k].length - 1)]);
+			}
+			imageGrid = shuffle([
+				...targets.map((e, i) => ({ id: i, emoji: e, isTarget: true, selected: false })),
+				...fillers.map((e, i) => ({ id: targets.length + i, emoji: e, isTarget: false, selected: false }))
+			]).map((c, i) => ({ ...c, id: i }));
+			targetCategory = CATEGORY_LABELS[targetKey]();
+		}
+
+		// ── Render ──
+		function render() {
+			const content = document.getElementById('robot-content');
+			const progress = document.getElementById('robot-progress');
+			if (!content) return;
+
+			const showProgress = !['checkbox', 'success', 'failed', 'closed'].includes(stage);
+			progress.style.display = showProgress ? 'flex' : 'none';
+			if (showProgress) {
+				document.getElementById('robot-progress-fill').style.width = `${(currentIdx / TOTAL_CHALLENGES) * 100}%`;
+				document.getElementById('robot-progress-text').textContent = `${currentIdx + 1}/${TOTAL_CHALLENGES}`;
+				document.getElementById('robot-attempts').textContent = `${'●'.repeat(MAX_ATTEMPTS - attempts)}${'○'.repeat(attempts)} ${MAX_ATTEMPTS - attempts}`;
+			}
+
+			if (stage === 'checkbox') renderCheckbox(content);
+			else if (stage === 'math') renderMath(content);
+			else if (stage === 'sequence') renderSequence(content);
+			else if (stage === 'image-grid') renderImageGrid(content);
+			else if (stage === 'success') renderResult(content, true);
+			else if (stage === 'failed') renderResult(content, false);
+		}
+
+		function renderCheckbox(el) {
+			el.innerHTML = `
+				<div style="font-size:40px;margin-bottom:8px;">🛡️</div>
+				<h2>${t('robot_title', 'Security Check')}</h2>
+				<p>${t('robot_subtitle', 'Verify that you are human by completing challenges.')}</p>
+				<button class="robot-checkbox-btn" id="robot-start-btn">
+					<div class="robot-checkbox-box" id="robot-cb-box"></div>
+					<span class="robot-checkbox-label">${t('robot_not_robot', "I'm not a robot")}</span>
+				</button>
+			`;
+			document.getElementById('robot-start-btn').addEventListener('click', () => {
+				document.getElementById('robot-cb-box').classList.add('checked');
+				document.getElementById('robot-cb-box').innerHTML = '✓';
+				setTimeout(() => nextChallenge(0), 800);
+			});
+		}
+
+		function renderMath(el) {
+			const ch = generateMath();
+			el.innerHTML = `
+				<h2>${t('robot_solve', 'Solve the equation')}</h2>
+				<p>${t('robot_select_answer', 'Select the correct answer')}</p>
+				<div class="robot-question-box">
+					<span class="robot-question-text">${ch.question}</span>
+				</div>
+				<div class="robot-answers">
+					${ch.options.map(opt => `<button class="robot-answer-btn" data-val="${opt}">${opt}</button>`).join('')}
+				</div>
+			`;
+			el.querySelectorAll('.robot-answer-btn').forEach(btn => {
+				btn.addEventListener('click', () => {
+					const val = parseInt(btn.dataset.val);
+					if (val === ch.answer) {
+						btn.classList.add('correct');
+						setTimeout(handleSuccess, 500);
+					} else {
+						btn.classList.add('wrong');
+						setTimeout(handleFailure, 500);
+					}
+				});
+			});
+		}
+
+		function renderSequence(el) {
+			const ch = generateSequence();
+			el.innerHTML = `
+				<h2>${t('robot_find_number', 'Find the missing number')}</h2>
+				<p>${t('robot_complete_pattern', 'What number completes the pattern?')}</p>
+				<div class="robot-sequence">
+					${ch.sequence.map((n, i) => {
+						if (i === ch.missingIndex) {
+							return `<div class="robot-seq-num robot-seq-missing">?</div>`;
+						}
+						return `<div class="robot-seq-num">${n}</div>`;
+					}).join('<span class="robot-seq-arrow">›</span>')}
+				</div>
+				<div class="robot-answers">
+					${ch.options.map(opt => `<button class="robot-answer-btn" data-val="${opt}">${opt}</button>`).join('')}
+				</div>
+			`;
+			el.querySelectorAll('.robot-answer-btn').forEach(btn => {
+				btn.addEventListener('click', () => {
+					const val = parseInt(btn.dataset.val);
+					if (val === ch.answer) {
+						btn.classList.add('correct');
+						setTimeout(handleSuccess, 500);
+					} else {
+						btn.classList.add('wrong');
+						setTimeout(handleFailure, 500);
+					}
+				});
+			});
+		}
+
+		function renderImageGrid(el) {
+			generateImageGrid();
+			el.innerHTML = `
+				<h2>${t('robot_select_all', 'Select all {category}').replace('{category}', targetCategory)}</h2>
+				<p>${t('robot_click_match', 'Click on each tile that matches')}</p>
+				<div class="robot-emoji-grid">
+					${imageGrid.map(c => `<button class="robot-emoji-cell" data-id="${c.id}">${c.emoji}</button>`).join('')}
+				</div>
+				<button class="robot-verify-btn">${t('robot_verify', 'Verify Selection')}</button>
+			`;
+			el.querySelectorAll('.robot-emoji-cell').forEach(btn => {
+				btn.addEventListener('click', () => {
+					const id = parseInt(btn.dataset.id);
+					imageGrid = imageGrid.map(c => c.id === id ? { ...c, selected: !c.selected } : c);
+					btn.classList.toggle('selected');
+				});
+			});
+			el.querySelector('.robot-verify-btn').addEventListener('click', () => {
+				const allCorrect = imageGrid.every(c => c.selected === c.isTarget);
+				if (allCorrect) handleSuccess();
+				else handleFailure();
+			});
+		}
+
+		function renderResult(el, success) {
+			el.innerHTML = `
+				<div class="robot-result-emoji ${success ? 'success' : ''}">${success ? '✅' : '🤖'}</div>
+				<h2>${success ? t('robot_complete', 'Verification Complete!') : t('robot_failed', 'Verification Failed')}</h2>
+				<p>${success
+					? t('robot_verified', 'You have been verified as a human.')
+					: t('robot_too_many', 'Too many incorrect attempts.')}</p>
+				<div style="font-family:'Press Start 2P',monospace;font-size:10px;color:var(--text,#ccc);">
+					Score: ${score}/${TOTAL_CHALLENGES}
+				</div>
+				${success ? `
+					<div class="robot-result-badge">
+						<span class="badge-icon">🛡️</span>
+						<div class="badge-text">
+							<div class="badge-title">Access Granted</div>
+							<div class="badge-sub">+15 🪙 gIVEMECOIN earned!</div>
+						</div>
+					</div>
+					<div class="robot-coin-reward">+15 🪙</div>
+				` : ''}
+				<button class="robot-retry-btn" id="robot-action-btn">
+					${success ? t('robot_close', 'Close') : t('robot_try_again', 'Try Again')}
+				</button>
+			`;
+			document.getElementById('robot-action-btn').addEventListener('click', () => {
+				if (success) close();
+				else open(); // Reset and try again
+			});
+		}
+
+		return { open, close };
+	})();
+
 	// ─── Veřejné API ───
 	return {
 		init,
@@ -761,7 +1708,15 @@ const App = (() => {
 		exportGame,
 		exportAs,
 		copyGame,
+		setMode,
+		getMode,
+		setLang,
+		t,
+		Music,
+		Timer,
+		Coins,
 		Filters,
+		RobotChallenge,
 		UI: GameUI,
 		API: GameAPI,
 		Data: GameData
