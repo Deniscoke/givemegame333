@@ -1687,6 +1687,9 @@ const App = (() => {
 			} else {
 				balance = fromStorage;
 			}
+			// DÔLEŽITÉ: Vždy ulož balance do localStorage ako zálohu — inak pri ďalšom načítaní
+			// (ak Supabase zlyhá alebo session nie je ešte pripravená) by sa coiny stratili
+			try { localStorage.setItem(STORAGE_KEY, String(balance)); } catch (e) {}
 			updateDisplay();
 		}
 
