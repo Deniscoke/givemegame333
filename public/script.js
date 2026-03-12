@@ -2324,7 +2324,7 @@ const App = (() => {
 			} catch (e) { console.warn('[Profile] signOut:', e); }
 			sessionStorage.removeItem('givemegame_user');
 			GameUI.closeModal('profile-modal');
-			window.location.href = 'index.html';
+			window.location.href = 'login.html';
 		}
 
 		function switchTab(tab) {

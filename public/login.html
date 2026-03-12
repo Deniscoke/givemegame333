@@ -151,6 +151,33 @@
 			border-color: rgba(255,255,255,0.4);
 		}
 
+		.login-setup-hint {
+			margin-top: 20px;
+			text-align: left;
+			font-size: 12px;
+			color: rgba(255,255,255,0.6);
+		}
+		.login-setup-hint details { cursor: pointer; }
+		.login-setup-hint summary { padding: 8px 0; }
+		.login-setup-hint code {
+			display: block;
+			word-break: break-all;
+			background: rgba(0,0,0,0.3);
+			padding: 8px 10px;
+			border-radius: 6px;
+			margin: 8px 0;
+			font-size: 11px;
+		}
+		.btn-copy-url {
+			padding: 6px 12px;
+			font-size: 12px;
+			background: rgba(131, 56, 236, 0.4);
+			border: 1px solid rgba(255,255,255,0.2);
+			border-radius: 6px;
+			color: #fff;
+			cursor: pointer;
+		}
+
 		/* Loading state */
 		.btn-login.loading {
 			pointer-events: none;
@@ -194,6 +221,14 @@
 		<div class="error-msg" id="error-msg"></div>
 
 		<a href="index.html" class="btn-skip" id="btn-skip">Hrať bez prihlásenia</a>
+
+		<div class="login-setup-hint" id="login-setup-hint">
+			<details>
+				<summary>🔧 Safari/iPhone nefunguje? Pridaj túto URL:</summary>
+				<code id="redirect-url-display"></code>
+				<button type="button" class="btn-copy-url" id="btn-copy-url">Skopírovať</button>
+			</details>
+		</div>
 
 		<div class="login-footer">
 			<span class="brand-give" style="font-family:'Press Start 2P';font-size:8px;">IW</span>
@@ -327,6 +362,20 @@
 
 		// Event listeners
 		document.getElementById('btn-google')?.addEventListener('click', loginGoogle);
+
+		// Setup hint — zobraz presnú URL pre Supabase Redirect URLs
+		(function initSetupHint() {
+			const redirectUrl = (window.location.origin || '') + '/login.html';
+			const display = document.getElementById('redirect-url-display');
+			const copyBtn = document.getElementById('btn-copy-url');
+			if (display) display.textContent = redirectUrl;
+			if (copyBtn) copyBtn.addEventListener('click', function() {
+				navigator.clipboard.writeText(redirectUrl).then(function() {
+					copyBtn.textContent = 'Skopírované!';
+					setTimeout(function() { copyBtn.textContent = 'Skopírovať'; }, 2000);
+				});
+			});
+		})();
 
 		// Inicializácia session
 		if (supabase && !checkOAuthError()) {
