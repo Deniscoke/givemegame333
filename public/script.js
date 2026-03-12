@@ -31,6 +31,13 @@ const GameAPI = (() => {
 			return await generateWithAI(filters);
 		} catch (err) {
 			console.warn('[GameAPI] AI zlyhalo, fallback na lokálny engine:', err.message);
+			// Upozornenie: používame lokálne hry, API nebolo použité
+			const msg = err.message || '';
+			if (msg.includes('NO_API_KEY') || msg.includes('OPENAI_API_KEY')) {
+				GameUI.toast('⚠️ AI nie je nakonfigurované — použité lokálne hry. Nastav OPENAI_API_KEY v .env');
+			} else if (msg.includes('fetch') || msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+				GameUI.toast('⚠️ Server nedostupný — otvor http://localhost:3000 namiesto súboru');
+			}
 			return generateLocally(filters);
 		}
 	}
@@ -560,6 +567,306 @@ const GameUI = (() => {
 	};
 })();
 
+// ─────────────────────────────────────────────────
+// Narrator — AI vypraváč (ako Dračí Hlídka: OpenAI TTS + fallback Web Speech)
+// ─────────────────────────────────────────────────
+const Narrator = (() => {
+	let speechSynth = null;
+	let awardedForCurrent = false;
+	let usePremiumTts = null; // null = skúsiť, true = OK, false = fallback
+	let localFacts = { sk: [], cs: [], en: [], es: [] };
+	const FALLBACK_FACTS = {
+		sk: ['Medúzy existujú na Zemi už viac ako 650 miliónov rokov – sú staršie ako dinosaury!', 'Včely komunikujú tancom.'],
+		cs: ['Medúzy existují na Zemi už více než 650 milionů let – jsou starší než dinosauři!', 'Včely komunikují tancem.'],
+		en: ['Jellyfish have existed on Earth for over 650 million years – older than dinosaurs!', 'Bees communicate through dance.'],
+		es: ['Las medusas existen en la Tierra desde hace más de 650 millones de años.', 'Las abejas se comunican bailando.']
+	};
+
+	async function loadLocalFacts() {
+		try {
+			const res = await fetch('data/narrator-facts.json', { headers: ngrokHeaders() });
+			if (res.ok) localFacts = await res.json();
+		} catch (e) { /* optional */ }
+	}
+
+	function getRandomLocalFact(lang) {
+		const arr = localFacts[lang] || localFacts.sk;
+		if (arr && arr.length > 0) return arr[Math.floor(Math.random() * arr.length)];
+		const fallback = FALLBACK_FACTS[lang] || FALLBACK_FACTS.sk;
+		return fallback[Math.floor(Math.random() * fallback.length)];
+	}
+
+	function getLangBcp47(lang) {
+		return lang === 'sk' ? 'sk-SK' : lang === 'cs' ? 'cs-CZ' : lang === 'es' ? 'es-ES' : 'en-US';
+	}
+
+	function getPreferredVoice(lang) {
+		if (!speechSynth) return null;
+		const voices = speechSynth.getVoices();
+		const bcp = getLangBcp47(lang);
+		const langCode = bcp.split('-')[0].toLowerCase();
+		return voices.find(v => v.lang.toLowerCase() === bcp.toLowerCase())
+			|| voices.find(v => v.lang.toLowerCase().startsWith(langCode))
+			|| voices.find(v => /en/i.test(v.lang))
+			|| null;
+	}
+
+	async function loadNarratorAreas() {
+		const sel = document.getElementById('narrator-area');
+		if (!sel) return;
+		try {
+			const res = await fetch('/api/narrator-areas', { headers: ngrokHeaders() });
+			if (res.ok) {
+				const { areas } = await res.json();
+				sel.innerHTML = areas.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+				return;
+			}
+		} catch (e) { console.warn('[Narrator] Areas API:', e); }
+		try {
+			const rvpRes = await fetch('data/rvp.json', { headers: ngrokHeaders() });
+			if (rvpRes.ok) {
+				const rvp = await rvpRes.json();
+				const areas = [{ id: '', name: 'Náhodná oblasť' }];
+				if (rvp.vzdelavaci_oblasti) {
+					for (const [id, v] of Object.entries(rvp.vzdelavaci_oblasti)) {
+						areas.push({ id, name: v.nazev });
+					}
+				}
+				if (rvp.kompetence) {
+					for (const [id, v] of Object.entries(rvp.kompetence)) {
+						areas.push({ id: 'komp-' + id, name: v.nazev });
+					}
+				}
+				if (rvp.prurezova_temata) {
+					for (const [id, name] of Object.entries(rvp.prurezova_temata)) {
+						areas.push({ id: 'tema-' + id, name });
+					}
+				}
+				sel.innerHTML = areas.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+			}
+		} catch (e) { console.warn('[Narrator] Areas fallback:', e); }
+	}
+
+	function init() {
+		speechSynth = window.speechSynthesis;
+		if (speechSynth) {
+			speechSynth.onvoiceschanged = () => {};
+			speechSynth.getVoices();
+		}
+		loadLocalFacts();
+		loadNarratorAreas();
+		const btn = document.getElementById('narrator-bot');
+		const hint = btn?.querySelector('.narrator-hint');
+		if (!btn) return;
+		btn.addEventListener('click', async (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			if (hint) hint.textContent = 'Načítavam...';
+			try {
+				await onNarratorClick();
+			} finally {
+				if (hint) hint.textContent = (window.givemegame_t || ((k,f)=>f||k))('narrator_click', 'Klikni a počúvaj');
+			}
+		});
+	}
+
+	let playbackEndTimeout = null;
+	function onPlaybackEnd(btn) {
+		if (playbackEndTimeout) { clearTimeout(playbackEndTimeout); playbackEndTimeout = null; }
+		if (btn) btn.classList.remove('speaking');
+		if (!awardedForCurrent) {
+			awardedForCurrent = true;
+			try {
+				if (typeof App !== 'undefined' && App?.Coins?.award) App.Coins.award('narrator_fact');
+			} catch (e) { console.warn('[Narrator] Coins.award:', e); }
+			GameUI.toast(`🪙 +50 gIVEMECOIN! ${(window.givemegame_t || ((k,f)=>f||k))('narrator_listened', 'Vypočutá zaujímavosť!')}`);
+		}
+		btn.disabled = false;
+	}
+	function schedulePlaybackEndSafety(btn, ms = 30000) {
+		if (playbackEndTimeout) clearTimeout(playbackEndTimeout);
+		playbackEndTimeout = setTimeout(() => {
+			playbackEndTimeout = null;
+			if (btn && btn.disabled) {
+				console.warn('[Narrator] Safety timeout — re-enabling button');
+				onPlaybackEnd(btn);
+			}
+		}, ms);
+	}
+
+	async function speakAndAward(fact, lang, btn, factEl) {
+		if (factEl) {
+			factEl.classList.remove('narrator-fact-placeholder');
+			factEl.setAttribute('aria-hidden', 'true');
+			factEl.innerHTML = '';
+			const p = document.createElement('p');
+			p.textContent = fact;
+			p.style.margin = '0';
+			p.setAttribute('aria-hidden', 'true');
+			factEl.appendChild(p);
+		}
+
+		// 1. Skúsiť OpenAI TTS (ako Dračí Hlídka) — s timeoutom, aby sa nezasekol
+		if (usePremiumTts !== false) {
+			try {
+				const TTS_TIMEOUT_MS = 8000;
+				const ctrl = new AbortController();
+				const to = setTimeout(() => ctrl.abort(), TTS_TIMEOUT_MS);
+				const res = await fetch('/api/tts', {
+					method: 'POST',
+					headers: { ...ngrokHeaders(), 'Content-Type': 'application/json' },
+					body: JSON.stringify({ text: fact, voice: 'marin' }),
+					signal: ctrl.signal
+				});
+				clearTimeout(to);
+				if (res.ok) {
+					const blob = await res.blob();
+					const url = URL.createObjectURL(blob);
+					const audio = new Audio(url);
+					schedulePlaybackEndSafety(btn);
+					audio.onended = () => {
+						URL.revokeObjectURL(url);
+						onPlaybackEnd(btn);
+					};
+					audio.onerror = () => {
+						URL.revokeObjectURL(url);
+						onPlaybackEnd(btn);
+					};
+					try {
+						btn.classList.add('speaking');
+						await audio.play();
+						usePremiumTts = true;
+						return;
+					} catch (playErr) {
+						URL.revokeObjectURL(url);
+						usePremiumTts = false;
+					}
+				} else {
+					if (res.status === 503 || res.status === 502) usePremiumTts = false;
+				}
+			} catch (err) {
+				if (err?.name === 'AbortError') console.warn('[Narrator] TTS timeout — fallback na Web Speech');
+				usePremiumTts = false;
+			}
+		}
+
+		// 2. Fallback: Web Speech API s výberom hlasu (ako The GAME / Dračí Hlídka)
+		if (speechSynth) {
+			speechSynth.cancel();
+			const u = new SpeechSynthesisUtterance(fact);
+			u.lang = getLangBcp47(lang);
+			u.rate = 0.9;
+			u.pitch = 0.82;
+			const preferred = getPreferredVoice(lang);
+			if (preferred) u.voice = preferred;
+			schedulePlaybackEndSafety(btn);
+			u.onend = () => onPlaybackEnd(btn);
+			u.onerror = () => onPlaybackEnd(btn);
+			btn.classList.add('speaking');
+			speechSynth.speak(u);
+		} else {
+			GameUI.toast((window.givemegame_t || ((k,f)=>f||k))('narrator_no_tts', 'Tento prehliadač nepodporuje hlasový výstup.'));
+			btn.disabled = false;
+		}
+	}
+
+	async function onNarratorClick() {
+		const btn = document.getElementById('narrator-bot');
+		const factEl = document.getElementById('narrator-fact');
+		if (!btn) return;
+		btn.disabled = true;
+		if (factEl) {
+			factEl.classList.add('narrator-fact-placeholder');
+			factEl.innerHTML = '<i class="bi bi-hourglass-split"></i><span>Načítavam...</span>';
+		}
+		awardedForCurrent = false;
+
+		const langMap = { sk: 'sk', cs: 'cs', en: 'en', es: 'es' };
+		const activeLang = document.querySelector('.btn-lang.active')?.dataset?.lang || window.givemegame_currentLang || 'cs';
+		const lang = langMap[activeLang] || 'sk';
+		const areaEl = document.getElementById('narrator-area');
+		const area = areaEl?.value || '';
+		const genZ = document.getElementById('narrator-genz')?.checked || false;
+
+		const TIMEOUT_MS = 15000;
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+		try {
+			let url = `/api/random-fact?lang=${lang}`;
+			if (area) url += `&area=${encodeURIComponent(area)}`;
+			if (genZ) url += '&style=genz';
+			const res = await fetch(url, {
+				headers: ngrokHeaders(),
+				signal: controller.signal
+			});
+			clearTimeout(timeoutId);
+			const data = await res.json().catch(() => ({}));
+			let fact = data?.fact;
+			const source = data?.source || 'local';
+			if (!fact && !res.ok) {
+				console.warn('[Narrator] API error:', res.status, data?.error);
+			}
+			if (source === 'local' && data?._debug) {
+				console.error('[Narrator] OpenAI zlyhalo:', data._debug);
+				GameUI.toast('⚠️ AI nedostupná: ' + (data._debug || '').slice(0, 60) + '…');
+			}
+			if (!fact) fact = getRandomLocalFact(lang);
+			if (!fact) throw new Error('Žiadna zaujímavosť');
+
+			console.log('[Narrator] Zaujímavosť:', source === 'openai' ? '🤖 AI (OpenAI)' : '📋 Lokál');
+
+			// 1. Najprv zobraz text dole (výstup) — používateľ vidí zaujímavosť hneď
+			if (factEl) {
+				factEl.classList.remove('narrator-fact-placeholder');
+				factEl.innerHTML = '';
+				const p = document.createElement('p');
+				p.textContent = fact;
+				p.style.margin = '0';
+				factEl.appendChild(p);
+				const badge = document.createElement('span');
+				badge.className = 'narrator-source-badge';
+				badge.textContent = source === 'openai' ? '🤖 AI' : '📋 Lokál';
+				badge.title = source === 'openai' ? 'Vygenerované OpenAI' : 'Lokálna zaujímavosť';
+				factEl.appendChild(badge);
+			}
+
+			// 2. Potom prečítaj nahlas (TTS alebo Web Speech)
+			await speakAndAward(fact, lang, btn, null);
+		} catch (err) {
+			clearTimeout(timeoutId);
+			console.warn('[Narrator]', err);
+			const fact = getRandomLocalFact(lang);
+			if (fact) {
+				if (factEl) {
+					factEl.classList.remove('narrator-fact-placeholder');
+					factEl.innerHTML = '';
+					const p = document.createElement('p');
+					p.textContent = fact;
+					p.style.margin = '0';
+					factEl.appendChild(p);
+					const badge = document.createElement('span');
+					badge.className = 'narrator-source-badge';
+					badge.textContent = '📋 Lokál';
+					badge.title = 'Lokálna zaujímavosť (API zlyhalo)';
+					factEl.appendChild(badge);
+				}
+				await speakAndAward(fact, lang, btn, null);
+			} else {
+				if (factEl) {
+					factEl.classList.add('narrator-fact-placeholder');
+					const _t = window.givemegame_t || ((k,f)=>f||k);
+					factEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i><span>' + (err.name === 'AbortError' ? _t('narrator_timeout', 'Čas vypršal – skús znova') : (err.message || 'Chyba')) + '</span>';
+				}
+				const _t = window.givemegame_t || ((k,f)=>f||k);
+				GameUI.toast(err.name === 'AbortError' ? _t('narrator_timeout', 'Čas vypršal – skús znova') : (err.message || 'Chyba načítania.'));
+				btn.disabled = false;
+			}
+		}
+	}
+
+	return { init };
+})();
 
 // ─────────────────────────────────────────────────
 // App — Veřejný kontrolér
@@ -577,7 +884,7 @@ const App = (() => {
 			if (u?.uid === 'guest') sessionStorage.removeItem('givemegame_user');
 		} catch (e) {}
 		await syncAuthFromSupabase();
-		supabase?.auth.onAuthStateChange((event, session) => {
+		supabaseClient?.auth.onAuthStateChange((event, session) => {
 			if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
 				syncAuthFromSupabase();
 			}
@@ -589,6 +896,7 @@ const App = (() => {
 		bindKeyboard();
 		bindModalClicks();
 		bindLangButtons();
+		Narrator.init();
 		setMode('party'); // Výchozí režim
 		await setLang(currentLang); // Načíst a aplikovat překlady
 
@@ -915,7 +1223,8 @@ const App = (() => {
 	// ─── Klávesové zkratky ───
 	function bindKeyboard() {
 		document.addEventListener('keydown', (e) => {
-			if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+			const tag = e.target.tagName;
+			if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return;
 
 			if (e.key === ' ' || e.key === 'Enter') {
 				e.preventDefault();
@@ -1258,10 +1567,11 @@ const App = (() => {
 	// ─── Supabase + Auth (pre Coins sync + gIVEME account) ───
 	const SUPABASE_URL = 'https://vhpkkbixshfyytohkruv.supabase.co';
 	const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
-	let supabase = null;
+	let supabaseClient = null;
+	let supabaseProfilesOk = true; // false = tabuľka profiles neexistuje (404), nevolať znova
 	try {
 		if (window.supabase) {
-			supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+			supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 				auth: { detectSessionInUrl: true, persistSession: true }
 			});
 		}
@@ -1277,9 +1587,9 @@ const App = (() => {
 
 	// Sync Supabase session → sessionStorage (každý používateľ má svoj gIVEME účet)
 	async function syncAuthFromSupabase() {
-		if (!supabase) return;
+		if (!supabaseClient) return;
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
+			const { data: { session } } = await supabaseClient.auth.getSession();
 			if (session?.user) {
 				const user = {
 					uid: session.user.id,
@@ -1289,16 +1599,20 @@ const App = (() => {
 				};
 				sessionStorage.setItem('givemegame_user', JSON.stringify(user));
 				// Ulož/aktualizuj profil v Supabase
-				await supabase.from('profiles').upsert({
+				const { error } = await supabaseClient.from('profiles').upsert({
 					id: session.user.id,
 					display_name: user.name,
 					avatar_url: user.photo,
 					updated_at: new Date().toISOString()
 				}, { onConflict: 'id' });
+				if (error) supabaseProfilesOk = false;
 				console.log('[Auth] Session synced — gIVEME účet:', user.name);
 				return user;
 			}
-		} catch (e) { console.warn('[Auth] syncAuthFromSupabase:', e); }
+		} catch (e) {
+			supabaseProfilesOk = false;
+			console.warn('[Auth] syncAuthFromSupabase:', e);
+		}
 		return null;
 	}
 
@@ -1312,7 +1626,8 @@ const App = (() => {
 			robot_challenge: 250,
 			mode_click: 1,
 			tamagochi_coin: 1,
-			phone_buzz: 5   // Telefón vibruje každých 30s; gIVEME akcie → rewards[x] || 1
+			phone_buzz: 5,
+			narrator_fact: 50   // AI vypraváč — vypočuj si zaujímavosť
 		};
 
 		const costs = {
@@ -1322,16 +1637,26 @@ const App = (() => {
 
 		async function load() {
 			// 1. VŽDY načítaj z localStorage (pretrvá pri refreshi)
-			const fromStorage = Math.max(0, parseInt(localStorage.getItem(STORAGE_KEY)) || 0);
+			let fromStorage = Math.max(0, parseInt(localStorage.getItem(STORAGE_KEY)) || 0);
+			// Starter coiny pre nových používateľov (aby mohli generovať prvú hru)
+			if (fromStorage === 0 && !localStorage.getItem(STORAGE_KEY + '_init')) {
+				fromStorage = 150;
+				localStorage.setItem(STORAGE_KEY, '150');
+				localStorage.setItem(STORAGE_KEY + '_init', '1');
+			}
 
 			const user = getCurrentUser();
-			if (user && user.uid !== 'guest' && supabase) {
+			if (user && user.uid !== 'guest' && supabaseClient && supabaseProfilesOk) {
 				try {
-					const { data } = await supabase.from('profiles').select('coins').eq('id', user.uid).single();
-					const fromSupabase = Math.max(0, parseInt(data?.coins) || 0);
-					balance = Math.max(fromSupabase, fromStorage);
-					if (balance > fromSupabase) save();
+					const { data, error } = await supabaseClient.from('profiles').select('coins').eq('id', user.uid).single();
+					if (error) { supabaseProfilesOk = false; balance = fromStorage; }
+					else {
+						const fromSupabase = Math.max(0, parseInt(data?.coins) || 0);
+						balance = Math.max(fromSupabase, fromStorage);
+						if (balance > fromSupabase) save();
+					}
 				} catch (e) {
+					supabaseProfilesOk = false;
 					balance = fromStorage;
 				}
 			} else {
@@ -1345,14 +1670,16 @@ const App = (() => {
 			try { localStorage.setItem(STORAGE_KEY, String(balance)); } catch (e) {}
 
 			const user = getCurrentUser();
-			if (user && user.uid !== 'guest' && supabase) {
-				supabase.from('profiles').upsert({
+			if (user && user.uid !== 'guest' && supabaseClient && supabaseProfilesOk) {
+				supabaseClient.from('profiles').upsert({
 					id: user.uid,
 					coins: balance,
 					display_name: user.name || null,
 					avatar_url: user.photo || null,
 					updated_at: new Date().toISOString()
-				}, { onConflict: 'id' }).then(() => {}).catch(() => {});
+				}, { onConflict: 'id' }).then(({ error }) => {
+					if (error) supabaseProfilesOk = false;
+				}).catch(() => { supabaseProfilesOk = false; });
 			}
 		}
 
@@ -1482,9 +1809,9 @@ const App = (() => {
 	// ─── Quest Log (per používateľ, nikdy sa nemazá) ───
 	async function loadQuestLog() {
 		const user = getCurrentUser();
-		if (!user || !supabase) return;
+		if (!user || !supabaseClient) return;
 		try {
-			const { data: rows, error } = await supabase
+			const { data: rows, error } = await supabaseClient
 				.from('quest_log')
 				.select('game_data')
 				.eq('user_id', user.uid)
@@ -1498,9 +1825,9 @@ const App = (() => {
 
 	async function saveQuestLogEntry(game) {
 		const user = getCurrentUser();
-		if (!user || !supabase) return;
+		if (!user || !supabaseClient) return;
 		try {
-			await supabase.from('quest_log').insert({
+			await supabaseClient.from('quest_log').insert({
 				user_id: user.uid,
 				game_data: game
 			});
@@ -1509,6 +1836,7 @@ const App = (() => {
 
 	// ─── Jazyk / i18n ───
 	let currentLang = 'cs';
+	window.givemegame_currentLang = currentLang;
 	const translationCache = {};
 
 	// Kľúče, ktorých hodnota obsahuje HTML (použijeme innerHTML namiesto textContent)
@@ -1564,9 +1892,11 @@ const App = (() => {
 		const tr = translationCache[currentLang];
 		return (tr && tr[key] !== undefined) ? tr[key] : (fallback || key);
 	}
+	window.givemegame_t = t;
 
 	async function setLang(lang) {
 		currentLang = lang;
+		window.givemegame_currentLang = lang;
 		document.querySelectorAll('.btn-lang').forEach(btn => {
 			btn.classList.toggle('active', btn.dataset.lang === lang);
 		});
@@ -1909,7 +2239,7 @@ const App = (() => {
 
 		async function logout() {
 			try {
-				if (supabase) await supabase.auth.signOut();
+				if (supabaseClient) await supabaseClient.auth.signOut();
 			} catch (e) { console.warn('[Profile] signOut:', e); }
 			sessionStorage.removeItem('givemegame_user');
 			GameUI.closeModal('profile-modal');

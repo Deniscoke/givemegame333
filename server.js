@@ -17,6 +17,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Favicon — predchádza 404
+app.get('/favicon.ico', (req, res) => {
+	const icon = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+	res.type('image/png').send(icon);
+});
+
 // Root: localhost → login, všetko ostatné (tunel / produkcia) → index.html (hra)
 const PUBLIC_DIR = path.join(__dirname, 'public');
 app.get('/', (req, res) => {
@@ -96,9 +102,6 @@ fs.watch(KNOWLEDGE_DIR, { persistent: false }, () => {
 	console.log('[Knowledge] Zmena detekovaná — reloadujem...');
 	setTimeout(loadKnowledgeBase, 500); // debounce
 });
-
-// ─── Statický file serving (public/ pre Vercel, lokálne) ───
-app.use(express.static(PUBLIC_DIR));
 
 // ─── OpenAI klient ───
 let openai = null;
@@ -456,7 +459,7 @@ ${didacticGuidance}
 POUŽI VŠETKY vstupy z panelu vyššie — každý filter je tvoj brief. Pred odpoveďou skontroluj, či si splnil VŠETKY obmedzenia.
 Odpovedz JEDNÝM JSON objektom. Píš v jazyku ${aiLanguage}.`;
 
-	const model = process.env.OPENAI_MODEL || 'gpt-4o';
+	const model = process.env.OPENAI_MODEL || 'gpt-5.4';
 	const fallbackModel = model === 'gpt-5.4' ? 'gpt-4o' : 'gpt-3.5-turbo';
 	const maxTokens = parseInt(process.env.OPENAI_MAX_TOKENS) || 5000;
 	const temperature = parseFloat(process.env.OPENAI_TEMPERATURE) || 0.8;
@@ -464,15 +467,17 @@ Odpovedz JEDNÝM JSON objektom. Píš v jazyku ${aiLanguage}.`;
 	console.log(`[API] Generujem hru: model=${model}, filters:`, JSON.stringify(filters, null, 0));
 
 	async function callAPI(useModel) {
-		return openai.chat.completions.create({
+		const isGpt5 = /^gpt-5\./.test(useModel);
+		const opts = {
 			model: useModel,
-			max_tokens: maxTokens,
 			temperature,
 			messages: [
 				{ role: 'system', content: buildSystemPrompt(aiLanguage) },
 				{ role: 'user', content: userContent }
 			]
-		});
+		};
+		opts[isGpt5 ? 'max_completion_tokens' : 'max_tokens'] = maxTokens;
+		return openai.chat.completions.create(opts);
 	}
 
 	try {
@@ -559,13 +564,242 @@ app.post('/api/knowledge/reload', (req, res) => {
 	});
 });
 
+// ─── Pripravené zaujímavosti pre vypraváča ───
+let narratorFacts = { sk: [], cs: [], en: [], es: [] };
+try {
+	const factsPath = path.join(__dirname, 'data', 'narrator-facts.json');
+	narratorFacts = JSON.parse(fs.readFileSync(factsPath, 'utf-8'));
+} catch (e) { console.warn('[API] narrator-facts.json not loaded:', e.message); }
+
+const FALLBACK_FACTS = {
+	sk: ['Medúzy existujú na Zemi už viac ako 650 miliónov rokov – sú staršie ako dinosaury!', 'Včely komunikujú tancom.'],
+	cs: ['Medúzy existují na Zemi už více než 650 milionů let – jsou starší než dinosauři!', 'Včely komunikují tancem.'],
+	en: ['Jellyfish have existed on Earth for over 650 million years – older than dinosaurs!', 'Bees communicate through dance.'],
+	es: ['Las medusas existen en la Tierra desde hace más de 650 millones de años.', 'Las abejas se comunican bailando.']
+};
+function getRandomLocalFact(lang) {
+	const arr = narratorFacts[lang] || narratorFacts.sk;
+	if (arr && arr.length > 0) return arr[Math.floor(Math.random() * arr.length)];
+	const fallback = FALLBACK_FACTS[lang] || FALLBACK_FACTS.sk;
+	return fallback[Math.floor(Math.random() * fallback.length)];
+}
+
+// ─── RVP CZ — obsah pre vzdelávacie zaujímavosti ───
+let rvpData = null;
+let rvpSummary = '';
+try {
+	const rvpPath = path.join(__dirname, 'data', 'rvp.json');
+	rvpData = JSON.parse(fs.readFileSync(rvpPath, 'utf-8'));
+	const parts = [];
+	if (rvpData.kompetence) {
+		for (const [k, v] of Object.entries(rvpData.kompetence)) {
+			parts.push(`${v.nazev}: ${v.popis}`);
+			if (v.indikatory?.length) parts.push('  ' + v.indikatory.slice(0, 3).join('; '));
+		}
+	}
+	if (rvpData.vzdelavaci_oblasti) {
+		for (const [k, v] of Object.entries(rvpData.vzdelavaci_oblasti)) {
+			parts.push(`${v.nazev} — predmety: ${(v.predmety || []).join(', ')}`);
+		}
+	}
+	if (rvpData.prurezova_temata) {
+		parts.push('Průřezová témata: ' + Object.values(rvpData.prurezova_temata).join(', '));
+	}
+	rvpSummary = parts.join('\n');
+	if (rvpSummary.length > 4000) rvpSummary = rvpSummary.substring(0, 4000) + '…';
+	console.log('[API] RVP CZ načítaný pre random-fact.');
+} catch (e) { console.warn('[API] rvp.json not loaded:', e.message); }
+
+// ─── Debug: test OpenAI pre vypraváča ───
+app.get('/api/random-fact-test', async (req, res) => {
+	const key = process.env.OPENAI_API_KEY;
+	const hasKey = key && key !== 'sk-your-openai-api-key-here';
+	if (!hasKey) {
+		return res.json({ ok: false, error: 'OPENAI_API_KEY nie je nastavený v .env' });
+	}
+	try {
+		const client = new OpenAI({ apiKey: key });
+		const { data } = await client.chat.completions.create({
+			model: 'gpt-4o-mini',
+			max_tokens: 50,
+			messages: [{ role: 'user', content: 'Say hello in one word.' }]
+		});
+		const choice = data?.choices?.[0];
+		const text = choice?.message?.content?.trim();
+		const finishReason = choice?.finish_reason;
+		return res.json({ ok: true, model: 'gpt-4o-mini', response: text, finish_reason: finishReason, raw: !!choice });
+	} catch (err) {
+		return res.json({ ok: false, error: err.message, code: err?.code });
+	}
+});
+
+// ─── Narrator oblasti (pre výber v UI) ───
+app.get('/api/narrator-areas', (req, res) => {
+	const areas = [{ id: '', name: 'Náhodná oblasť' }];
+	if (rvpData?.vzdelavaci_oblasti) {
+		for (const [id, v] of Object.entries(rvpData.vzdelavaci_oblasti)) {
+			areas.push({ id, name: v.nazev });
+		}
+	}
+	if (rvpData?.kompetence) {
+		for (const [id, v] of Object.entries(rvpData.kompetence)) {
+			areas.push({ id: 'komp-' + id, name: v.nazev });
+		}
+	}
+	if (rvpData?.prurezova_temata) {
+		for (const [id, name] of Object.entries(rvpData.prurezova_temata)) {
+			areas.push({ id: 'tema-' + id, name });
+		}
+	}
+	res.json({ areas });
+});
+
+// ─── Random educational fact (AI vypraváč) — GPT-5.4 + RVP CZ + výber oblasti ───
+app.get('/api/random-fact', async (req, res) => {
+	const lang = (req.query.lang || 'sk').slice(0, 2);
+	const areaId = (req.query.area || '').trim();
+	const styleParam = (req.query.style || '').toLowerCase();
+	const effectiveKey = process.env.OPENAI_API_KEY;
+	const hasKey = effectiveKey && effectiveKey !== 'sk-your-openai-api-key-here';
+
+	if (!hasKey) {
+		const fact = getRandomLocalFact(lang);
+		console.log('[API] random-fact: no API key, local fact');
+		return res.json({ fact, source: 'local' });
+	}
+
+	// OpenAI API — GPT-5.4 (Chat) pre generovanie, TTS pre čítanie
+	if (!openai) openai = new OpenAI({ apiKey: effectiveKey });
+	const langNames = { sk: 'Slovenčina', cs: 'Čeština', en: 'English', es: 'Español' };
+	const langName = langNames[lang] || 'Slovenčina';
+
+	let areaContext = '';
+	if (areaId && rvpData) {
+		if (areaId.startsWith('komp-')) {
+			const k = areaId.replace('komp-', '');
+			const v = rvpData.kompetence?.[k];
+			if (v) areaContext = `\n\nVYBRANÁ OBLAST: ${v.nazev}\nPopis: ${v.popis}\nIndikátory: ${(v.indikatory || []).slice(0, 5).join('; ')}\n\nTvoja zaujímavosť MUSÍ vychádzať výhradne z tejto oblasti.`;
+		} else if (areaId.startsWith('tema-')) {
+			const k = areaId.replace('tema-', '');
+			const name = rvpData.prurezova_temata?.[k];
+			if (name) areaContext = `\n\nVYBRANÁ OBLAST: ${name}\n\nTvoja zaujímavosť MUSÍ vychádzať výhradne z tejto oblasti.`;
+		} else {
+			const v = rvpData.vzdelavaci_oblasti?.[areaId];
+			if (v) areaContext = `\n\nVYBRANÁ OBLAST: ${v.nazev}\nPredmety: ${(v.predmety || []).join(', ')}\n\nTvoja zaujímavosť MUSÍ vychádzať výhradne z tejto oblasti.`;
+		}
+	} else {
+		areaContext = rvpSummary
+			? `\n\nVyber NÁHODNE jednu z týchto oblastí RVP CZ a vytvor krátku zaujímavosť:\n${rvpSummary}`
+			: '';
+	}
+
+	// Použi spoľahlivé modely — gpt-4o-mini je najdostupnejší
+	const modelsToTry = ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+	let lastError = null;
+	for (const factModel of modelsToTry) {
+		try {
+			const langMap = { sk: 'Slovak', cs: 'Czech', en: 'English', es: 'Spanish' };
+			const tgtLang = langMap[lang] || 'Czech';
+			const genZStyle = styleParam === 'genz' || (process.env.NARRATOR_STYLE || '').toLowerCase() === 'genz';
+			const styleHint = genZStyle
+				? ` STYLE: Use Gen Z slang and casual vocabulary. Same educational content, different delivery. EN: "lowkey", "literally", "vibe", "no cap", "slay", "fr". CZ/SK: "v pohodě", "lit", "based", "lowkey", "to je vibe", "žádný cap". Keep the fact accurate, just make it sound like a Gen Z friend.`
+				: '';
+			const factOpts = {
+				model: factModel,
+				temperature: 0.9,
+				max_tokens: 150,
+				messages: [{
+					role: 'system',
+					content: `You are a friendly educational narrator. Reply with ONE short surprising educational fact only. 1-3 sentences. Write in ${tgtLang}. No quotes or preamble.${styleHint}`
+				}, {
+					role: 'user',
+					content: areaId ? 'One interesting fact from the selected topic.' : 'One random educational fact for children.'
+				}]
+			};
+			if (areaContext) {
+				factOpts.messages[1].content = areaContext.slice(0, 300) + '\n\nGive one fact from above.';
+			}
+			const completion = await openai.chat.completions.create(factOpts);
+			const choice = completion?.choices?.[0];
+			const msg = choice?.message;
+			let fact = msg?.content;
+			if (Array.isArray(fact)) fact = fact.map(p => p?.text || p?.content).filter(Boolean).join(' ');
+			fact = (fact || '').toString().trim();
+			if (fact) {
+				console.log('[API] random-fact: OpenAI OK', factModel);
+				return res.json({ fact, source: 'openai' });
+			}
+			if (choice) {
+				lastError = `Prázdna odpoveď (finish: ${choice.finish_reason || '?'})`;
+				console.warn('[API] random-fact', factModel, lastError, 'msg keys:', msg ? Object.keys(msg) : []);
+			}
+		} catch (err) {
+			lastError = err.message || String(err);
+			console.error('[API] random-fact', factModel, 'CHYBA:', lastError);
+		}
+	}
+
+	// Fallback na lokál — vráť aj chybu pre debug
+	const fact = getRandomLocalFact(lang);
+	console.error('[API] random-fact: VŠETKY modely zlyhali, fallback local. Posledná chyba:', lastError);
+	res.json({ fact, source: 'local', _debug: lastError });
+});
+
+// ─── TTS (Text-to-Speech) — ako v Dračí Hlídke, OpenAI audio/speech ───
+const TTS_VOICES = ['marin', 'cedar', 'onyx', 'sage', 'coral', 'nova', 'alloy'];
+app.post('/api/tts', async (req, res) => {
+	const apiKey = process.env.OPENAI_API_KEY;
+	if (!apiKey || apiKey === 'sk-your-openai-api-key-here') {
+		return res.status(503).json({ error: 'TTS nie je nakonfigurovaný. Nastav OPENAI_API_KEY.' });
+	}
+	let body;
+	try {
+		body = typeof req.body === 'object' ? req.body : {};
+	} catch {
+		return res.status(400).json({ error: 'Neplatný JSON' });
+	}
+	const text = (body.text || '').trim();
+	if (!text) return res.status(400).json({ error: "Pole 'text' je povinné" });
+	const truncated = text.length > 4096 ? text.slice(0, 4096) : text;
+	const voice = TTS_VOICES.includes(body.voice) ? body.voice : 'marin';
+	try {
+		const response = await fetch('https://api.openai.com/v1/audio/speech', {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				model: process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts',
+				voice,
+				input: truncated,
+				instructions: 'Speak in a calm, engaging narrative tone like a storyteller. Moderate pace, clear pronunciation.',
+				response_format: 'mp3'
+			})
+		});
+		if (!response.ok) {
+			const errBody = await response.text().catch(() => '');
+			console.error('[TTS] OpenAI:', response.status, errBody.slice(0, 200));
+			return res.status(response.status >= 500 ? 502 : response.status).json({ error: `TTS chyba: ${response.status}` });
+		}
+		const buf = await response.arrayBuffer();
+		res.set({ 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, max-age=3600' });
+		res.send(Buffer.from(buf));
+	} catch (e) {
+		console.error('[TTS]', e.message);
+		res.status(502).json({ error: 'Nepodarilo sa vygenerovať audio.' });
+	}
+});
+
 // ─── Status endpoint ───
 app.get('/api/status', (req, res) => {
+	const hasKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-your-openai-api-key-here');
 	res.json({
 		status: 'ok',
-		hasApiKey: !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-your-openai-api-key-here'),
+		hasApiKey: hasKey,
 		model: process.env.OPENAI_MODEL || 'gpt-5.4',
 		engine: openai ? 'ai' : 'local',
+		randomFactSource: hasKey ? 'openai' : 'local',
 		knowledge: {
 			fileCount: knowledgeCache.length,
 			totalChars: knowledgeSummary.length
@@ -573,15 +807,21 @@ app.get('/api/status', (req, res) => {
 	});
 });
 
+// ─── Statický file serving (po API route, aby /api/* fungovalo) ───
+app.use(express.static(PUBLIC_DIR));
+
 // ─── Spustenie servera (lokálne) / export pre Vercel ───
 const PORT = process.env.PORT || 3000;
 if (!process.env.VERCEL) {
 	app.listen(PORT, () => {
+		const hasKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-your-openai-api-key-here');
 		console.log(`\n╔════════════════════════════════════════╗`);
 		console.log(`║  gIVEMEGAME.IO server bežiaci         ║`);
 		console.log(`║  http://localhost:${PORT}                 ║`);
 		console.log(`║  API: /api/generate-game               ║`);
-		console.log(`║  OpenAI: ${openai ? '✅ pripojené' : '❌ nie je kľúč'}               ║`);
+		console.log(`║  API: /api/random-fact (vypraváč)      ║`);
+		console.log(`║  OpenAI: ${hasKey ? '✅ pripojené' : '❌ nie je kľúč'}               ║`);
+		console.log(`║  Vypraváč: ${hasKey ? '🤖 AI (OpenAI)' : '📋 Lokál'}                  ║`);
 		console.log(`╚════════════════════════════════════════╝\n`);
 	});
 }

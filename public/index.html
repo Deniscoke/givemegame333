@@ -3,6 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23633cff'/><text x='16' y='22' font-size='14' fill='white' text-anchor='middle' font-family='sans-serif'>G</text></svg>">
 	<title>gIVEMEGAME.IO — Generátor vzdělávacích her</title>
 	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -455,9 +456,35 @@
 
 			<!-- ─── RIGHT PANEL: PREVIEW & HISTORY ─── -->
 			<aside class="right-panel">
-				<div class="panel-section">
-					<label class="panel-label"><i class="bi bi-card-text"></i> <span data-i18n="preview">Náhled</span></label>
-					<div id="quick-view" class="quick-view">
+				<div class="panel-section narrator-section" data-narrator-zone>
+					<label class="panel-label"><i class="bi bi-mic"></i> SMARTA</label>
+					<div class="narrator-area-select-wrap">
+						<select id="narrator-area" class="narrator-area-select" title="Vyber oblasť RVP pre zaujímavosť">
+							<option value="">Náhodná oblasť</option>
+						</select>
+					</div>
+					<label class="narrator-genz-wrap">
+						<input type="checkbox" id="narrator-genz" title="Gen Z slovník — obsah rovnaký, len iný štýl">
+						<span>Gen Z štýl</span>
+					</label>
+					<button type="button" class="narrator-bot" id="narrator-bot" title="Klikni — SMARTA ti povie zaujímavosť nahlas. Vypočuj si ju a získaš 50 coinov!">
+						<div class="narrator-avatar-pixel smarta" aria-hidden="true">
+							<span></span><span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span></span><span></span>
+							<span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-eye"></span><span class="px-eye"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-smile"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
+							<span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-body"></span><span class="px-body"></span><span class="px-hair"></span><span></span><span></span>
+						</div>
+						<span class="narrator-hint" data-i18n="narrator_click">Klikni a počúvaj</span>
+					</button>
+					<div id="narrator-fact" class="narrator-fact narrator-fact-placeholder" aria-hidden="true" data-speechify-ignore>
+						<i class="bi bi-mic"></i>
+						<span data-i18n="narrator_click">Klikni a počúvaj</span>
+					</div>
+					<div id="quick-view" class="quick-view quick-view-compact" style="margin-top:8px">
 						<div class="quick-placeholder">
 							<i class="bi bi-dice-3"></i>
 							<span data-i18n="no_game">Žádná hra</span>
@@ -673,8 +700,8 @@
 
 	<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-	<script src="script.js"></script>
-	<script type="module" src="cursor-effect.js"></script>
+	<script src="script.js?v=7"></script>
+	<script src="cursor-effect.js?v=2"></script>
 
 </body>
 </html>

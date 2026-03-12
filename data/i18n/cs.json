@@ -177,6 +177,10 @@
   "toast_key_invalid": "Neplatný API klíč",
 
   "share_link": "Zdieľať",
+  "narrator_title": "AI Vypraváč",
+  "narrator_click": "Klikni a poslouchej",
+  "narrator_listened": "Vypočutá zaujímavosť!",
+  "narrator_no_tts": "Tento prohlížeč nepodporuje hlasový výstup.",
   "robot_challenge": "🤖 Challenge",
   "robot_title": "Ověření lidskosti",
   "robot_subtitle": "Splň výzvy a dokaž, že nejsi bot",

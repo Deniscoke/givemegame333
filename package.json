@@ -6,13 +6,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "tunnel": "npx localtunnel --port 3000"
+    "tunnel": "npx localtunnel --port 3000",
+    "db:migrate": "node scripts/run-supabase-migrations.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "firebase": "^12.10.0",
-    "openai": "^4.82.0"
+    "openai": "^4.82.0",
+    "pg": "^8.20.0"
   }
 }

@@ -541,7 +541,7 @@ aside {
 aside.left-panel { border-right: 2px solid var(--border); }
 aside.right-panel {
 	border-left: 2px solid var(--border);
-	overflow: hidden;
+	overflow-y: auto;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
@@ -566,6 +566,118 @@ aside.right-panel .panel-section.panel-scrollable .panel-scroll-inner {
 aside.right-panel .panel-scroll-inner .history-list {
 	overflow: visible;
 }
+/* AI Vypraváč — pixel art narrator (izolácia pred Speechify a inými TTS rozšíreniami) */
+.narrator-section[data-narrator-zone] {
+	contain: layout style;
+	isolation: isolate;
+}
+.narrator-area-select-wrap { margin-bottom: 8px; }
+.narrator-area-select {
+	width: 100%;
+	font-size: 10px;
+	padding: 6px 8px;
+	background: var(--panel);
+	border: 2px solid var(--border);
+	border-radius: 4px;
+	color: var(--text);
+	font-family: inherit;
+	cursor: pointer;
+}
+.narrator-area-select:focus { outline: none; border-color: rgba(99, 102, 241, 0.6); }
+.narrator-genz-wrap {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	font-size: 9px;
+	cursor: pointer;
+	color: var(--text);
+}
+.narrator-genz-wrap input { cursor: pointer; }
+.narrator-section .narrator-bot {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 10px;
+	background: var(--panel);
+	border: 2px solid var(--border);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: transform 0.15s, box-shadow 0.15s;
+	position: relative;
+	z-index: 1;
+}
+.narrator-section .narrator-bot:hover {
+	transform: scale(1.02);
+	box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}
+.narrator-section .narrator-bot:disabled {
+	opacity: 0.7;
+	cursor: wait;
+}
+.narrator-avatar-pixel {
+	display: grid;
+	grid-template-columns: repeat(8, 1fr);
+	grid-template-rows: repeat(8, 1fr);
+	gap: 0;
+	width: 40px;
+	height: 40px;
+	margin: 0 auto;
+}
+.narrator-avatar-pixel span {
+	width: 5px;
+	height: 5px;
+	min-width: 5px;
+	min-height: 5px;
+	background: transparent;
+}
+/* SMARTA — ženská postava 40×40px */
+.narrator-avatar-pixel.smarta .px-hair { background: #5c4033; }
+.narrator-avatar-pixel.smarta .px-face { background: #f5d0c5; }
+.narrator-avatar-pixel.smarta .px-eye { background: #1a1a1a; }
+.narrator-avatar-pixel.smarta .px-smile { background: #e8a598; }
+.narrator-avatar-pixel.smarta .px-body { background: #6366f1; }
+.narrator-hint {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 6px;
+	opacity: 0.9;
+}
+.narrator-fact {
+	font-size: 10px;
+	line-height: 1.5;
+	padding: 10px;
+	margin-top: 8px;
+	min-height: 48px;
+	background: rgba(139, 69, 19, 0.08);
+	border: 2px solid rgba(139, 69, 19, 0.3);
+	border-radius: 6px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	text-align: center;
+}
+.narrator-fact-placeholder {
+	color: var(--text);
+	opacity: 0.7;
+}
+.narrator-fact-placeholder .bi-mic { font-size: 14px; }
+.narrator-fact:not(.narrator-fact-placeholder) {
+	opacity: 1;
+	background: rgba(139, 69, 19, 0.12);
+}
+.narrator-source-badge {
+	display: inline-block;
+	margin-top: 6px;
+	font-size: 8px;
+	opacity: 0.8;
+	color: var(--text);
+}
+.quick-view-compact { font-size: 9px; }
+
 aside.right-panel .panel-section.tamagochi-section {
 	max-height: 180px;
 }

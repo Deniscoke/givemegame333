@@ -176,6 +176,10 @@
   "toast_key_invalid": "API key inválida",
 
   "share_link": "Compartir",
+  "narrator_title": "AI Narrador",
+  "narrator_click": "Clic para escuchar",
+  "narrator_listened": "¡Curiosidad escuchada!",
+  "narrator_no_tts": "Este navegador no soporta salida de audio.",
   "robot_challenge": "🤖 Challenge",
   "robot_title": "Verificación humana",
   "robot_subtitle": "Completa los retos y demuestra que no eres un bot",
