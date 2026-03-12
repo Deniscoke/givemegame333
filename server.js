@@ -39,8 +39,10 @@ function loadKnowledgeBase() {
 	knowledgeCache = [];
 	knowledgeSummary = '';
 	if (!fs.existsSync(KNOWLEDGE_DIR)) {
-		fs.mkdirSync(KNOWLEDGE_DIR, { recursive: true });
-		console.log('[Knowledge] Priečinok "source of knowledge" vytvorený.');
+		try {
+			fs.mkdirSync(KNOWLEDGE_DIR, { recursive: true });
+			console.log('[Knowledge] Priečinok "source of knowledge" vytvorený.');
+		} catch (e) { /* Na Vercel je filesystem read-only */ }
 		return;
 	}
 	try {
@@ -93,12 +95,16 @@ function loadKnowledgeBase() {
 		console.error('[Knowledge] Chyba skenovania:', e.message);
 	}
 }
-// Load on startup + watch for changes
+// Load on startup + watch for changes (iba lokálne — fs.watch nie je podporovaný na Vercel)
 loadKnowledgeBase();
-fs.watch(KNOWLEDGE_DIR, { persistent: false }, () => {
-	console.log('[Knowledge] Zmena detekovaná — reloadujem...');
-	setTimeout(loadKnowledgeBase, 500); // debounce
-});
+if (!process.env.VERCEL && fs.existsSync(KNOWLEDGE_DIR)) {
+	try {
+		fs.watch(KNOWLEDGE_DIR, { persistent: false }, () => {
+			console.log('[Knowledge] Zmena detekovaná — reloadujem...');
+			setTimeout(loadKnowledgeBase, 500); // debounce
+		});
+	} catch (e) { console.warn('[Knowledge] fs.watch nie je dostupný:', e.message); }
+}
 
 // ─── OpenAI klient ───
 let openai = null;
