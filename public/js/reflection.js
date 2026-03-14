@@ -78,10 +78,13 @@ const Reflection = (() => {
 					});
 				});
 			} else {
+				const savedNotes = q.id === 'darilo'
+					? (localStorage.getItem('givemegame_session_notes') || '')
+					: '';
 				div.innerHTML = `
 					<label class="reflection-label">${q.label}</label>
 					<textarea data-id="${q.id}" rows="2" maxlength="300"
-						placeholder="Napíš pár viet..."></textarea>`;
+						placeholder="Napíš pár viet...">${savedNotes}</textarea>`;
 			}
 			form.appendChild(div);
 		});

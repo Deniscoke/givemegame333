@@ -157,6 +157,15 @@ const Session = (() => {
 	}
 
 	function _onActive(session) {
+		// Show notes block
+		const notesBlock = document.getElementById('session-notes-block');
+		if (notesBlock) {
+			notesBlock.style.display = '';
+			const saved = localStorage.getItem('givemegame_session_notes') || '';
+			const ta = document.getElementById('session-notes-input');
+			if (ta) ta.value = saved;
+		}
+
 		// Remove start button — game is live
 		document.getElementById('btn-lobby-start')?.remove();
 
@@ -200,6 +209,9 @@ const Session = (() => {
 		_closeLobby();
 		_channel?.unsubscribe();
 		_channel = null;
+		localStorage.removeItem('givemegame_session_notes');
+		const notesBlock = document.getElementById('session-notes-block');
+		if (notesBlock) notesBlock.style.display = 'none';
 	}
 
 	// ─── Lobby UI ─────────────────────────────────────────────────

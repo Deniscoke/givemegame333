@@ -462,6 +462,19 @@
 
 					</div>
 
+					<!-- ─── Session Notes (shown during active session) ─── -->
+					<div id="session-notes-block" style="display:none" class="session-notes-block">
+					  <div class="section-title" style="margin-bottom:8px">
+					    <i class="bi bi-pencil-square"></i> Moje poznámky
+					  </div>
+					  <textarea id="session-notes-input" rows="3" maxlength="500"
+					    placeholder="Zapíš si poznámky počas aktivity..."
+					    oninput="localStorage.setItem('givemegame_session_notes', this.value)"
+					    style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);
+					           background:rgba(255,255,255,0.05);color:inherit;font-size:13px;
+					           resize:vertical;font-family:inherit;box-sizing:border-box"></textarea>
+					</div>
+
 					<div class="game-card-footer">
 						<button class="btn btn-retro btn-action" onclick="App.exportGame()">
 							<i class="bi bi-download"></i> Export
