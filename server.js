@@ -175,6 +175,14 @@ async function requireSupabaseUser(req, res) {
 	}
 }
 
+function generateJoinCode() {
+	let code = '';
+	for (let i = 0; i < JOIN_CODE_LENGTH; i++) {
+		code += JOIN_CODE_CHARS[Math.floor(Math.random() * JOIN_CODE_CHARS.length)];
+	}
+	return code;
+}
+
 function coinApiReady() {
 	return Boolean(coinsDbPool && SUPABASE_AUTH_ENDPOINT && SUPABASE_ANON_KEY);
 }
@@ -952,6 +960,275 @@ app.get('/api/profile/competencies', async (req, res) => {
 	} catch (err) {
 		console.error('[Competencies] fetch failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa načítať kompetencie', code: 'COMP_ERROR' });
+	}
+});
+
+// ─── Sessions API ─────────────────────────────────────────────────
+
+app.post('/api/sessions', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const { game_json } = req.body || {};
+	if (!game_json?.title) {
+		return res.status(400).json({ error: 'game_json je povinné', code: 'MISSING_GAME' });
+	}
+
+	// Generate unique join code (retry on collision)
+	let join_code;
+	for (let attempt = 0; attempt < 10; attempt++) {
+		const candidate = generateJoinCode();
+		const { rows } = await queryCoinsDb(
+			'SELECT id FROM public.sessions WHERE join_code = $1', [candidate]
+		);
+		if (rows.length === 0) { join_code = candidate; break; }
+	}
+	if (!join_code) {
+		return res.status(500).json({ error: 'Nepodarilo sa vygenerovať unikátny kód', code: 'CODE_GEN_ERROR' });
+	}
+
+	try {
+		const { rows } = await queryCoinsDb(
+			`INSERT INTO public.sessions (host_id, game_json, join_code)
+			 VALUES ($1, $2, $3)
+			 RETURNING id, join_code, status, created_at`,
+			[user.id, JSON.stringify(game_json), join_code]
+		);
+		res.json(rows[0]);
+	} catch (err) {
+		console.error('[Sessions] create failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa vytvoriť session', code: 'CREATE_ERROR' });
+	}
+});
+
+app.get('/api/sessions/:code', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const code = (req.params.code || '').toUpperCase().trim();
+	if (!code) return res.status(400).json({ error: 'Kód je povinný', code: 'MISSING_CODE' });
+
+	try {
+		const { rows: sRows } = await queryCoinsDb(
+			`SELECT id, host_id, game_json, join_code, status, timer_ends_at, created_at
+			 FROM public.sessions WHERE join_code = $1`,
+			[code]
+		);
+		if (!sRows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
+		const session = sRows[0];
+
+		const { rows: pRows } = await queryCoinsDb(
+			`SELECT sp.user_id, sp.coins_paid, sp.reflection_done, sp.joined_at,
+			        p.display_name
+			 FROM public.session_participants sp
+			 JOIN public.profiles p ON p.id = sp.user_id
+			 WHERE sp.session_id = $1
+			 ORDER BY sp.joined_at ASC`,
+			[session.id]
+		);
+
+		res.json({ ...session, participants: pRows });
+	} catch (err) {
+		console.error('[Sessions] get failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa načítať session', code: 'FETCH_ERROR' });
+	}
+});
+
+app.post('/api/sessions/:code/join', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const code = (req.params.code || '').toUpperCase().trim();
+	try {
+		const { rows } = await queryCoinsDb(
+			'SELECT id, status FROM public.sessions WHERE join_code = $1', [code]
+		);
+		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
+		const sess = rows[0];
+		if (sess.status !== 'waiting') {
+			return res.status(409).json({ error: 'Session už beží alebo skončila', code: 'ALREADY_STARTED' });
+		}
+
+		// Check coin balance
+		const { rows: pRows } = await queryCoinsDb(
+			'SELECT coins FROM public.profiles WHERE id = $1', [user.id]
+		);
+		const coins = parseInt(pRows[0]?.coins, 10) || 0;
+		if (coins < SESSION_JOIN_COST) {
+			return res.status(402).json({
+				error: `Potrebuješ aspoň ${SESSION_JOIN_COST} coinov pre vstup`,
+				code: 'INSUFFICIENT_COINS'
+			});
+		}
+
+		await queryCoinsDb(
+			`INSERT INTO public.session_participants (session_id, user_id)
+			 VALUES ($1, $2) ON CONFLICT (session_id, user_id) DO NOTHING`,
+			[sess.id, user.id]
+		);
+		res.json({ ok: true, session_id: sess.id });
+	} catch (err) {
+		console.error('[Sessions] join failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa pripojiť', code: 'JOIN_ERROR' });
+	}
+});
+
+app.post('/api/sessions/:code/start', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const code = (req.params.code || '').toUpperCase().trim();
+	try {
+		const { rows } = await queryCoinsDb(
+			'SELECT id, host_id, game_json, status FROM public.sessions WHERE join_code = $1', [code]
+		);
+		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
+		const sess = rows[0];
+		if (sess.host_id !== user.id) {
+			return res.status(403).json({ error: 'Len host môže štartovať session', code: 'NOT_HOST' });
+		}
+		if (sess.status !== 'waiting') {
+			return res.status(409).json({ error: 'Session už beží', code: 'ALREADY_STARTED' });
+		}
+
+		const durationMin = sess.game_json?.duration?.max || 15;
+		const timerEndsAt = new Date(Date.now() + durationMin * 60 * 1000).toISOString();
+
+		// Deduct coins from all participants
+		const { rows: parts } = await queryCoinsDb(
+			'SELECT user_id FROM public.session_participants WHERE session_id = $1', [sess.id]
+		);
+
+		for (const p of parts) {
+			await queryCoinsDb(
+				'UPDATE public.profiles SET coins = GREATEST(0, COALESCE(coins,0) - $1) WHERE id = $2',
+				[SESSION_JOIN_COST, p.user_id]
+			);
+			await queryCoinsDb(
+				'UPDATE public.session_participants SET coins_paid = $1 WHERE session_id = $2 AND user_id = $3',
+				[SESSION_JOIN_COST, sess.id, p.user_id]
+			);
+			await queryCoinsDb(
+				'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
+				[p.user_id, -SESSION_JOIN_COST, 'session_join', JSON.stringify({ session_code: code })]
+			);
+		}
+
+		await queryCoinsDb(
+			`UPDATE public.sessions SET status = 'active', timer_ends_at = $1 WHERE id = $2`,
+			[timerEndsAt, sess.id]
+		);
+
+		res.json({ ok: true, timer_ends_at: timerEndsAt, participants_charged: parts.length });
+	} catch (err) {
+		console.error('[Sessions] start failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa štartovať session', code: 'START_ERROR' });
+	}
+});
+
+app.post('/api/sessions/:code/reflect', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const code = (req.params.code || '').toUpperCase().trim();
+	const { reflection_data } = req.body || {};
+	if (!reflection_data || typeof reflection_data !== 'object' || Array.isArray(reflection_data)) {
+		return res.status(400).json({ error: 'reflection_data (object) je povinné', code: 'MISSING_DATA' });
+	}
+
+	try {
+		const { rows } = await queryCoinsDb(
+			'SELECT id, status FROM public.sessions WHERE join_code = $1', [code]
+		);
+		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
+		const sess = rows[0];
+		if (!['active', 'reflection'].includes(sess.status)) {
+			return res.status(409).json({ error: 'Session nie je aktívna', code: 'WRONG_STATUS' });
+		}
+
+		await queryCoinsDb(
+			`UPDATE public.session_participants
+			 SET reflection_data = $1, reflection_done = true
+			 WHERE session_id = $2 AND user_id = $3`,
+			[JSON.stringify(reflection_data), sess.id, user.id]
+		);
+		res.json({ ok: true });
+	} catch (err) {
+		console.error('[Sessions] reflect failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa uložiť reflexiu', code: 'REFLECT_ERROR' });
+	}
+});
+
+app.post('/api/sessions/:code/complete', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const code = (req.params.code || '').toUpperCase().trim();
+	try {
+		const { rows } = await queryCoinsDb(
+			'SELECT id, host_id, game_json, status FROM public.sessions WHERE join_code = $1', [code]
+		);
+		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
+		const sess = rows[0];
+		if (sess.host_id !== user.id) {
+			return res.status(403).json({ error: 'Len host môže ukončiť session', code: 'NOT_HOST' });
+		}
+
+		const kompetence = sess.game_json?.rvp?.kompetence || [];
+		const awarded = {};
+		kompetence.forEach(k => { awarded[k] = COMPETENCY_AWARD; });
+
+		// Award competency points + bonus coins to all who completed reflection
+		const { rows: parts } = await queryCoinsDb(
+			`SELECT user_id FROM public.session_participants
+			 WHERE session_id = $1 AND reflection_done = true`,
+			[sess.id]
+		);
+
+		for (const p of parts) {
+			const { rows: profRows } = await queryCoinsDb(
+				'SELECT competency_points FROM public.profiles WHERE id = $1', [p.user_id]
+			);
+			const current = profRows[0]?.competency_points || {};
+			const updated = { ...current };
+			kompetence.forEach(k => {
+				updated[k] = (parseInt(updated[k], 10) || 0) + COMPETENCY_AWARD;
+			});
+
+			await queryCoinsDb(
+				'UPDATE public.profiles SET competency_points = $1 WHERE id = $2',
+				[JSON.stringify(updated), p.user_id]
+			);
+			await queryCoinsDb(
+				`UPDATE public.session_participants
+				 SET awarded_competencies = $1 WHERE session_id = $2 AND user_id = $3`,
+				[JSON.stringify(awarded), sess.id, p.user_id]
+			);
+			await queryCoinsDb(
+				'UPDATE public.profiles SET coins = COALESCE(coins,0) + $1 WHERE id = $2',
+				[COMPLETION_BONUS, p.user_id]
+			);
+			await queryCoinsDb(
+				'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
+				[p.user_id, COMPLETION_BONUS, 'session_complete', JSON.stringify({ session_code: code, kompetence: awarded })]
+			);
+		}
+
+		await queryCoinsDb(
+			`UPDATE public.sessions SET status = 'completed', completed_at = now() WHERE id = $1`,
+			[sess.id]
+		);
+
+		res.json({ ok: true, awarded, participants_rewarded: parts.length });
+	} catch (err) {
+		console.error('[Sessions] complete failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa ukončiť session', code: 'COMPLETE_ERROR' });
 	}
 });
 
