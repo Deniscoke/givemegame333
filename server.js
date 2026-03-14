@@ -1100,7 +1100,7 @@ app.post('/api/sessions/:code/start', async (req, res) => {
 
 		// Deduct coins from all participants
 		const { rows: parts } = await queryCoinsDb(
-			'SELECT user_id FROM public.session_participants WHERE session_id = $1', [sess.id]
+			'SELECT user_id FROM public.session_participants WHERE session_id = $1 AND coins_paid = 0', [sess.id]
 		);
 
 		for (const p of parts) {
@@ -1179,6 +1179,9 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 		if (sess.host_id !== user.id) {
 			return res.status(403).json({ error: 'Len host môže ukončiť session', code: 'NOT_HOST' });
 		}
+		if (sess.status === 'completed') {
+			return res.status(409).json({ error: 'Session je už dokončená', code: 'ALREADY_COMPLETED' });
+		}
 
 		const kompetence = sess.game_json?.rvp?.kompetence || [];
 		const awarded = {};
@@ -1187,7 +1190,7 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 		// Award competency points + bonus coins to all who completed reflection
 		const { rows: parts } = await queryCoinsDb(
 			`SELECT user_id FROM public.session_participants
-			 WHERE session_id = $1 AND reflection_done = true`,
+			 WHERE session_id = $1 AND reflection_done = true AND awarded_competencies IS NULL`,
 			[sess.id]
 		);
 
