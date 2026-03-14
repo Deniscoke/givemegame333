@@ -21,7 +21,7 @@
 			</div>
 
 			<!-- COIN DISPLAY -->
-			<div class="coin-display" id="coin-display" title="gIVEMECOIN">
+			<div class="coin-display" id="coin-display" title="gIVEMECOIN" onclick="App.Coins.toggleHistory()">
 				<span class="coin-icon">🪙</span>
 				<span class="coin-count" id="coin-count">0</span>
 			</div>
@@ -70,6 +70,9 @@
 				</button>
 				<button class="btn btn-retro btn-action-header desktop-only" onclick="App.UI.toggleHistory()" data-i18n-title="history">
 					<i class="bi bi-clock-history"></i>
+				</button>
+				<button class="btn btn-retro btn-action-header" id="btn-library" onclick="App.Library.open()" title="Knižnica hier">
+					<i class="bi bi-collection"></i>
 				</button>
 				<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleTheme()" data-i18n-title="appearance">
 					<i class="bi bi-moon-fill" id="theme-icon"></i>
@@ -457,6 +460,12 @@
 						<button class="btn btn-retro btn-action" onclick="App.copyGame()">
 							<i class="bi bi-clipboard"></i> <span data-i18n="copy">Kopírovat</span>
 						</button>
+						<button class="btn btn-retro btn-action btn-save-game" id="btn-save-game" onclick="App.Library.saveCurrentGame()">
+							<i class="bi bi-bookmark-plus"></i> <span>Uložiť</span>
+						</button>
+						<button class="btn btn-retro btn-action" id="btn-edit-game" style="display:none;" onclick="App.GameEdit.open()">
+							<i class="bi bi-pencil"></i> <span>Editovať</span>
+						</button>
 						<button class="btn btn-retro btn-action btn-regenerate" onclick="App.generate()">
 							<i class="bi bi-arrow-repeat"></i> <span data-i18n="new_game">Nová hra</span>
 						</button>
@@ -726,10 +735,108 @@
 	<!-- ═══════════════════ CURSOR EFFECT CANVAS ═══════════════════ -->
 	<canvas id="cursor-canvas" class="cursor-canvas"></canvas>
 
+	<!-- COIN HISTORY DROPDOWN (top-level — outside any transform context) -->
+	<div class="coin-history-dropdown" id="coin-history-dropdown" onclick="event.stopPropagation()">
+		<div class="coin-history-header">
+			<span class="coin-history-title">🪙 gIVEMECOIN</span>
+			<span class="coin-history-balance" id="coin-history-balance">0</span>
+		</div>
+		<div class="coin-history-list" id="coin-history-list">
+			<div class="coin-history-loading">Načítavam...</div>
+		</div>
+		<div class="coin-history-earn">
+			<div class="coin-history-earn-title">Ako zarobiť</div>
+			<div class="coin-earn-item">⏱ Dokonči timer <span>+500</span></div>
+			<div class="coin-earn-item">🤖 Robot Challenge <span>+250</span></div>
+			<div class="coin-earn-item">🎙 Vypočuj si zaujímavosť <span>+50</span></div>
+			<div class="coin-earn-item">📱 Buzz mobilu <span>+5</span></div>
+		</div>
+	</div>
+
+	<!-- ─── Library Modal ─── -->
+	<div class="library-modal-overlay" id="library-modal" style="display:none;" onclick="if(event.target===this)App.Library.close()">
+		<div class="library-modal">
+			<div class="library-modal-header">
+				<span class="library-modal-title"><i class="bi bi-collection"></i> Knižnica hier</span>
+				<button class="library-modal-close" onclick="App.Library.close()"><i class="bi bi-x-lg"></i></button>
+			</div>
+			<div class="library-modal-body">
+				<div class="library-list" id="library-list">
+					<div class="library-loading">Načítavam...</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
 	<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-	<script src="script.js?v=9"></script>
+	<!-- Phase 1+2+3 modules — must load before script.js -->
+	<script src="js/narrator.js?v=1"></script>
+	<script src="js/coins.js?v=1"></script>
+	<script src="js/timer.js?v=1"></script>
+	<script src="js/game-data.js?v=1"></script>
+	<script src="js/game-ui.js?v=1"></script>
+	<script src="js/reflection.js?v=1"></script>
+	<script src="js/game-api.js?v=1"></script>
+	<script src="js/library.js?v=1"></script>
+	<script src="js/game-edit.js?v=1"></script>
+	<script src="script.js?v=15"></script>
 	<script src="cursor-effect.js?v=2"></script>
 
+
+	<!-- ─── Game Inline Edit Modal ─── -->
+	<div id="game-edit-modal" class="modal-overlay" onclick="if(event.target===this)App.GameEdit.cancel()">
+		<div class="modal-box game-edit-box">
+			<div class="game-edit-header">
+				<span class="modal-title">✏️ EDITOVAŤ HRU</span>
+				<button class="modal-close" onclick="App.GameEdit.cancel()">✕</button>
+			</div>
+			<div class="game-edit-body">
+				<label class="gedit-label">Názov</label>
+				<input class="gedit-input" id="gedit-title" maxlength="120">
+				<label class="gedit-label">Krátky popis</label>
+				<textarea class="gedit-textarea" id="gedit-pitch" rows="2"></textarea>
+				<label class="gedit-label">Pomôcky (jeden na riadok)</label>
+				<textarea class="gedit-textarea" id="gedit-materials" rows="3"></textarea>
+				<label class="gedit-label">Inštrukcie (jeden krok na riadok)</label>
+				<textarea class="gedit-textarea" id="gedit-instructions" rows="6"></textarea>
+				<label class="gedit-label">Vzdelávacie ciele (jeden na riadok)</label>
+				<textarea class="gedit-textarea" id="gedit-learningGoals" rows="3"></textarea>
+				<label class="gedit-label">Reflexné otázky (jedna na riadok)</label>
+				<textarea class="gedit-textarea" id="gedit-reflectionPrompts" rows="3"></textarea>
+				<label class="gedit-label">Bezpečnostné poznámky (jedna na riadok)</label>
+				<textarea class="gedit-textarea" id="gedit-safetyNotes" rows="2"></textarea>
+				<label class="gedit-label">Tipy na úpravy (jeden na riadok)</label>
+				<textarea class="gedit-textarea" id="gedit-adaptationTips" rows="2"></textarea>
+				<label class="gedit-label">Poznámky pre vedúceho</label>
+				<textarea class="gedit-textarea" id="gedit-facilitatorNotes" rows="2"></textarea>
+			</div>
+			<div class="game-edit-footer">
+				<button class="btn btn-retro btn-action" id="btn-gedit-save" onclick="App.GameEdit.save()">
+					<i class="bi bi-check-lg"></i> Uložiť
+				</button>
+				<button class="btn btn-retro" onclick="App.GameEdit.cancel()">
+					<i class="bi bi-x-lg"></i> Zrušiť
+				</button>
+			</div>
+		</div>
+	</div>
+
+<!-- ─── Reflection Modal ─── -->
+<div id="reflection-modal" class="modal-overlay" style="display:none" aria-modal="true" role="dialog">
+  <div class="modal-box" style="max-width:540px">
+    <div class="modal-header">
+      <h3>🧠 Reflexia aktivity</h3>
+      <button class="modal-close" onclick="Reflection.close()" aria-label="Zavrieť">✕</button>
+    </div>
+    <p style="opacity:0.7;font-size:13px;margin-bottom:16px">
+      Zhodnoť ako prebehla aktivita — toto je posledný krok pred získaním kompetentnostných bodov.
+    </p>
+    <form id="reflection-form" onsubmit="return false"></form>
+    <button id="btn-reflection-submit" class="btn-primary" style="margin-top:16px;width:100%">
+      ✅ Odoslať reflexiu
+    </button>
+  </div>
+</div>
 </body>
 </html>
