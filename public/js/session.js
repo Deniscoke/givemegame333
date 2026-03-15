@@ -95,7 +95,7 @@ const Session = (() => {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 			const data = await res.json();
-			if (!res.ok) { GameUI.toast(`❌ ${data.error}`); return; }
+			if (!res.ok) { GameUI.toast(`❌ ${data.error}${data.detail ? ': ' + data.detail : ''}`); return; }
 			// Realtime will handle status transition to 'active'
 		} catch (err) {
 			GameUI.toast(`❌ ${err.message}`);

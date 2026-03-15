@@ -1339,7 +1339,7 @@ app.post('/api/sessions/:code/start', async (req, res) => {
 		res.json({ ok: true, timer_ends_at: timerEndsAt, participants_charged: parts.length });
 	} catch (err) {
 		console.error('[Sessions] start failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa štartovať session', code: 'START_ERROR' });
+		res.status(500).json({ error: 'Nepodarilo sa štartovať session', code: 'START_ERROR', detail: err.message });
 	}
 });
 
