@@ -24,6 +24,7 @@ const Session = (() => {
 	let _sessionId = null;  // current session uuid
 	let _isHost    = false;
 	let _channel   = null;  // Supabase Realtime channel
+	let _pollTimer = null;  // fallback polling interval for lobby participants
 
 	// ─── Public API ───────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ const Session = (() => {
 
 			_openLobby();
 			_subscribe();
+			_startPoll();
 			await _refreshParticipants();
 		} catch (err) {
 			GameUI.toast(`❌ ${err.message}`);
@@ -173,6 +175,7 @@ const Session = (() => {
 	}
 
 	function _onActive(session) {
+		_stopPoll(); // session started, no need to poll lobby anymore
 		// Show notes block
 		const notesBlock = document.getElementById('session-notes-block');
 		if (notesBlock) {
@@ -332,6 +335,17 @@ const Session = (() => {
 	function _closeLobby() {
 		const modal = document.getElementById('session-lobby-modal');
 		if (modal) modal.style.display = 'none';
+		_stopPoll();
+	}
+
+	function _startPoll() {
+		_stopPoll();
+		// Poll every 4s as fallback in case Realtime subscription misses events
+		_pollTimer = setInterval(() => _refreshParticipants(), 4000);
+	}
+
+	function _stopPoll() {
+		if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 	}
 
 	// ─── Helpers ──────────────────────────────────────────────────
