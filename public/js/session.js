@@ -177,6 +177,16 @@ const Session = (() => {
 
 	function _onActive(session) {
 		_stopPoll(); // session started, no need to poll lobby anymore
+
+		// For participants: load and render the game from session data
+		if (!_isHost && session.game_json && window.GameUI?.renderGame) {
+			window.currentGame = session.game_json;
+			GameUI.renderGame(session.game_json);
+		}
+
+		// Close the lobby modal so the game is visible
+		_closeLobby();
+
 		// Show notes block
 		const notesBlock = document.getElementById('session-notes-block');
 		if (notesBlock) {
@@ -185,9 +195,6 @@ const Session = (() => {
 			const ta = document.getElementById('session-notes-input');
 			if (ta) ta.value = saved;
 		}
-
-		// Remove start button — game is live
-		document.getElementById('btn-lobby-start')?.remove();
 
 		// Sync timer to server's timer_ends_at
 		const msLeft  = new Date(session.timer_ends_at) - Date.now();
