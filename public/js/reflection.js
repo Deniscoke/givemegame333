@@ -15,37 +15,49 @@
 const Reflection = (() => {
 	const MODAL_ID = 'reflection-modal';
 
-	// Human-readable question per competency key
-	const KOMP_QUESTIONS = {
-		'k-uceni':            'Ako sa ti darilo učiť sa nové veci počas hry?',
-		'k-reseni-problemu':  'Ako si riešil/a problémy počas aktivity?',
-		'komunikativni':      'Ako sa ti darilo komunikovať so skupinou?',
-		'socialni-personalni':'Ako si spolupracoval/a s ostatnými hráčmi?',
-		'obcanske':           'Ako si dodržiaval/a pravidlá a férovosť?',
-		'pracovni':           'Ako si pristupoval/a k zadanej úlohe?'
-	};
+	// Resolve translation at call-time so language changes are respected
+	const _t = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
+
+	// Question labels per competency key — resolved via _t() at open() time
+	function _kompQuestions() {
+		return {
+			'k-uceni':            _t('refl_q_k_uceni',       'Ako sa ti darilo učiť sa nové veci počas hry?'),
+			'k-reseni-problemu':  _t('refl_q_k_reseni',      'Ako si riešil/a problémy počas aktivity?'),
+			'komunikativni':      _t('refl_q_komunikativni', 'Ako sa ti darilo komunikovať so skupinou?'),
+			'socialni-personalni':_t('refl_q_socialni',      'Ako si spolupracoval/a s ostatnými hráčmi?'),
+			'obcanske':           _t('refl_q_obcanske',      'Ako si dodržiaval/a pravidlá a férovosť?'),
+			'pracovni':           _t('refl_q_pracovni',      'Ako si pristupoval/a k zadanej úlohe?')
+		};
+	}
 
 	// Build 5 questions: up to 3 competency ratings + 2 fixed open text
 	function buildQuestions(game) {
+		const kompQuestions = _kompQuestions();
 		const questions = [];
 		const komps = (game?.rvp?.kompetence || []).slice(0, 3);
 		komps.forEach(key => {
 			questions.push({
 				id: key,
 				type: 'rating',
-				label: KOMP_QUESTIONS[key] || key
+				label: kompQuestions[key] || key
 			});
 		});
-		// Always pad to at least 3 items with a generic if fewer competencies
-		while (questions.length < 3) {
-			questions.push({
-				id: 'aktivita_' + questions.length,
-				type: 'rating',
-				label: 'Ako hodnotíš svoju účasť na aktivite?'
-			});
+		// Pad to 3 items with DISTINCT fallback questions; skip any already shown via rvp.kompetence
+		const usedKompKeys = new Set(komps);
+		const FALLBACK_PADS = [
+			{ id: 'pad_general',  label: () => _t('refl_q_aktivita',      'Ako hodnotíš svoju účasť na aktivite?') },
+			{ id: 'pad_learning', label: () => _t('refl_q_k_uceni',       'Ako sa ti darilo učiť sa nové veci počas hry?'), skipIfUsed: 'k-uceni' },
+			{ id: 'pad_social',   label: () => _t('refl_q_socialni',       'Ako si spolupracoval/a s ostatnými hráčmi?'),   skipIfUsed: 'socialni-personalni' },
+			{ id: 'pad_comm',     label: () => _t('refl_q_komunikativni',  'Ako sa ti darilo komunikovať so skupinou?'),    skipIfUsed: 'komunikativni' },
+		];
+		let padPtr = 0;
+		while (questions.length < 3 && padPtr < FALLBACK_PADS.length) {
+			const fb = FALLBACK_PADS[padPtr++];
+			if (fb.skipIfUsed && usedKompKeys.has(fb.skipIfUsed)) continue;
+			questions.push({ id: fb.id, type: 'rating', label: fb.label() });
 		}
-		questions.push({ id: 'darilo',  type: 'text', label: 'Čo sa ti darilo?' });
-		questions.push({ id: 'zlepsit', type: 'text', label: 'Čo by si zlepšil/a nabudúce?' });
+		questions.push({ id: 'darilo',  type: 'text', label: _t('refl_q_darilo',  'Čo sa ti darilo?') });
+		questions.push({ id: 'zlepsit', type: 'text', label: _t('refl_q_zlepsit', 'Čo by si zlepšil/a nabudúce?') });
 		return questions;
 	}
 
@@ -81,7 +93,7 @@ const Reflection = (() => {
 				div.innerHTML = `
 					<label class="reflection-label">${q.label}</label>
 					<textarea data-id="${q.id}" rows="2" maxlength="300"
-						placeholder="Napíš pár viet..."></textarea>`;
+						placeholder="${_t('refl_placeholder', 'Napíš pár viet...')}"></textarea>`;
 				if (q.id === 'darilo') {
 					const ta = div.querySelector('textarea');
 					if (ta) ta.value = localStorage.getItem('givemegame_session_notes') || '';
@@ -118,7 +130,7 @@ const Reflection = (() => {
 		});
 
 		if (!allFilled) {
-			GameUI.toast('⚠️ Vyplň všetky otázky pred odoslaním');
+			GameUI.toast(_t('refl_fill_all', '⚠️ Vyplň všetky otázky pred odoslaním'));
 			return;
 		}
 
@@ -129,7 +141,7 @@ const Reflection = (() => {
 			if (sessionCode && supabaseClient) {
 				const { data: { session: authSession } } = await supabaseClient.auth.getSession();
 				const token = authSession?.access_token;
-				if (!token) throw new Error('Prihlás sa pre odoslanie reflexie');
+				if (!token) throw new Error(_t('refl_no_auth', 'Prihlás sa pre odoslanie reflexie'));
 
 				const res = await fetch(`/api/sessions/${sessionCode}/reflect`, {
 					method: 'POST',
@@ -141,7 +153,7 @@ const Reflection = (() => {
 				});
 				if (!res.ok) {
 					const err = await res.json().catch(() => ({}));
-					throw new Error(err.error || 'Chyba pri odosielaní reflexie');
+					throw new Error(err.error || _t('refl_error', 'Chyba pri odosielaní reflexie'));
 				}
 			}
 

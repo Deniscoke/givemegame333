@@ -1161,8 +1161,9 @@ body.light-mode .welcome-screen { box-shadow: 4px 4px 0px #999; }
 body.light-mode .game-card { box-shadow: 4px 4px 0px #999; }
 
 @keyframes card-appear {
-	0% { opacity: 0; transform: translateY(20px); }
-	100% { opacity: 1; transform: translateY(0); }
+	0%   { opacity: 0; transform: translateY(20px); filter: brightness(1.6); }
+	50%  { filter: brightness(1.12); }
+	100% { opacity: 1; transform: translateY(0); filter: brightness(1); }
 }
 
 .game-card-header {
@@ -2875,7 +2876,13 @@ body.light-mode .library-action-btn:hover {
 }
 
 /* ─── Competency Panel ─── */
-.competency-panel { padding: 12px 16px; }
+@keyframes comp-panel-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(106,191,198,0); background: transparent; }
+  30%  { box-shadow: 0 0 12px 4px rgba(106,191,198,0.5); background: rgba(106,191,198,0.08); }
+  100% { box-shadow: 0 0 0 0 rgba(106,191,198,0); background: transparent; }
+}
+.competency-panel { padding: 12px 16px; border-radius: 6px; transition: background 0.3s; }
+.competency-panel.comp-panel-flash { animation: comp-panel-flash 1.2s ease-out forwards; }
 .comp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .comp-label {
   width: 130px; font-size: 11px; display: flex; align-items: center;
@@ -2887,3 +2894,287 @@ body.light-mode .library-action-btn:hover {
 }
 .comp-bar { height: 100%; border-radius: 4px; transition: width 0.6s ease; min-width: 4px; }
 .comp-val { font-size: 11px; width: 30px; text-align: right; opacity: 0.6; }
+
+/* ─── Profile Modal — Competency Section ─── */
+.profile-comp-section { margin: 16px 0 8px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 14px; }
+body.light-mode .profile-comp-section { border-top-color: rgba(0,0,0,0.1); }
+.profile-comp-title { font-family: 'Press Start 2P', cursive; font-size: 9px; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+.profile-comp-row { flex-wrap: wrap; margin-bottom: 12px; }
+.profile-comp-label { width: 155px; font-size: 12px; }
+.profile-comp-right { flex: 1; min-width: 130px; }
+.profile-comp-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.profile-comp-pts { font-size: 12px; font-weight: bold; min-width: 32px; }
+.profile-comp-level { font-family: 'Press Start 2P', cursive; font-size: 7px; padding: 2px 5px; border-radius: 3px; background: rgba(255,255,255,0.08); }
+.profile-comp-next { font-size: 10px; opacity: 0.45; margin-left: auto; }
+body.light-mode .profile-comp-level { background: rgba(0,0,0,0.07); }
+
+/* ─── Game Rating Widget ─── */
+.game-rating-widget {
+  padding: 10px 16px 12px;
+  border-top: 1px solid rgba(0,255,255,0.12);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.rating-label {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  width: 100%;
+}
+.rating-stars { display: flex; gap: 3px; }
+.star-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.2);
+  font-size: 1.35rem;
+  cursor: pointer;
+  padding: 0 1px;
+  line-height: 1;
+  transition: color 0.12s, transform 0.1s;
+}
+.star-btn:hover:not([disabled]),
+.star-btn.active { color: #ffd700; }
+.star-btn:hover:not([disabled]) { transform: scale(1.2); }
+.star-btn[disabled] { cursor: default; opacity: 0.3; }
+.rating-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  margin-top: 4px;
+}
+.rating-feedback.hidden { display: none; }
+.rating-text {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(0,255,255,0.18);
+  color: #ddd;
+  font-size: 0.73rem;
+  padding: 5px 8px;
+  border-radius: 4px;
+  resize: vertical;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.rating-text:focus { outline: none; border-color: rgba(0,255,255,0.45); }
+.btn-xs { padding: 3px 10px; font-size: 0.62rem; align-self: flex-end; }
+/* Library star display */
+.lib-stars { color: #ffd700; font-size: 0.78em; letter-spacing: 1px; }
+
+/* ─── Library Controls — Feature C (search / filter / sort) ─── */
+.library-controls {
+	display: flex;
+	gap: 8px;
+	padding: 10px 14px;
+	border-bottom: 1px solid rgba(255,255,255,0.08);
+	background: rgba(0,0,0,0.2);
+	flex-wrap: wrap;
+	flex-shrink: 0;
+}
+.lib-search {
+	flex: 1 1 150px;
+	min-width: 100px;
+	padding: 5px 10px;
+	border: 1px solid rgba(255,255,255,0.15);
+	border-radius: 6px;
+	background: rgba(255,255,255,0.06);
+	color: #fff;
+	font-family: 'VT323', monospace;
+	font-size: 15px;
+	outline: none;
+	transition: border-color 0.2s;
+}
+.lib-search::placeholder { color: rgba(255,255,255,0.35); }
+.lib-search:focus { border-color: rgba(99,60,255,0.7); }
+.lib-filter-select {
+	padding: 5px 8px;
+	border: 1px solid rgba(255,255,255,0.15);
+	border-radius: 6px;
+	background: rgba(255,255,255,0.06);
+	color: #fff;
+	font-family: 'VT323', monospace;
+	font-size: 15px;
+	cursor: pointer;
+	outline: none;
+	transition: border-color 0.2s;
+}
+.lib-filter-select:focus { border-color: rgba(99,60,255,0.7); }
+.lib-filter-select option { background: #1a1a2e; color: #fff; }
+body.light-mode .lib-search,
+body.light-mode .lib-filter-select {
+	background: rgba(0,0,0,0.05);
+	color: #111;
+	border-color: rgba(0,0,0,0.2);
+}
+body.light-mode .lib-filter-select option { background: #fff; color: #111; }
+
+/* ─── Analytics Tab ─── */
+.analytics-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 8px;
+	margin: 4px 0 12px;
+}
+@media (max-width: 420px) { .analytics-grid { grid-template-columns: repeat(2, 1fr); } }
+.analytics-stat {
+	background: rgba(255,255,255,0.04);
+	border: 1px solid rgba(255,255,255,0.08);
+	border-radius: 8px;
+	padding: 10px 8px;
+	text-align: center;
+}
+body.light-mode .analytics-stat { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+.analytics-stat-value {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 12px;
+	margin-bottom: 5px;
+	color: var(--accent, #633cff);
+	word-break: break-word;
+	line-height: 1.4;
+}
+.analytics-stat-label { font-size: 9px; opacity: 0.55; line-height: 1.3; }
+.analytics-stat-sub   { font-size: 8px; opacity: 0.4;  margin-top: 3px; }
+.analytics-loading, .analytics-hint { font-size: 12px; opacity: 0.5; padding: 20px 0; text-align: center; }
+@media print { #profile-tab-analytics { display: none !important; } }
+
+/* ─── Level-up Feedback Panel ─── */
+#levelup-feedback {
+	position: fixed;
+	bottom: 20px;
+	right: 20px;
+	z-index: 9000;
+	min-width: 280px;
+	max-width: 360px;
+	background: var(--card-bg, #1a1a2e);
+	border: 1px solid rgba(255,255,255,0.15);
+	border-radius: 10px;
+	box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+	animation: levelup-slide-in 0.35s ease;
+	overflow: hidden;
+}
+@keyframes levelup-slide-in {
+	from { opacity: 0; transform: translateY(18px); }
+	to   { opacity: 1; transform: translateY(0); }
+}
+.levelup-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 14px;
+	font-family: 'Press Start 2P', cursive;
+	font-size: 8px;
+	border-bottom: 1px solid rgba(255,255,255,0.08);
+	opacity: 0.7;
+	letter-spacing: 0.04em;
+}
+.levelup-close {
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 14px;
+	color: inherit;
+	opacity: 0.5;
+	padding: 0;
+	line-height: 1;
+}
+.levelup-close:hover { opacity: 1; }
+.levelup-list { padding: 6px 0; }
+.levelup-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 14px;
+	font-size: 12px;
+	animation: levelup-row-enter 0.22s ease backwards;
+}
+@keyframes levelup-row-enter {
+	from { opacity: 0; transform: translateX(-8px); }
+	to   { opacity: 1; transform: translateX(0); }
+}
+.levelup-row.leveled-up {
+	animation: levelup-row-enter 0.22s ease backwards, levelup-glow 0.7s ease 0.25s both;
+}
+@keyframes levelup-glow {
+	0%   { background: rgba(255,200,50,0.00); }
+	50%  { background: rgba(255,200,50,0.22); }
+	100% { background: rgba(255,200,50,0.07); }
+}
+.levelup-icon { font-size: 14px; flex-shrink: 0; }
+.levelup-name { flex: 1; font-size: 11px; }
+.levelup-pts  { font-weight: bold; font-size: 11px; min-width: 44px; text-align: right; color: #50C878; }
+.levelup-level { font-size: 10px; opacity: 0.7; text-align: right; }
+.levelup-badge {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 6px;
+	color: #F4C542;
+	background: rgba(244,197,66,0.18);
+	padding: 2px 4px;
+	border-radius: 3px;
+	margin-left: 3px;
+	vertical-align: middle;
+}
+body.light-mode #levelup-feedback {
+	background: #fff;
+	border-color: rgba(0,0,0,0.12);
+	box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+@media print { #levelup-feedback { display: none !important; } }
+
+/* ─── PRINT VIEW ──────────────────────────────────────────────────────────── */
+@media print {
+	/* Hide all UI chrome — keep only the game card */
+	header,
+	footer,
+	.left-panel,
+	.right-panel,
+	.mobile-overlay-backdrop,
+	#welcome-screen,
+	#loading-screen,
+	#game-timer-block,
+	.game-card-footer,
+	#session-notes-block,
+	.section-title .toggle-icon { display: none !important; }
+
+	/* Reset layout so game-card fills the page */
+	#app-layout,
+	#workspace,
+	#game-viewport { display: block !important; height: auto !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; }
+
+	body, html { background: #fff !important; }
+	* { color: #000 !important; background: transparent !important; box-shadow: none !important; text-shadow: none !important; }
+
+	/* Expand all collapsible sections; hide empty RVP block */
+	.collapsed .section-body,
+	.section-body { display: block !important; }
+	[data-rvp-empty="1"] { display: none !important; }
+
+	/* Game card: no frame, full width */
+	.game-card { display: block !important; border: none !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+
+	/* Readable typography — override pixel font */
+	.game-title,
+	.section-title,
+	.game-pitch,
+	.game-list li,
+	.facilitator-text,
+	.game-tags,
+	.rvp-badges,
+	.tag,
+	.rvp-badge { font-family: Georgia, serif !important; }
+
+	.game-title { font-size: 20pt !important; font-weight: bold !important; }
+	.section-title { font-size: 12pt !important; font-weight: bold !important; border-bottom: 1px solid #ccc !important; padding-bottom: 4px !important; margin-bottom: 6px !important; }
+	.game-pitch { font-size: 11pt !important; }
+	.game-list li, .facilitator-text { font-size: 10pt !important; line-height: 1.5 !important; }
+
+	/* Badges: outline only, no fill */
+	.tag, .rvp-badge { border: 1px solid #666 !important; border-radius: 3px !important; padding: 1px 5px !important; font-size: 9pt !important; }
+
+	/* Source line at bottom of header */
+	.game-card-header::after { content: 'gIVEMEGAME.IO'; display: block; font-size: 8pt; color: #aaa !important; font-family: sans-serif !important; margin-top: 2px; }
+
+	@page { margin: 15mm; }
+}

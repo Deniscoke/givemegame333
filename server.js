@@ -20,6 +20,41 @@ const COMPLETION_BONUS  = 100;
 const JOIN_CODE_CHARS   = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const JOIN_CODE_LENGTH  = 6;
 
+// ─── Reward validation constants ───
+const VALID_COMPETENCY_KEYS = [
+	'k-uceni', 'k-reseni-problemu', 'komunikativni',
+	'socialni-personalni', 'obcanske', 'pracovni', 'digitalni'
+];
+const MIN_SESSION_DURATION_FLOOR = 3;    // minutes — absolute minimum even if game.duration.min is lower
+const MIN_SESSION_DURATION_FALLBACK = 5; // minutes — used when game has no duration.min
+const HOST_COOLDOWN_MAX  = 5;            // max completed sessions per host per rolling hour
+const SOLO_DAILY_LIMIT   = 10;           // max solo completions per user per 24h
+
+// ─── Competency level thresholds ───────────────────────────────────────────
+const COMP_LEVELS = [
+	{ name: 'Nováčik', min:    0, next:  250 },
+	{ name: 'Skúsený', min:  250, next:  750 },
+	{ name: 'Expert',  min:  750, next: 1500 },
+	{ name: 'Majster', min: 1500, next: 3000 },
+	{ name: 'Legenda', min: 3000, next: null },
+];
+
+function computeLevel(pts) {
+	const p = parseInt(pts, 10) || 0;
+	let lvl = COMP_LEVELS[0];
+	for (const l of COMP_LEVELS) { if (p >= l.min) lvl = l; }
+	const progress_pct = lvl.next
+		? Math.min(100, Math.round((p - lvl.min) / (lvl.next - lvl.min) * 100))
+		: 100;
+	return { points: p, level: lvl.name, next_threshold: lvl.next, progress_pct };
+}
+
+function enrichCompetencies(raw) {
+	const result = {};
+	VALID_COMPETENCY_KEYS.forEach(k => { result[k] = computeLevel(raw[k] || 0); });
+	return result;
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -239,15 +274,9 @@ const SCHEMA_FALLBACK = `{
   "facilitatorNotes": "Keep energy up — encourage everyone to participate, no pressure."
 }`;
 
-let sampleGameJSON = SCHEMA_FALLBACK;
-try {
-	const games = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'games.json'), 'utf-8'));
-	if (games.length > 0) {
-		sampleGameJSON = JSON.stringify(games[0], null, 2);
-	}
-} catch (err) {
-	console.warn('[Server] games.json nedostupný, používam schema fallback:', err.message);
-}
+// Compact schema for AI format reference (~85 tokens vs ~600 for a full example).
+// Field names + types are sufficient — sample values add noise, not signal.
+const COMPACT_GAME_SCHEMA = `{"id":"ai-XXXXXX","title":"string","pitch":"string","playerCount":{"min":2,"max":15},"ageRange":{"min":8,"max":15},"duration":{"min":15,"max":30},"setting":"indoor|outdoor|any","mode":"party|classroom|reflection|circus|cooking|meditation","energyLevel":"low|medium|high","materials":["string"],"instructions":["string"],"learningGoals":["string"],"reflectionPrompts":["string"],"safetyNotes":["string"],"adaptationTips":["string"],"facilitatorNotes":"string","rvp":{"kompetence":["k-uceni"],"oblasti":["string"],"stupen":"prvni|druhy","prurezova_temata":["string"],"ocekavane_vystupy":["string"],"doporucene_hodnoceni":"string"}}`;
 
 // ─── Strict constraint mapping for AI ───
 function buildFilterDescription(filters) {
@@ -468,6 +497,48 @@ function validateGame(game) {
 	return errors;
 }
 
+// ─── Safety validation ───
+// Checks generated game text for content inappropriate for educational/youth contexts.
+// Returns [] if safe, or an array of violation strings.
+// Hard-reject only — no repair attempt, to avoid rephrasing the same unsafe content.
+function validateSafety(game) {
+	const violations = [];
+
+	const allText = [
+		game.title, game.pitch, game.facilitatorNotes,
+		...(Array.isArray(game.instructions)     ? game.instructions     : []),
+		...(Array.isArray(game.learningGoals)     ? game.learningGoals     : []),
+		...(Array.isArray(game.reflectionPrompts) ? game.reflectionPrompts : []),
+		...(Array.isArray(game.safetyNotes)       ? game.safetyNotes       : []),
+		...(Array.isArray(game.materials)         ? game.materials         : []),
+		...(Array.isArray(game.adaptationTips)    ? game.adaptationTips    : []),
+	].filter(Boolean).join(' ');
+
+	const UNSAFE = [
+		// Explicit sexual content (cognates across EN/CS/SK/ES)
+		{ pattern: /\bporno?graph/i,                          label: 'explicit sexual content' },
+		{ pattern: /\bsexually explicit\b/i,                  label: 'explicit sexual content' },
+		// Named hard drugs (international loanwords, consistent across all 4 supported languages)
+		{ pattern: /\bcocain[ae]?\b/i,                        label: 'hard drug reference (cocaine)' },
+		{ pattern: /\bheroin\b/i,                             label: 'hard drug reference (heroin)' },
+		{ pattern: /\bmethamphetamin/i,                       label: 'hard drug reference (meth)' },
+		{ pattern: /\bfentanyl\b/i,                           label: 'hard drug reference (fentanyl)' },
+		// Instructions to physically harm self or others (EN verb-first; CS/SK allow verb-after)
+		{ pattern: /\b(hurt|harm|injure|zranit|zraniť|ublíži[tť])\s+(yourself|each other|one another|navzájem|navzájom)\b/i, label: 'direct harm instruction' },
+		{ pattern: /\b(navzájem|navzájom)\s+(zranit|zraniť|ublíži[tť])(?:\s|$)/i,                                           label: 'direct harm instruction (CS/SK)' },
+		{ pattern: /\b(hit|strike|beat|attack|udeř[ií])\s+(each other|one another|navzájem|navzájom)\b/i,                  label: 'physical violence instruction' },
+		{ pattern: /\b(navzájem|navzájom)\s+(udeř[ií]|bij[eií]|atakuj)(?:\s|$)/i,                                         label: 'physical violence instruction (CS/SK)' },
+	];
+
+	for (const { pattern, label } of UNSAFE) {
+		if (pattern.test(allText)) {
+			violations.push(`Unsafe content detected: ${label}`);
+		}
+	}
+
+	return violations;
+}
+
 // ─── One-shot repair call for structurally invalid AI output ───
 // Uses low temperature and a minimal focused prompt — not a full regeneration.
 async function callRepairAPI(brokenOutput, errors, useModel, aiLanguage) {
@@ -532,8 +603,7 @@ function buildDidacticGuidance(filters) {
 }
 
 // ─── Systémový prompt ───
-function buildSystemPrompt(aiLanguage) {
-	const lang = aiLanguage || 'Czech';
+function buildSystemPrompt() {
 	return `You are a CREATIVE GAME DESIGNER who speaks like a Gen Z friend — casual, relatable, fun. You design original educational games for facilitators (teachers, trainers, youth workers). You know pedagogy (Kolb, Bloom, experiential learning) but you EXPLAIN things simply, like you're talking to a mate.
 
 IDENTITY:
@@ -564,7 +634,7 @@ RULES:
 - If mode is "cooking", the game MUST be a cooking/recipe activity.
 - If mode is "meditation", the game MUST be a mindfulness/wellness exercise.
 - Respond ONLY with a valid JSON object — no markdown, no comments.
-- WRITE EVERYTHING IN ${lang.toUpperCase()}.
+- Language is specified in the user message — write ALL output in that language.
 
 CRITICAL — PANEL INPUT COMPLIANCE:
 The user specifies MANDATORY constraints below. You MUST satisfy ALL of them. Before outputting JSON, verify:
@@ -578,24 +648,17 @@ The user specifies MANDATORY constraints below. You MUST satisfy ALL of them. Be
 If ANY constraint fails, regenerate before responding.
 
 RESPONSE FORMAT — exactly this JSON shape:
-${sampleGameJSON}
+${COMPACT_GAME_SCHEMA}
 
-IMPORTANT: Generate "id" as "ai-" + random 6-character code. All fields are required.${knowledgeSummary ? `
-
-═══ SOURCE OF KNOWLEDGE ═══
-The following reference material was uploaded by the facilitator. Use it to ENRICH and CUSTOMIZE the generated game.
-- You MAY use professional/technical content from these files — themes, facts, scenarios
-- BUT: INTERPRET everything SIMPLY. Explain like you're telling a friend, not citing a textbook
-- Add CONCRETE EXAMPLES based on the content (e.g. if it mentions photosynthesis, say "rostlina bere světlo a dělá z něj jídlo — jako solární panel")
-- Always respect the MANDATORY CONSTRAINTS above.
-
-${knowledgeSummary}
-═══ END SOURCE OF KNOWLEDGE ═══` : ''}`;
+IMPORTANT: Generate "id" as "ai-" + random 6-character code. All fields are required.`;
 }
+
+// Computed once at startup — identical string every call → OpenAI prompt cache activates.
+const STATIC_SYSTEM_PROMPT = buildSystemPrompt();
 
 // ─── API endpoint ───
 app.post('/api/generate-game', async (req, res) => {
-	const { filters } = req.body;
+	const { filters, remix } = req.body;
 
 	// API kľúč výhradne z .env (nikdy z klienta)
 	const effectiveKey = process.env.OPENAI_API_KEY;
@@ -667,16 +730,35 @@ ${didacticGuidance}
 POUŽI VŠETKY vstupy z panelu vyššie — každý filter je tvoj brief.
 ŠTÝL: Piš Gen Z — jednoducho, uvolnene, s príkladmi. Žiadny akademický žargón.
 PRÍKLADY: V inštrukciách, reflexných otázkach a poznámkach vždy uveď konkrétne príklady (napr. "Honza hádže loptu Zuzke a povie jej meno").
-Ak máš SOURCE OF KNOWLEDGE — môžeš z neho čerpať odborné témy, ale INTERPRETUJ ich jednoducho (ako by si to vysvetlil kamarátovi).
 Pred odpoveďou skontroluj, či si splnil VŠETKY obmedzenia.
-Odpovedz JEDNÝM JSON objektom. Píš v jazyku ${aiLanguage}.`;
+Odpovedz JEDNÝM JSON objektom.
+──────────────────────────────────────
+LANGUAGE: Write ALL output in ${aiLanguage}. Every text field must be in ${aiLanguage}.${knowledgeSummary ? `
+──────────────────────────────────────
+═══ SOURCE OF KNOWLEDGE ═══
+The following reference material was uploaded by the facilitator. Use it to ENRICH and CUSTOMIZE the generated game.
+- You MAY use professional/technical content from these files — themes, facts, scenarios
+- BUT: INTERPRET everything SIMPLY. Explain like you're telling a friend, not citing a textbook
+- Add CONCRETE EXAMPLES based on the content (e.g. if it mentions photosynthesis, say "rostlina bere světlo a dělá z něj jídlo — ako solárny panel")
+- Always respect the MANDATORY CONSTRAINTS above.
+
+${knowledgeSummary}
+═══ END SOURCE OF KNOWLEDGE ═══` : ''}${(remix && typeof remix === 'object' && remix.title) ? `
+──────────────────────────────────────
+REMIX — VYTVOR VARIÁCIU (neplagiaruj, len sa inšpiruj):
+Pôvodná hra: "${remix.title}"
+Pôvodný mód: ${remix.mode || 'neuvedený'}
+Pôvodné kompetencie: ${(remix.rvp?.kompetence || []).join(', ') || 'neuvedené'}
+Pôvodné ciele učenia: ${(remix.learningGoals || []).slice(0, 3).join(' | ') || 'neuvedené'}
+Zachovaj mód, vzdelávacie ciele a kompetencie. Zmeň mechaniku, materiály, názov a postup VÝRAZNE.
+──────────────────────────────────────` : ''}`;
 
 	const FALLBACK_MODEL = 'gpt-4o-mini';
 	// Repair always uses the cheaper mini model — fast, low-cost, sufficient for structural fixes.
 	const REPAIR_MODEL = 'gpt-4o-mini';
 	const model = process.env.OPENAI_MODEL || 'gpt-4o';
 	const fallbackModel = model !== FALLBACK_MODEL ? FALLBACK_MODEL : 'gpt-4o';
-	const maxTokens = parseInt(process.env.OPENAI_MAX_TOKENS) || 5000;
+	const maxTokens = parseInt(process.env.OPENAI_MAX_TOKENS) || 2000;
 	const temperature = parseFloat(process.env.OPENAI_TEMPERATURE) || 0.8;
 
 	console.log(`[API] Generujem hru: model=${model}, filters:`, JSON.stringify(filters, null, 0));
@@ -693,7 +775,7 @@ Odpovedz JEDNÝM JSON objektom. Píš v jazyku ${aiLanguage}.`;
 			model: useModel,
 			temperature,
 			messages: [
-				{ role: 'system', content: buildSystemPrompt(aiLanguage) },
+				{ role: 'system', content: STATIC_SYSTEM_PROMPT },
 				{ role: 'user', content: userContent }
 			]
 		};
@@ -771,6 +853,17 @@ Odpovedz JEDNÝM JSON objektom. Píš v jazyku ${aiLanguage}.`;
 				});
 			}
 			game = repairedGame;
+		}
+
+		// ── Step 3b: Safety check — hard-reject, no repair ──
+		const safetyViolations = validateSafety(game);
+		if (safetyViolations.length > 0) {
+			console.error('[API] Safety check zlyhala:', safetyViolations);
+			return res.status(422).json({
+				error: 'Vygenerovaná hra neprešla bezpečnostnou kontrolou.',
+				code: 'SAFE_GENERATION_FAILED',
+				details: safetyViolations
+			});
 		}
 
 		// ── Step 4: Enforce filter constraints server-side ──
@@ -907,6 +1000,25 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		return res.status(400).json({ error: 'game_json.rvp.kompetence je povinné', code: 'MISSING_COMPETENCIES' });
 	}
 
+	// ─── Solo cooldown: max SOLO_DAILY_LIMIT per 24h ──────────────
+	try {
+		const { rows: soloRows } = await queryCoinsDb(
+			`SELECT COUNT(*)::int AS cnt FROM public.coin_transactions
+			 WHERE user_id = $1 AND action = 'solo_complete'
+			   AND created_at > NOW() - INTERVAL '24 hours'`,
+			[user.id]
+		);
+		if ((soloRows[0]?.cnt || 0) >= SOLO_DAILY_LIMIT) {
+			return res.status(429).json({
+				error: `Denný limit solo hier dosiahnutý (${soloRows[0].cnt}/${SOLO_DAILY_LIMIT})`,
+				code: 'SOLO_DAILY_LIMIT'
+			});
+		}
+	} catch (e) {
+		console.error('[Completion] solo cooldown check failed:', e.message);
+		return res.status(500).json({ error: 'Kontrola limitu zlyhala', code: 'COOLDOWN_CHECK_ERROR' });
+	}
+
 	try {
 		// Fetch current competency points
 		const { rows: profileRows } = await queryCoinsDb(
@@ -918,9 +1030,26 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		// Merge: add COMPETENCY_AWARD to each listed competency
 		const updated = { ...current };
 		const awarded = {};
-		kompetence.forEach(k => {
+		const validKomps = kompetence.filter(k => VALID_COMPETENCY_KEYS.includes(k));
+		// Snapshot levels before awarding — used for level-up detection below
+		const prevLevels = {};
+		validKomps.forEach(k => { prevLevels[k] = computeLevel(current[k] || 0); });
+		validKomps.forEach(k => {
 			updated[k] = (parseInt(updated[k], 10) || 0) + COMPETENCY_AWARD;
 			awarded[k] = COMPETENCY_AWARD;
+		});
+		// Compute per-competency level changes
+		const level_changes = {};
+		validKomps.forEach(k => {
+			const from = prevLevels[k];
+			const to   = computeLevel(updated[k]);
+			level_changes[k] = {
+				previous_points: from.points,
+				new_points:      to.points,
+				from_level:      from.level,
+				to_level:        to.level,
+				leveled_up:      from.level !== to.level,
+			};
 		});
 
 		// Write updated competency points
@@ -939,7 +1068,7 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			[user.id, COMPLETION_BONUS, 'solo_complete', JSON.stringify({ kompetence: awarded })]
 		);
 
-		res.json({ ok: true, awarded, competency_points: updated });
+		res.json({ ok: true, awarded, competency_points: updated, competencies: enrichCompetencies(updated), level_changes });
 	} catch (err) {
 		console.error('[Completion] solo complete failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa udeliť body', code: 'AWARD_ERROR' });
@@ -956,10 +1085,94 @@ app.get('/api/profile/competencies', async (req, res) => {
 			'SELECT competency_points FROM public.profiles WHERE id = $1',
 			[user.id]
 		);
-		res.json({ competency_points: rows[0]?.competency_points || {} });
+		const raw = rows[0]?.competency_points || {};
+		res.json({ competency_points: raw, competencies: enrichCompetencies(raw) });
 	} catch (err) {
 		console.error('[Competencies] fetch failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa načítať kompetencie', code: 'COMP_ERROR' });
+	}
+});
+
+// ─── Teacher analytics — aggregated stats for the authenticated user ───
+// Reads profiles (games_generated, competency_points) + coin_transactions aggregate.
+// No new tables or columns required.
+app.get('/api/profile/analytics', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	// Map competency keys to their i18n label keys (mirrors COMP_META in game-ui.js)
+	const COMP_LABEL_KEYS = {
+		'k-uceni':             'comp_learning',
+		'k-reseni-problemu':   'comp_problem',
+		'komunikativni':       'comp_comm',
+		'socialni-personalni': 'comp_social',
+		'obcanske':            'comp_civic',
+		'pracovni':            'comp_work',
+		'digitalni':           'comp_digital',
+	};
+
+	try {
+		// 1. Profile row — games_generated, games_exported, competency_points
+		const { rows: profRows } = await queryCoinsDb(
+			`SELECT COALESCE(games_generated, 0)::int AS games_generated,
+			        COALESCE(games_exported,  0)::int AS games_exported,
+			        competency_points
+			 FROM public.profiles WHERE id = $1`,
+			[user.id]
+		);
+		const prof = profRows[0] || {};
+		const compPoints = prof.competency_points || {};
+
+		// 2. Transaction aggregates — solo/session counts + coin flows
+		const { rows: txRows } = await queryCoinsDb(
+			`SELECT
+			   COUNT(*)           FILTER (WHERE action = 'solo_complete')    AS solo_completions,
+			   COUNT(*)           FILTER (WHERE action = 'session_complete') AS session_completions,
+			   COALESCE(SUM(amount)        FILTER (WHERE amount > 0), 0)::int AS coins_earned,
+			   COALESCE(SUM(ABS(amount))   FILTER (WHERE amount < 0), 0)::int AS coins_spent
+			 FROM public.coin_transactions WHERE user_id = $1`,
+			[user.id]
+		);
+		const tx = txRows[0] || {};
+		const solo     = parseInt(tx.solo_completions,    10) || 0;
+		const sessions = parseInt(tx.session_completions, 10) || 0;
+
+		// 3. Derive competency stats from stored points
+		const pointEntries = VALID_COMPETENCY_KEYS.map(k => [k, parseInt(compPoints[k], 10) || 0]);
+		const total_xp     = pointEntries.reduce((s, [, v]) => s + v, 0);
+		const withPoints   = pointEntries.filter(([, v]) => v > 0);
+		const strongest    = withPoints.length
+			? withPoints.reduce((a, b) => b[1] > a[1] ? b : a)[0]
+			: null;
+		// Weakest only meaningful when ≥2 competencies have points
+		const weakest      = withPoints.length > 1
+			? withPoints.reduce((a, b) => b[1] < a[1] ? b : a)[0]
+			: null;
+
+		// 4. Dominant mode: inferred from solo vs session completions
+		const dominant_mode = solo > sessions ? 'solo'
+			: sessions > solo              ? 'session'
+			: (solo + sessions > 0)        ? 'balanced'
+			: null;
+
+		res.json({
+			games_generated:        prof.games_generated || 0,
+			games_exported:         prof.games_exported  || 0,
+			solo_completions:       solo,
+			session_completions:    sessions,
+			coins_earned:           parseInt(tx.coins_earned, 10) || 0,
+			coins_spent:            parseInt(tx.coins_spent,  10) || 0,
+			total_xp,
+			strongest,
+			strongest_label_key:    strongest ? (COMP_LABEL_KEYS[strongest] || strongest) : null,
+			weakest,
+			weakest_label_key:      weakest   ? (COMP_LABEL_KEYS[weakest]   || weakest)   : null,
+			dominant_mode,
+		});
+	} catch (err) {
+		console.error('[Analytics] fetch failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa načítať analytiku', code: 'ANALYTICS_ERROR' });
 	}
 });
 
@@ -1119,7 +1332,7 @@ app.post('/api/sessions/:code/start', async (req, res) => {
 		}
 
 		await queryCoinsDb(
-			`UPDATE public.sessions SET status = 'active', timer_ends_at = $1 WHERE id = $2`,
+			`UPDATE public.sessions SET status = 'active', timer_ends_at = $1, started_at = NOW() WHERE id = $2`,
 			[timerEndsAt, sess.id]
 		);
 
@@ -1172,7 +1385,7 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 	const code = (req.params.code || '').toUpperCase().trim();
 	try {
 		const { rows } = await queryCoinsDb(
-			'SELECT id, host_id, game_json, status FROM public.sessions WHERE join_code = $1', [code]
+			'SELECT id, host_id, game_json, status, started_at FROM public.sessions WHERE join_code = $1', [code]
 		);
 		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
 		const sess = rows[0];
@@ -1182,56 +1395,271 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 		if (sess.status === 'completed') {
 			return res.status(409).json({ error: 'Session je už dokončená', code: 'ALREADY_COMPLETED' });
 		}
+		// Explicit status guard — only active or reflection sessions can complete
+		if (!['active', 'reflection'].includes(sess.status)) {
+			return res.status(409).json({ error: 'Session nie je aktívna', code: 'WRONG_STATUS' });
+		}
 
-		const kompetence = sess.game_json?.rvp?.kompetence || [];
+		// ─── VALIDATION GATE 1: Duration ───────────────────────────────
+		const gameDurMin = sess.game_json?.duration?.min;
+		const requiredMin = Math.max(
+			gameDurMin != null ? gameDurMin : MIN_SESSION_DURATION_FALLBACK,
+			MIN_SESSION_DURATION_FLOOR
+		);
+		const startedAt = sess.started_at ? new Date(sess.started_at) : null;
+		const actualMin = startedAt ? (Date.now() - startedAt.getTime()) / 60000 : 0;
+
+		if (actualMin < requiredMin) {
+			const validation = {
+				duration_actual_min: Math.round(actualMin * 10) / 10,
+				duration_required_min: requiredMin,
+				passed: false,
+				failed_gate: 'DURATION_TOO_SHORT',
+				validated_at: new Date().toISOString()
+			};
+			await queryCoinsDb(
+				'UPDATE public.sessions SET reward_validation = $1 WHERE id = $2',
+				[JSON.stringify(validation), sess.id]
+			);
+			return res.status(422).json({
+				error: `Session trvala príliš krátko (${Math.round(actualMin)}/${requiredMin} min)`,
+				code: 'DURATION_TOO_SHORT',
+				validation
+			});
+		}
+
+		// ─── VALIDATION GATE 2: Participant count ──────────────────────
+		const gamePlayerMin = sess.game_json?.playerCount?.min || 1;
+		const requiredPlayers = Math.max(gamePlayerMin, 1);
+		const { rows: paidParts } = await queryCoinsDb(
+			'SELECT COUNT(*)::int AS cnt FROM public.session_participants WHERE session_id = $1 AND coins_paid > 0',
+			[sess.id]
+		);
+		const actualPlayers = paidParts[0]?.cnt || 0;
+
+		if (actualPlayers < requiredPlayers) {
+			const validation = {
+				participants_actual: actualPlayers,
+				participants_required: requiredPlayers,
+				passed: false,
+				failed_gate: 'NOT_ENOUGH_PLAYERS',
+				validated_at: new Date().toISOString()
+			};
+			await queryCoinsDb(
+				'UPDATE public.sessions SET reward_validation = $1 WHERE id = $2',
+				[JSON.stringify(validation), sess.id]
+			);
+			return res.status(422).json({
+				error: `Nedostatok hráčov (${actualPlayers}/${requiredPlayers})`,
+				code: 'NOT_ENOUGH_PLAYERS',
+				validation
+			});
+		}
+
+		// ─── VALIDATION GATE 3: Host cooldown ──────────────────────────
+		const { rows: cooldownRows } = await queryCoinsDb(
+			`SELECT COUNT(*)::int AS cnt FROM public.sessions
+			 WHERE host_id = $1 AND status = 'completed'
+			   AND completed_at > NOW() - INTERVAL '1 hour'`,
+			[user.id]
+		);
+		const hostSessionsLastHour = cooldownRows[0]?.cnt || 0;
+
+		if (hostSessionsLastHour >= HOST_COOLDOWN_MAX) {
+			const validation = {
+				host_sessions_last_hour: hostSessionsLastHour,
+				host_cooldown_max: HOST_COOLDOWN_MAX,
+				passed: false,
+				failed_gate: 'HOST_COOLDOWN',
+				validated_at: new Date().toISOString()
+			};
+			await queryCoinsDb(
+				'UPDATE public.sessions SET reward_validation = $1 WHERE id = $2',
+				[JSON.stringify(validation), sess.id]
+			);
+			return res.status(429).json({
+				error: `Príliš veľa sessions za hodinu (${hostSessionsLastHour}/${HOST_COOLDOWN_MAX}). Skús neskôr.`,
+				code: 'HOST_COOLDOWN',
+				validation
+			});
+		}
+
+		// ─── Atomic status lock: prevent concurrent /complete race ─────
+		// Compare-and-swap: only one request can transition away from active/reflection
+		const { rowCount: lockCount } = await queryCoinsDb(
+			`UPDATE public.sessions SET status = 'completing' WHERE id = $1 AND status IN ('active', 'reflection')`,
+			[sess.id]
+		);
+		if (lockCount === 0) {
+			return res.status(409).json({ error: 'Session je už dokončená', code: 'ALREADY_COMPLETED' });
+		}
+
+		// ─── Filter and whitelist competency keys ──────────────────────
+		const rawKompetence = sess.game_json?.rvp?.kompetence || [];
+		const kompetence = rawKompetence.filter(k => VALID_COMPETENCY_KEYS.includes(k));
 		const awarded = {};
 		kompetence.forEach(k => { awarded[k] = COMPETENCY_AWARD; });
 
-		// Award competency points + bonus coins to all who completed reflection
-		const { rows: parts } = await queryCoinsDb(
-			`SELECT user_id FROM public.session_participants
-			 WHERE session_id = $1 AND reflection_done = true AND awarded_competencies IS NULL`,
-			[sess.id]
-		);
+		// ─── Transactional reward loop ─────────────────────────────────
+		// All awards are wrapped in a single DB transaction to prevent
+		// partial awarding on crash/error (atomicity guarantee).
+		const client = await coinsDbPool.connect();
+		let participantsRewarded = 0;
+		let myLevelChanges = null;
+		try {
+			await client.query('BEGIN');
 
-		for (const p of parts) {
-			const { rows: profRows } = await queryCoinsDb(
-				'SELECT competency_points FROM public.profiles WHERE id = $1', [p.user_id]
+			const { rows: parts } = await client.query(
+				`SELECT user_id FROM public.session_participants
+				 WHERE session_id = $1 AND reflection_done = true AND awarded_competencies IS NULL`,
+				[sess.id]
 			);
-			const current = profRows[0]?.competency_points || {};
-			const updated = { ...current };
-			kompetence.forEach(k => {
-				updated[k] = (parseInt(updated[k], 10) || 0) + COMPETENCY_AWARD;
-			});
 
-			await queryCoinsDb(
-				'UPDATE public.profiles SET competency_points = $1 WHERE id = $2',
-				[JSON.stringify(updated), p.user_id]
+			for (const p of parts) {
+				const { rows: profRows } = await client.query(
+					'SELECT competency_points FROM public.profiles WHERE id = $1', [p.user_id]
+				);
+				const current = profRows[0]?.competency_points || {};
+				const updated = { ...current };
+				const pPrevLevels = {};
+				kompetence.forEach(k => { pPrevLevels[k] = computeLevel(current[k] || 0); });
+				kompetence.forEach(k => {
+					updated[k] = (parseInt(updated[k], 10) || 0) + COMPETENCY_AWARD;
+				});
+				// Track level changes for the requesting user
+				if (p.user_id === user.id) {
+					myLevelChanges = {};
+					kompetence.forEach(k => {
+						const from = pPrevLevels[k];
+						const to   = computeLevel(updated[k]);
+						myLevelChanges[k] = {
+							previous_points: from.points,
+							new_points:      to.points,
+							from_level:      from.level,
+							to_level:        to.level,
+							leveled_up:      from.level !== to.level,
+						};
+					});
+				}
+
+				await client.query(
+					'UPDATE public.profiles SET competency_points = $1 WHERE id = $2',
+					[JSON.stringify(updated), p.user_id]
+				);
+				await client.query(
+					`UPDATE public.session_participants
+					 SET awarded_competencies = $1 WHERE session_id = $2 AND user_id = $3`,
+					[JSON.stringify(awarded), sess.id, p.user_id]
+				);
+				await client.query(
+					'UPDATE public.profiles SET coins = COALESCE(coins,0) + $1 WHERE id = $2',
+					[COMPLETION_BONUS, p.user_id]
+				);
+				await client.query(
+					'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
+					[p.user_id, COMPLETION_BONUS, 'session_complete', JSON.stringify({ session_code: code, kompetence: awarded })]
+				);
+			}
+			participantsRewarded = parts.length;
+
+			// Write audit trail + mark completed (inside transaction)
+			const validation = {
+				duration_actual_min: Math.round(actualMin * 10) / 10,
+				duration_required_min: requiredMin,
+				participants_actual: actualPlayers,
+				participants_required: requiredPlayers,
+				host_sessions_last_hour: hostSessionsLastHour,
+				competencies_awarded: kompetence,
+				participants_rewarded: parts.length,
+				passed: true,
+				validated_at: new Date().toISOString()
+			};
+			await client.query(
+				`UPDATE public.sessions SET status = 'completed', completed_at = NOW(), reward_validation = $1 WHERE id = $2`,
+				[JSON.stringify(validation), sess.id]
 			);
+
+			await client.query('COMMIT');
+
+			res.json({ ok: true, awarded, participants_rewarded: participantsRewarded, validation, my_level_changes: myLevelChanges });
+		} catch (txErr) {
+			await client.query('ROLLBACK');
+			// Revert status lock so host can retry
 			await queryCoinsDb(
-				`UPDATE public.session_participants
-				 SET awarded_competencies = $1 WHERE session_id = $2 AND user_id = $3`,
-				[JSON.stringify(awarded), sess.id, p.user_id]
+				`UPDATE public.sessions SET status = 'active' WHERE id = $1 AND status = 'completing'`,
+				[sess.id]
 			);
-			await queryCoinsDb(
-				'UPDATE public.profiles SET coins = COALESCE(coins,0) + $1 WHERE id = $2',
-				[COMPLETION_BONUS, p.user_id]
-			);
-			await queryCoinsDb(
-				'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
-				[p.user_id, COMPLETION_BONUS, 'session_complete', JSON.stringify({ session_code: code, kompetence: awarded })]
-			);
+			throw txErr;
+		} finally {
+			client.release();
 		}
-
-		await queryCoinsDb(
-			`UPDATE public.sessions SET status = 'completed', completed_at = now() WHERE id = $1`,
-			[sess.id]
-		);
-
-		res.json({ ok: true, awarded, participants_rewarded: parts.length });
 	} catch (err) {
 		console.error('[Sessions] complete failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa ukončiť session', code: 'COMPLETE_ERROR' });
+	}
+});
+
+// ─── Session reward: participant fetches their own level changes ───
+// Back-calculates from stored awarded_competencies + current profile points.
+// Only returns data for the authenticated requesting user — never exposes others.
+app.get('/api/sessions/:code/my-reward', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const code = (req.params.code || '').toUpperCase().trim();
+	try {
+		// 1. Verify session exists and is completed
+		const { rows: sessRows } = await queryCoinsDb(
+			'SELECT id, status FROM public.sessions WHERE join_code = $1', [code]
+		);
+		if (!sessRows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
+		const sess = sessRows[0];
+		if (sess.status !== 'completed') {
+			return res.status(400).json({ error: 'Session ešte nie je dokončená', code: 'NOT_COMPLETED' });
+		}
+
+		// 2. Fetch only this user's participant row
+		const { rows: partRows } = await queryCoinsDb(
+			`SELECT awarded_competencies FROM public.session_participants
+			 WHERE session_id = $1 AND user_id = $2`,
+			[sess.id, user.id]
+		);
+		if (!partRows.length) return res.status(404).json({ error: 'Nie si účastníkom tejto session', code: 'NOT_PARTICIPANT' });
+
+		const awarded = partRows[0].awarded_competencies || {};
+		if (!Object.keys(awarded).length) {
+			// Participant didn't reflect or wasn't rewarded — return empty, no panel shown
+			return res.json({ awarded: {}, competencies: enrichCompetencies({}), level_changes: {} });
+		}
+
+		// 3. Fetch current profile points (this user only)
+		const { rows: profRows } = await queryCoinsDb(
+			'SELECT competency_points FROM public.profiles WHERE id = $1', [user.id]
+		);
+		const current = profRows[0]?.competency_points || {};
+
+		// 4. Back-calculate level changes: previous = current - awarded
+		const level_changes = {};
+		Object.keys(awarded).forEach(k => {
+			const gain    = parseInt(awarded[k], 10) || 0;
+			const newPts  = parseInt(current[k],  10) || 0;
+			const prevPts = Math.max(0, newPts - gain);
+			const from    = computeLevel(prevPts);
+			const to      = computeLevel(newPts);
+			level_changes[k] = {
+				previous_points: prevPts,
+				new_points:      newPts,
+				from_level:      from.level,
+				to_level:        to.level,
+				leveled_up:      from.level !== to.level,
+			};
+		});
+
+		res.json({ awarded, competencies: enrichCompetencies(current), level_changes });
+	} catch (err) {
+		console.error('[Sessions] my-reward failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa načítať odmenu', code: 'REWARD_ERROR' });
 	}
 });
 
@@ -1244,7 +1672,7 @@ app.get('/api/games/public/:id', async (req, res) => {
 	}
 	try {
 		const { rows } = await queryCoinsDb(
-			`SELECT game_json FROM public.saved_games WHERE id = $1 LIMIT 1`,
+			`SELECT game_json FROM public.saved_games WHERE public_token = $1 LIMIT 1`,
 			[id]
 		);
 		if (rows.length === 0) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
@@ -1288,7 +1716,9 @@ app.get('/api/games/library', async (req, res) => {
 	const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 50, 200));
 	try {
 		const { rows } = await queryCoinsDb(
-			`SELECT id, title, mode, is_favorite, created_at, updated_at
+			`SELECT id, title, mode, is_favorite, rating,
+			        public_token IS NOT NULL AS is_shared,
+			        created_at, updated_at
 			 FROM public.saved_games
 			 WHERE user_id = $1
 			 ORDER BY is_favorite DESC, created_at DESC
@@ -1312,7 +1742,7 @@ app.get('/api/games/:id', async (req, res) => {
 	}
 	try {
 		const { rows } = await queryCoinsDb(
-			`SELECT id, title, mode, game_json, is_favorite, created_at
+			`SELECT id, title, mode, game_json, is_favorite, rating, created_at
 			 FROM public.saved_games
 			 WHERE id = $1 AND user_id = $2
 			 LIMIT 1`,
@@ -1320,7 +1750,7 @@ app.get('/api/games/:id', async (req, res) => {
 		);
 		if (rows.length === 0) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
 		const row = rows[0];
-		res.json({ ...row.game_json, _savedId: row.id, _savedAt: row.created_at, _favorite: row.is_favorite });
+		res.json({ ...row.game_json, _savedId: row.id, _savedAt: row.created_at, _favorite: row.is_favorite, _currentRating: row.rating || 0 });
 	} catch (err) {
 		console.error('[Games] fetch game failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa načítať hru', code: 'FETCH_ERROR' });
@@ -1348,6 +1778,71 @@ app.patch('/api/games/:id/favorite', async (req, res) => {
 	} catch (err) {
 		console.error('[Games] favorite update failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa aktualizovať obľúbenú', code: 'FAVORITE_ERROR' });
+	}
+});
+
+// ─── Game publish / unpublish ───
+app.patch('/api/games/:id/publish', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const { id } = req.params;
+	if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
+		return res.status(400).json({ error: 'Neplatné ID hry' });
+	}
+	const { publish } = req.body || {};
+	try {
+		if (publish === false) {
+			// Revoke: clear the token so all old links 404 immediately
+			const { rowCount } = await queryCoinsDb(
+				`UPDATE public.saved_games SET public_token = NULL, updated_at = NOW()
+				 WHERE id = $1 AND user_id = $2`,
+				[id, user.id]
+			);
+			if (rowCount === 0) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
+			return res.json({ ok: true, token: null });
+		}
+		// Publish: generate token only if not already set (idempotent)
+		const { rows } = await queryCoinsDb(
+			`UPDATE public.saved_games
+			 SET public_token = COALESCE(public_token, gen_random_uuid()), updated_at = NOW()
+			 WHERE id = $1 AND user_id = $2
+			 RETURNING public_token`,
+			[id, user.id]
+		);
+		if (rows.length === 0) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
+		res.json({ ok: true, token: rows[0].public_token });
+	} catch (err) {
+		console.error('[Games] publish toggle failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa nastaviť zdieľanie', code: 'PUBLISH_ERROR' });
+	}
+});
+
+// ─── Game rating ───
+app.patch('/api/games/:id/rate', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const { id } = req.params;
+	if (!id || !/^[0-9a-f-]{36}$/.test(id)) {
+		return res.status(400).json({ error: 'Neplatné ID hry' });
+	}
+	const { rating, feedback } = req.body || {};
+	if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+		return res.status(400).json({ error: 'rating musí byť celé číslo 1–5', code: 'INVALID_RATING' });
+	}
+	const cleanFeedback = feedback ? String(feedback).trim().slice(0, 500) : null;
+	try {
+		const { rowCount } = await queryCoinsDb(
+			`UPDATE public.saved_games SET rating = $1, feedback = $2, updated_at = NOW()
+			 WHERE id = $3 AND user_id = $4`,
+			[rating, cleanFeedback, id, user.id]
+		);
+		if (rowCount === 0) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
+		res.json({ ok: true });
+	} catch (err) {
+		console.error('[Games] rate update failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa uložiť hodnotenie', code: 'RATE_ERROR' });
 	}
 });
 

@@ -1,147 +1,140 @@
 # Prompt pre ChatGPT — Stav projektu gIVEMEGAME.IO
+**Aktualizovaný:** 2026-03-15
 
 **Skopíruj celý text nižšie a vlož ho do nového chatu s ChatGPT.**
 
 ---
 
-## Kontext pre AI asistenta (ChatGPT)
-
-Ahoj! Potrebujem pomoc s projektom **gIVEMEGAME.IO**. Tu je kompletný prehľad, aby si vedel, o čo ide a v akom stave to je.
+Ahoj! Potrebujem pomoc s projektom **gIVEMEGAME.IO**. Tu je kompletný prehľad aktuálneho stavu.
 
 ---
 
-### Čo to je?
+## Čo to je?
 
-**gIVEMEGAME.IO** je webová aplikácia — **inteligentný generátor vzdelávacích hier**. Pomáha učiteľom, lektorom a facilitátorom vytvárať originálne, pedagogicky podložené hry a aktivity. Používa **OpenAI GPT** na generovanie hier podľa filtrov (režim, vek, počet hráčov, trvanie, prostredie atď.). Výstup je v Gen Z štýle — casual, s konkrétnymi príkladmi, nie akademický.
+**gIVEMEGAME.IO** je webová app — **inteligentný generátor vzdelávacích hier**. Pomáha učiteľom, lektorom a facilitátorom vytvárať pedagogicky podložené hry. Používa **OpenAI GPT** na generovanie hier podľa filtrov. Výstup je Gen Z štýl, casual, s konkrétnymi príkladmi.
 
-**Cieľová skupina:** české/slovenské školstvo (RVP ZV), podporuje SK, CS, EN, ES.
+**Cieľová skupina:** česko-slovenské školstvo (RVP ZV kurikulum), podporuje SK/CS/EN/ES.
 
 ---
 
-### Tech stack
+## Tech stack
 
-- **Backend:** Node.js, Express, OpenAI SDK
-- **Frontend:** Vanilla JS (žiadny framework), HTML5, CSS3
-- **Auth:** Supabase (Google OAuth)
+- **Backend:** Node.js, Express, OpenAI SDK, PostgreSQL (`pg` Pool)
+- **Frontend:** Vanilla JS (IIFE moduly, žiadny framework), HTML5, CSS3
+- **Auth:** Supabase (Google OAuth, JWT)
 - **Deploy:** Vercel (serverless)
-- **Fonty:** Press Start 2P, VT323 (retro gaming)
-- **Ikony:** Bootstrap Icons
+- **DB:** Supabase PostgreSQL
 
 ---
 
-### Štruktúra projektu (čo máme v súboroch)
+## Štruktúra projektu
 
 ```
 gIVEMEGAME.IO-OPENCLAW/
-├── server.js              # Express backend, API routes, OpenAI volania
+├── server.js              # Express backend — VŠETKA reward logika je TU
 ├── public/
-│   ├── index.html         # Hlavná app (UI generátora hier)
-│   ├── login.html         # Prihlásenie (Google OAuth)
-│   ├── script.js          # Frontend logika (~2500 riadkov)
-│   ├── style.css          # Štýly
-│   ├── data/
-│   │   ├── games.json     # Vzorové hry (fallback keď AI zlyhá)
-│   │   ├── rvp.json       # RVP ZV kurikulum (kompetencie, oblasti)
-│   │   ├── narrator-facts.json
-│   │   └── i18n/          # sk, cs, en, es preklady
-│   ├── gIVEME/            # Mini sociálna sieť (iframe)
-│   └── tamagochi/         # Tamagotchi mini-hra (iframe)
-├── data/                  # Duplikáty dát (games, rvp, i18n)
-├── source of knowledge/   # Používateľ uploaduje .txt, .md, .json — AI ich používa
-├── supabase/
-│   └── migrations/        # 001–008 SQL migrácie (profiles, coins, giveme, quest_log...)
-├── docs/
-│   ├── gIVEMECOIN_IMPLEMENTATION_PLAN.md   # Plán coin systému
-│   ├── gIVEMECOIN_LEGAL_CONSIDERATIONS.md
-│   ├── gIVEMECOIN_HYBRID_SPEC.md
-│   └── ENV_SETUP.md
-├── no robot test/         # Robot Challenge (CAPTCHA) — React/Vite
-├── zoom-pan-the-image-on-hover-mouse-move/  # Referenčný kód pre zoom
-├── .env.example
-├── vercel.json
-├── package.json
-└── PROJECT_OVERVIEW_FOR_AI.md   # Detailný prehľad pre AI
+│   ├── index.html, script.js, style.css
+│   ├── js/
+│   │   ├── coins.js, game-api.js, game-data.js, game-ui.js
+│   │   ├── game-edit.js, library.js, narrator.js
+│   │   ├── reflection.js, session.js, timer.js
+│   └── data/
+│       ├── games.json, rvp.json
+│       └── i18n/  (sk, cs, en, es)
+├── supabase/migrations/   (001–012 SQL)
+├── source of knowledge/   (.txt/.md/.json — vkladá sa do AI promptu)
+└── docs/plans/            (dizajnové dokumenty)
 ```
 
 ---
 
-### Čo už funguje (implementované)
+## Čo už funguje
 
-1. **Generovanie hier** — POST `/api/generate-game`, OpenAI GPT, fallback na `games.json`
-2. **3-panelové UI** — Ľavý panel (filtre), stred (viewport hry), pravý panel (SMARTA, Tamagochi, história)
+1. **Generovanie hier** — OpenAI GPT, fallback na `games.json`
+2. **3-panelové UI** — Filtre / Game viewport / SMARTA + história
 3. **Režimy:** Party, Classroom, Reflection, Circus, Cooking, Meditation
-4. **RVP filtre** — Stupeň, Kompetencie, Oblasti (české kurikulum)
-5. **SMARTA** — AI rozprávač s faktami, TTS (OpenAI alebo Web Speech)
-6. **gIVEMECOIN** — in-app coiny (localStorage + Supabase sync), odmeny za timer, robot, narrator
-7. **Robot Challenge** — CAPTCHA (matematika, sekvencia, emoji mriežka) — 250 coinov
-8. **gIVEME** — mini sociálna sieť s pixel art postami, lajky, komentáre, darovanie coinov
-9. **Tamagochi** — mini-hra v iframe
-10. **i18n** — SK, CS, EN, ES
-11. **Supabase** — profily, coiny, follows, giveme_posts, quest_log
+4. **RVP filtre** — Stupeň, Kompetencie, Oblast
+5. **gIVEMECOIN** — in-app coiny (localStorage + Supabase sync)
+6. **SMARTA** — AI rozprávač, TTS, denný limit 10 faktov, +50 coinov odmena
+7. **Robot Challenge** — CAPTCHA mini-hra, odmena +250 coinov
+8. **gIVEME** — mini sociálna sieť (pixel art posty, lajky, darovanie coinov)
+9. **gIVEMEGOCHI** — Tamagotchi mini-hra (iframe)
+10. **i18n** — SK/CS/EN/ES, `window.givemegame_t(key, fallback)`
+11. **Sessions (Phase 4)** — multiplayerové session (create/join/start/reflect/complete)
+12. **Systém kompetencií (Phase 4)** — 7 RVP kompetencií, body za dokončenie hier
+13. **Reward Validation System** — anti-exploit ochrana s 5 bránami + audit trail
 
 ---
 
-### Čo je v pláne / rozpracované
+## Ekonomika coinov
 
-**gIVEMECOIN Fáza 1** (podľa `docs/gIVEMECOIN_IMPLEMENTATION_PLAN.md`):
-- Migrácia `006_coin_transactions.sql` — história transakcií
-- API: `GET /api/coins/history`, `GET /api/coins/balance`
-- **Coin menu** — dropdown pri kliknutí na coin ikonu: balance, posledné transakcie, „Ako zarábať“
-- Logovanie existujúcich akcií (Robot Challenge, Tamagochi, gIVEME darovanie) do `coin_transactions`
+| Akcia | Suma |
+|---|---|
+| Nový používateľ | +150 |
+| Generovanie hry | -125 |
+| Pripojenie do session | -200 |
+| Dokončenie session | +100 |
+| Solo dokončenie | +100 |
+| Timer dokončený | +500 |
+| Robot Challenge | +250 |
+| SMARTA | +50 |
 
-**Fázy 2–4:** Právne dokumenty (ToS, Privacy Policy), blockchain vrstva (voliteľná) — claim tokenov za coiny.
-
----
-
-### Kľúčové API endpointy
-
-| Endpoint | Metóda | Účel |
-|----------|--------|------|
-| `/api/generate-game` | POST | Generuje hru cez OpenAI |
-| `/api/random-fact` | GET | Náhodný vzdelávací fakt (SMARTA) |
-| `/api/tts` | POST | OpenAI TTS |
-| `/api/knowledge` | GET | Zoznam súborov v „source of knowledge“ |
-| `/api/status` | GET | Stav, hasApiKey, model |
+**Netto za session: -100 coinov** (zámerný drain — zabraňuje farmeniu)
 
 ---
 
-### Schéma hry (JSON)
+## Systém kompetencií
 
-```json
-{
-  "id": "ai-xxxxxx",
-  "title": "string",
-  "pitch": "string",
-  "playerCount": { "min": 6, "max": 30 },
-  "ageRange": { "min": 6, "max": 12 },
-  "duration": { "min": 15, "max": 30 },
-  "setting": "indoor|outdoor|any",
-  "mode": "party|classroom|reflection|circus|cooking|meditation",
-  "materials": ["string"],
-  "instructions": ["string"],
-  "learningGoals": ["string"],
-  "rvp": { "kompetence", "oblasti", "stupen", ... }
-}
-```
+7 kľúčov z `rvp.json`:
+`k-uceni`, `k-reseni-problemu`, `komunikativni`, `socialni-personalni`, `obcanske`, `pracovni`, `digitalni`
+
+- Za každú kompetenciu v `game.rvp.kompetence` → **+50 bodov**
+- Body sú **permanentné** — len rastú
+- Vek hráčov rastie biologicky, nie cez levelovanie
+
+### Reward Validation brány (musí prejsť všetky):
+1. **Trvanie:** `(teraz - started_at) >= max(game.duration.min, 3)` min → `DURATION_TOO_SHORT`
+2. **Počet hráčov:** `COUNT(coins_paid > 0) >= max(game.playerCount.min, 1)` → `NOT_ENOUGH_PLAYERS`
+3. **Cooldown hosta:** `< 5 sessions za hodinu` → `HOST_COOLDOWN`
+4. **Reflexia:** `reflection_done = true AND awarded_competencies IS NULL`
+5. **Denný limit solo:** `< 10/deň` → `SOLO_DAILY_LIMIT`
 
 ---
 
-### Termíny (CZ/SK)
+## Databázová schéma (kľúčové tabuľky)
 
-- **Spawnuj hru** = Generuj hru
-- **RVP** = Rámcový vzdělávací program (kurikulum)
-- **Stupeň** = Ročník (1./2. stupeň)
-- **SMARTA** = AI rozprávač
+**profiles:** `id, coins, competency_points JSONB, games_generated, games_exported`
 
----
+**sessions:** `id, host_id, game_json JSONB, join_code, status (waiting/active/reflection/completing/completed), started_at, completed_at, reward_validation JSONB`
 
-### Ako ma môžeš osloviť pri pomoci
+**session_participants:** `session_id, user_id, coins_paid, reflection_done, awarded_competencies JSONB`
 
-- **Frontend:** „V script.js, modul GameUI…“, „V index.html, ľavý panel…“
-- **Backend:** „V server.js, buildSystemPrompt…“, „V /api/generate-game…“
-- **Dáta:** „Štruktúra games.json“, „Formát rvp.json“
-- **gIVEMECOIN:** „Implementuj Fázu 1 z gIVEMECOIN_IMPLEMENTATION_PLAN“
+**coin_transactions:** `user_id, amount, action, metadata JSONB, created_at`
 
 ---
 
-*Toto je aktuálny stav projektu k marcu 2026. Použij tento kontext pri každej otázke o gIVEMEGAME.IO.*
+## Čo čaká na vykonanie
+
+1. **Spustiť Migration 012 v Supabase Dashboard** (`supabase/migrations/012_reward_validation.sql`)
+2. Integračné testovanie validation brán
+
+---
+
+## Budúce plány
+
+- **Phase 5:** Úrovne kompetencií (Level 1–5 podľa bodov)
+- **Phase 6:** Achievementy, evolúcia avatara
+- **Phase 7:** Adaptívna ťažkosť AI, talent trees
+
+---
+
+## Ako referencovať kód
+
+- **Frontend:** `V public/js/session.js, funkcia complete()...`
+- **Backend:** `V server.js, endpoint /complete...`
+- **Konštanty odmien:** `COMPETENCY_AWARD=50, COMPLETION_BONUS=100, SESSION_JOIN_COST=200`
+- **i18n:** `public/data/i18n/sk.json, kľúče pre chyby: err_duration_short, err_not_enough_players...`
+
+---
+
+*Aktuálny stav projektu k 2026-03-15. Použi tento kontext pri každej otázke.*

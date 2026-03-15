@@ -7,7 +7,7 @@
 	<title>gIVEMEGAME.IO — Generátor vzdělávacích her</title>
 	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-	<link rel="stylesheet" href="style.css?v=9">
+	<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body class="mode-party">
 
@@ -491,6 +491,12 @@
 						<button class="btn btn-retro btn-action btn-regenerate" onclick="App.generate()">
 							<i class="bi bi-arrow-repeat"></i> <span data-i18n="new_game">Nová hra</span>
 						</button>
+						<button class="btn btn-retro btn-action btn-remix" id="btn-remix-game" onclick="App.remixCurrentGame()" title="Vytvor variáciu tejto hry s aktuálnymi filtrami">
+							<i class="bi bi-shuffle"></i> <span data-i18n="btn_remix">Remix</span>
+						</button>
+						<button class="btn btn-retro btn-action btn-print" onclick="window.print()" title="Tisk / Print">
+							<i class="bi bi-printer"></i> <span data-i18n="btn_print">Tisk</span>
+						</button>
 					</div>
 				</div>
 			</main>
@@ -639,6 +645,7 @@
 			</div>
 			<div class="profile-tabs">
 				<button class="profile-tab active" data-tab="profil" onclick="App.Profile.switchTab('profil')">Profil</button>
+				<button class="profile-tab" data-tab="analytics" onclick="App.Profile.switchTab('analytics')" data-i18n="tab_analytics">Analytika</button>
 				<button class="profile-tab" data-tab="giveme" onclick="App.Profile.switchTab('giveme')">gIVEME</button>
 			</div>
 			<div class="profile-tab-content" id="profile-tab-profil">
@@ -658,8 +665,21 @@
 					<div class="profile-coins-value" id="profile-coins">0</div>
 					<p class="profile-coins-hint">Coiny z Robot Challenge, Timer, módu — uložené v profile</p>
 				</div>
+				<!-- Competency progression — loaded lazily when Profil tab activates -->
+				<div class="profile-comp-section" id="profile-competencies" style="display:none">
+					<div class="profile-comp-title" data-i18n="comp_panel_title">Kompetencie</div>
+					<div id="profile-comp-bars"></div>
+				</div>
 				<div class="profile-logout-section" id="profile-logout-section" style="display:none;">
 					<button class="btn btn-retro btn-logout" id="profile-logout-btn" onclick="App.Profile.logout()">🚪 Odhlásiť sa z Google</button>
+				</div>
+				<div class="profile-actions">
+					<button class="btn btn-retro" onclick="App.UI.closeModal('profile-modal')">Zavrieť</button>
+				</div>
+			</div>
+			<div class="profile-tab-content" id="profile-tab-analytics" style="display:none;">
+				<div id="analytics-content">
+					<div class="analytics-loading" data-i18n="ana_loading">Načítavam...</div>
 				</div>
 				<div class="profile-actions">
 					<button class="btn btn-retro" onclick="App.UI.closeModal('profile-modal')">Zavrieť</button>
@@ -791,6 +811,23 @@
 				<span class="library-modal-title"><i class="bi bi-collection"></i> Knižnica hier</span>
 				<button class="library-modal-close" onclick="App.Library.close()"><i class="bi bi-x-lg"></i></button>
 			</div>
+			<div class="library-controls" id="library-controls">
+				<input type="text" id="lib-search" class="lib-search" placeholder="🔍 Hľadaj..." oninput="App.Library._renderFiltered()">
+				<select id="lib-mode" class="lib-filter-select" onchange="App.Library._renderFiltered()">
+					<option value="">Všetky módy</option>
+					<option value="party">🎉 Party</option>
+					<option value="classroom">📚 Classroom</option>
+					<option value="reflection">🪞 Reflection</option>
+					<option value="circus">🎪 Circus</option>
+					<option value="cooking">🍳 Cooking</option>
+					<option value="meditation">🧘 Meditation</option>
+				</select>
+				<select id="lib-sort" class="lib-filter-select" onchange="App.Library._renderFiltered()">
+					<option value="newest">Najnovšie</option>
+					<option value="oldest">Najstaršie</option>
+					<option value="rating">Najlepšie hodnotenie</option>
+				</select>
+			</div>
 			<div class="library-modal-body">
 				<div class="library-list" id="library-list">
 					<div class="library-loading">Načítavam...</div>
@@ -806,13 +843,14 @@
 	<script src="js/coins.js?v=1"></script>
 	<script src="js/timer.js?v=1"></script>
 	<script src="js/game-data.js?v=1"></script>
-	<script src="js/game-ui.js?v=1"></script>
-	<script src="js/reflection.js?v=1"></script>
-	<script src="js/session.js?v=1"></script>
-	<script src="js/game-api.js?v=1"></script>
-	<script src="js/library.js?v=1"></script>
+	<script src="js/sfx.js?v=1"></script>
+	<script src="js/game-ui.js?v=12"></script>
+	<script src="js/reflection.js?v=3"></script>
+	<script src="js/session.js?v=4"></script>
+	<script src="js/game-api.js?v=2"></script>
+	<script src="js/library.js?v=4"></script>
 	<script src="js/game-edit.js?v=1"></script>
-	<script src="script.js?v=15"></script>
+	<script src="script.js?v=21"></script>
 	<script src="cursor-effect.js?v=2"></script>
 
 

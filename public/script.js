@@ -188,18 +188,19 @@ const App = (() => {
 				});
 				if (!res.ok) return;
 				const data = await res.json();
-				GameUI.renderCompetencies(data.competency_points || {});
+				GameUI.renderCompetencies(data.competencies || data.competency_points || {});
 			} catch (e) { /* silent — not critical on startup */ }
 		})();
 
 		// Wire timer completion → reflection → solo competency award
 		Timer.setOnComplete(() => {
+			if (window.SFX) SFX.play('complete');
 			if (!window.currentGame) return;
 			Reflection.open(window.currentGame, null, async (reflectionData) => {
 				try {
 					const { data: { session } } = await supabaseClient.auth.getSession();
 					const token = session?.access_token;
-					if (!token) { GameUI.toast('Prihlás sa pre získanie bodov'); return; }
+					if (!token) { GameUI.toast(t('sess_no_login_points', 'Prihlás sa pre získanie bodov')); return; }
 
 					const res = await fetch('/api/profile/complete-solo', {
 						method: 'POST',
@@ -210,12 +211,19 @@ const App = (() => {
 						body: JSON.stringify({ game_json: window.currentGame })
 					});
 					const data = await res.json();
-					if (!res.ok) throw new Error(data.error || 'Chyba servera');
+					if (!res.ok) {
+						if (data.code === 'SOLO_DAILY_LIMIT') {
+							throw new Error(data.error || t('err_solo_daily_limit', 'Denný limit solo hier dosiahnutý'));
+						}
+						throw new Error(data.error || 'Chyba servera');
+					}
 
 					const kompCount = Object.keys(data.awarded || {}).length;
-					GameUI.toast(`🧠 +${kompCount * 50} bodov! 🪙 +${100} coinov`);
+					GameUI.toast(t('solo_comp_awarded', '🧠 +{pts} bodov! 🪙 +{coins} coinov')
+						.replace('{pts}', kompCount * 50).replace('{coins}', 100));
 					if (window.Coins?.load) window.Coins.load();
-					if (GameUI.renderCompetencies) GameUI.renderCompetencies(data.competency_points || {});
+					if (GameUI.renderCompetencies) GameUI.renderCompetencies(data.competencies || data.competency_points || {});
+					if (GameUI.showLevelUpFeedback && data.level_changes) GameUI.showLevelUpFeedback(data.level_changes);
 				} catch (err) {
 					GameUI.toast(`❌ ${err.message}`);
 				}
@@ -323,7 +331,7 @@ const App = (() => {
 	}
 
 	// ─── Generování ───
-	async function generate(costAction = 'generate') {
+	async function generate(costAction = 'generate', sourceGame = null) {
 		if (isGenerating) return;
 
 		// Check if player can afford the generation cost
@@ -333,6 +341,7 @@ const App = (() => {
 		}
 
 		isGenerating = true;
+		if (window.SFX) SFX.play('generate');
 
 		// Deduct coins immediately
 		Coins.spend(costAction);
@@ -341,13 +350,15 @@ const App = (() => {
 		const btnText = document.getElementById('generate-text');
 		btn.classList.add('generating');
 		btnText.textContent = t('status_generating', 'GENERATING...');
-		GameUI.setStatus(t('status_generating', 'GENERATING...'));
+		GameUI.setStatus(sourceGame ? t('status_remixing', 'REMIXING...') : t('status_generating', 'GENERATING...'));
 
 		GameUI.showScreen('loading');
 
 		try {
 			const filters = getFilters();
-			const game = await GameAPI.generateGame(filters);
+			const game = sourceGame
+				? await GameAPI.remixGame(sourceGame, filters)
+				: await GameAPI.generateGame(filters);
 			currentGame = game;
 			const sessionBtn = document.getElementById('btn-create-session');
 			if (sessionBtn) sessionBtn.style.display = '';
@@ -359,12 +370,13 @@ const App = (() => {
 			await new Promise(r => setTimeout(r, 1300));
 
 			GameUI.renderGame(game);
+			if (window.SFX) SFX.play('ready');
 			GameUI.renderQuickView(game);
 			GameUI.addToHistory(game);
 			GameUI.closeMobileOverlays();
 			saveQuestLogEntry(game);
 			GameUI.updateStats(stats.generated, stats.exported);
-			GameUI.setStatus(t('status_game_ready', 'GAME READY'));
+			GameUI.setStatus(sourceGame ? t('status_remix_ready', 'REMIX READY') : t('status_game_ready', 'GAME READY'));
 
 			// Setup timer based on game duration
 			Timer.setup(game.duration);
@@ -382,6 +394,12 @@ const App = (() => {
 			btn.classList.remove('generating');
 			btnText.textContent = t('generate', 'GENERATE GAME');
 		}
+	}
+
+	// ─── Remix — variácia aktuálnej hry s novými filtrami ───
+	function remixCurrentGame() {
+		if (!currentGame) { GameUI.toast('Najprv vygeneruj alebo načítaj hru!'); return; }
+		generate('remix', currentGame);
 	}
 
 	// ─── Překvapení (náhodné, ignoruje filtry) ───
@@ -1359,8 +1377,9 @@ const App = (() => {
 
 		function switchTab(tab) {
 			document.querySelectorAll('.profile-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-			document.getElementById('profile-tab-profil').style.display = tab === 'profil' ? 'block' : 'none';
-			document.getElementById('profile-tab-giveme').style.display = tab === 'giveme' ? 'block' : 'none';
+			document.getElementById('profile-tab-profil').style.display    = tab === 'profil'    ? 'block' : 'none';
+			document.getElementById('profile-tab-analytics').style.display = tab === 'analytics' ? 'block' : 'none';
+			document.getElementById('profile-tab-giveme').style.display    = tab === 'giveme'    ? 'block' : 'none';
 
 			const modalBox = document.querySelector('#profile-modal .modal-box');
 			if (modalBox) modalBox.classList.toggle('profile-modal-giveme', tab === 'giveme');
@@ -1368,12 +1387,104 @@ const App = (() => {
 			if (tab === 'profil') {
 				const coinsEl = document.getElementById('profile-coins');
 				if (coinsEl) coinsEl.textContent = Coins.getBalance();
+				_loadProfileCompetencies();
 			}
-
+			if (tab === 'analytics') _loadAnalytics();
 			if (tab === 'giveme') {
 				const iframe = document.getElementById('giveme-iframe');
 				if (iframe) syncGivemeIframe(iframe);
 			}
+		}
+
+		async function _loadProfileCompetencies() {
+			const compSection = document.getElementById('profile-competencies');
+			const compBars    = document.getElementById('profile-comp-bars');
+			if (!compSection || !compBars) return;
+			const user = getCurrentUser();
+			if (!user || user.uid === 'guest' || !supabaseClient) {
+				compSection.style.display = 'none';
+				return;
+			}
+			try {
+				const { data: { session } } = await supabaseClient.auth.getSession();
+				const token = session?.access_token;
+				if (!token) { compSection.style.display = 'none'; return; }
+				const res = await fetch('/api/profile/competencies', {
+					headers: { 'Authorization': `Bearer ${token}` }
+				});
+				if (!res.ok) { compSection.style.display = 'none'; return; }
+				const data = await res.json();
+				GameUI.renderProfileCompetencies(compBars, data.competencies || data.competency_points || {});
+				compSection.style.display = 'block';
+			} catch (e) {
+				compSection.style.display = 'none';
+			}
+		}
+
+		// Small lookup so the analytics renderer can translate competency keys
+		// without needing access to the private COMP_META inside game-ui.js.
+		const _COMP_LABEL = {
+			'k-uceni':             ['comp_learning',  'K učeniu'],
+			'k-reseni-problemu':   ['comp_problem',   'K riešeniu'],
+			'komunikativni':       ['comp_comm',      'Komunikatívna'],
+			'socialni-personalni': ['comp_social',    'Sociálna'],
+			'obcanske':            ['comp_civic',     'Občianska'],
+			'pracovni':            ['comp_work',      'Pracovná'],
+			'digitalni':           ['comp_digital',   'Digitálna'],
+		};
+
+		async function _loadAnalytics() {
+			const el = document.getElementById('analytics-content');
+			if (!el) return;
+			const user = getCurrentUser();
+			if (!user || user.uid === 'guest' || !supabaseClient) {
+				el.innerHTML = `<p class="analytics-hint">${t('ana_login_required', 'Prihlás sa pre štatistiky')}</p>`;
+				return;
+			}
+			el.innerHTML = `<p class="analytics-loading">${t('ana_loading', 'Načítavam...')}</p>`;
+			try {
+				const { data: { session } } = await supabaseClient.auth.getSession();
+				const token = session?.access_token;
+				if (!token) { el.innerHTML = ''; return; }
+				const res = await fetch('/api/profile/analytics', {
+					headers: { 'Authorization': `Bearer ${token}` }
+				});
+				if (!res.ok) { el.innerHTML = `<p class="analytics-hint">${t('ana_no_data', 'Zatiaľ bez dát')}</p>`; return; }
+				const data = await res.json();
+				el.innerHTML = _renderAnalytics(data);
+			} catch (e) {
+				el.innerHTML = `<p class="analytics-hint">${t('ana_no_data', 'Zatiaľ bez dát')}</p>`;
+			}
+		}
+
+		function _renderAnalytics(d) {
+			const modeLabels = {
+				solo:     `🎮 ${t('ana_style_solo',     'Sólový hráč')}`,
+				session:  `👥 ${t('ana_style_group',    'Tímový hráč')}`,
+				balanced: `⚖️ ${t('ana_style_balanced', 'Vyvážený')}`,
+			};
+			const compLabel = key => {
+				if (!key) return '—';
+				const [lkey, lfb] = _COMP_LABEL[key] || ['', key];
+				return t(lkey, lfb);
+			};
+			const stat = (value, label, sub) => `
+				<div class="analytics-stat">
+					<div class="analytics-stat-value">${value}</div>
+					<div class="analytics-stat-label">${label}</div>
+					${sub ? `<div class="analytics-stat-sub">${sub}</div>` : ''}
+				</div>`;
+			return `<div class="analytics-grid">
+				${stat(d.games_generated,     t('ana_games_gen',   'Hier'))}
+				${stat(d.solo_completions,    t('ana_solo',        'Solo hry'))}
+				${stat(d.session_completions, t('ana_sessions',    'Sessie'))}
+				${stat(d.total_xp,            t('ana_total_xp',   'Celkové XP'))}
+				${stat(d.strongest ? compLabel(d.strongest) : '—', t('ana_strongest', 'Najsilnejšia'))}
+				${stat(d.weakest   ? compLabel(d.weakest)   : '—', t('ana_weakest',   'Najslabšia'))}
+				${stat(`🪙 ${d.coins_earned}`, t('ana_coins_earned', 'Coinov zarobených'))}
+				${stat(`🪙 ${d.coins_spent}`,  t('ana_coins_spent',  'Coinov minutých'))}
+				${stat(d.dominant_mode ? modeLabels[d.dominant_mode] : '—', t('ana_play_style', 'Herný štýl'))}
+			</div>`;
 		}
 
 		function syncGivemeIframe(iframe) {
@@ -1422,6 +1533,7 @@ const App = (() => {
 	return {
 		init,
 		generate,
+		remixCurrentGame,
 		surprise,
 		exportGame,
 		exportAs,

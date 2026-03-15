@@ -20,12 +20,13 @@
 - [ ] Endpoint `GET /api/coins/history?limit=50` — vracia históriu pre prihláseného usera
 - [ ] Endpoint `GET /api/coins/balance` — vracia aktuálny balance (môže byť z profiles)
 
-### 1.3 Frontend — Coin menu
+### 1.3 Frontend — Coin menu (iba in-app, bez blockchainu)
 
 - [ ] Klik na coin ikonu v headeri → otvorí dropdown/modal
 - [ ] Zobrazenie: balance, posledných 10–20 transakcií
 - [ ] Formát transakcie: „+15 Robot Challenge“, „-5 Dar gIVEME“, atď.
 - [ ] Sekcia „Ako zarábať“ — odkazy na Robot Challenge, Tamagochi, gIVEME
+- [ ] **Žiadny** WalletConnect, Claim token ani crypto terminológia — to až Fáza 3
 
 ### 1.4 Logovanie existujúcich akcií
 
@@ -76,12 +77,13 @@
 - [ ] Rate limiting, min. balance
 - [ ] Veková brána (18+) — overenie pred claimom
 
-### 3.4 Frontend
+### 3.4 Frontend — Crypto / Claim rozšírenie (samostatná sekcia v coin menu)
 
-- [ ] Tlačidlo „Claim gIVEME token“ v coin menu
-- [ ] WalletConnect modal — pripojenie peňaženky
+- [ ] Nová sekcia „Claim token“ — zobrazí sa len ak je blockchain vrstva aktívna
+- [ ] Tlačidlo „Claim gIVEME token“ + WalletConnect modal
 - [ ] Zobrazenie Token Disclaimer pred claimom
 - [ ] Success / error stavy
+- [ ] Oddeliť vizuálne od bežného in-app coin menu (Fáza 1)
 
 ### 3.5 Testovanie
 

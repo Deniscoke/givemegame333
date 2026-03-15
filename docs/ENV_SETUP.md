@@ -7,7 +7,9 @@ Tento projekt funguje len vtedy, ak sú všetky tajomstvá držané mimo repozit
 2. Vyplň reálne hodnoty:
    - `OPENAI_API_KEY` — nový kľúč vytvorený v [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
    - `OPENAI_MODEL`, `OPENAI_TTS_MODEL` ponechaj podľa odporúčaní
-   - `SUPABASE_DB_URL` len vtedy, ak spúšťaš server so skriptami, ktoré pristupujú k DB
+   - `SUPABASE_DB_URL` — Postgres connection string zo Supabase (potrebné pre migrácie aj server)
+   - `SUPABASE_URL` — napr. `https://vhpkkbixshfyytohkruv.supabase.co`
+   - `SUPABASE_ANON_KEY` — Supabase anon key (backend ho používa na verifikáciu tokenov)
 3. Súbor `.env.local` nikdy necommituj (je v `.gitignore`).
 
 ## 2. Vercel / Deploy prostredie
@@ -16,6 +18,8 @@ Tento projekt funguje len vtedy, ak sú všetky tajomstvá držané mimo repozit
    - `OPENAI_API_KEY`
    - `OPENAI_MODEL`
    - `OPENAI_TTS_MODEL`
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
    - `NARRATOR_STYLE` (ak používaš)
 3. Nastav rovnaké hodnoty pre Production aj Preview.  
 4. Spusť redeploy, aby server nabil nové hodnoty.
