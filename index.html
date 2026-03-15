@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23633cff'/><text x='16' y='22' font-size='14' fill='white' text-anchor='middle' font-family='sans-serif'>G</text></svg>">
+	<title>gIVEMEGAME.IO — Generátor vzdělávacích her</title>
+	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+	<link rel="stylesheet" href="style.css">
+</head>
+<body class="light-mode mode-party">
+
+	<div id="app-layout">
+
+		<!-- ═══════════════════ HEADER ═══════════════════ -->
+		<header>
+			<div class="brand-title">
+				<span class="brand-give">gIVE</span><span class="brand-me">ME</span><span class="brand-game">GAME</span><span class="brand-io">.IO</span>
+			</div>
+
+			<!-- COIN DISPLAY -->
+			<div class="coin-display" id="coin-display" title="gIVEMECOIN">
+				<span class="coin-icon">🪙</span>
+				<span class="coin-count" id="coin-count">0</span>
+			</div>
+
+			<!-- SHARE LINK (viditeľné len cez ngrok) -->
+			<div class="share-link-wrap" id="share-link-wrap" style="display:none" title="Skopíruj a pošli kamarátovi — NIE localhost!">
+				<button type="button" class="btn-share-link" id="btn-share-link" title="Skopíruj odkaz pre kamaráta">
+					🔗 <span data-i18n="share_link">Zdieľať</span>
+				</button>
+				<span class="share-link-url" id="share-link-url"></span>
+			</div>
+
+			<!-- ROBOT CHALLENGE BUTTON -->
+			<button class="btn-robot-challenge" id="btn-robot-challenge" onclick="App.RobotChallenge.open()" title="Robot Challenge — earn coins!">
+				🤖 <span data-i18n="robot_challenge">Challenge</span>
+			</button>
+
+			<!-- LANGUAGE SELECTOR -->
+			<div class="lang-selector" id="lang-selector">
+				<button class="btn-lang" data-lang="sk" title="Slovenčina">SK</button>
+				<button class="btn-lang active" data-lang="cs" title="Čeština">CZ</button>
+				<button class="btn-lang" data-lang="en" title="English">EN</button>
+				<button class="btn-lang" data-lang="es" title="Español">ES</button>
+			</div>
+
+			<div class="header-actions">
+				<button class="btn btn-retro btn-action-header btn-phone" id="btn-phone" onclick="App.Profile.open()" title="Profil & gIVEMECOIN">
+					<svg class="phone-icon" viewBox="0 0 16 24" width="16" height="24">
+						<rect x="2" y="1" width="12" height="22" rx="2" fill="var(--border)" stroke="var(--text)" stroke-width="1"/>
+						<rect x="3" y="2" width="10" height="18" rx="1" fill="var(--panel)"/>
+						<rect x="5" y="4" width="6" height="10" fill="var(--bg)"/>
+						<circle cx="8" cy="20" r="1.5" fill="var(--border)"/>
+					</svg>
+				</button>
+				<button class="btn btn-retro btn-action-header btn-music" id="btn-music" onclick="App.Music.toggle()" title="Hudba">
+					<i class="bi bi-music-note-beamed" id="music-icon"></i>
+				</button>
+				<button class="btn btn-retro btn-action-header" onclick="App.UI.openHelp()" data-i18n-title="help">
+					<i class="bi bi-question-circle"></i>
+				</button>
+				<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleHistory()" data-i18n-title="history">
+					<i class="bi bi-clock-history"></i>
+				</button>
+				<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleTheme()" data-i18n-title="appearance">
+					<i class="bi bi-sun-fill" id="theme-icon"></i>
+				</button>
+				<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleFullscreen()" data-i18n-title="fullscreen">
+					<i class="bi bi-arrows-fullscreen"></i>
+				</button>
+			</div>
+		</header>
+
+		<!-- ═══════════════════ WORKSPACE ═══════════════════ -->
+		<div id="workspace">
+
+			<!-- ─── LEFT PANEL: MODE + FILTERS ─── -->
+			<aside class="left-panel">
+
+				<!-- MODE SELECTOR -->
+				<div class="panel-section mode-section">
+					<label class="panel-label"><i class="bi bi-joystick"></i> <span data-i18n="mode">Režim</span></label>
+					<div class="mode-grid" id="mode-grid">
+						<button class="btn-mode active" data-mode="party" onclick="App.setMode('party')">
+							<span class="mode-emoji">🎉</span>
+							<span class="mode-name" data-i18n="mode_party">Párty</span>
+						</button>
+						<button class="btn-mode" data-mode="classroom" onclick="App.setMode('classroom')">
+							<span class="mode-emoji">📚</span>
+							<span class="mode-name" data-i18n="mode_classroom">Třída</span>
+						</button>
+						<button class="btn-mode" data-mode="reflection" onclick="App.setMode('reflection')">
+							<span class="mode-emoji">🪞</span>
+							<span class="mode-name" data-i18n="mode_reflection">Reflexe</span>
+						</button>
+						<button class="btn-mode" data-mode="circus" onclick="App.setMode('circus')">
+							<span class="mode-emoji">🎪</span>
+							<span class="mode-name" data-i18n="mode_circus">Cirkus</span>
+						</button>
+					<button class="btn-mode" data-mode="cooking" onclick="App.setMode('cooking')">
+							<span class="mode-emoji">🍳</span>
+							<span class="mode-name" data-i18n="mode_cooking">Vaření</span>
+						</button>
+						<button class="btn-mode" data-mode="meditation" onclick="App.setMode('meditation')">
+							<span class="mode-emoji">🧘</span>
+							<span class="mode-name" data-i18n="mode_meditation">Meditace</span>
+						</button>
+					</div>
+				</div>
+
+				<!-- MAIN FILTERS -->
+				<div class="panel-section">
+					<label class="panel-label"><i class="bi bi-sliders"></i> <span data-i18n="filters">Filtry</span></label>
+
+					<div class="filter-group">
+						<label class="filter-label" data-i18n="age">Věk</label>
+						<div class="filter-row">
+							<select id="filter-age-min" class="form-select form-select-sm">
+								<option value="" data-i18n="from">Od</option>
+								<option value="3">3+</option>
+								<option value="5">5+</option>
+								<option value="6">6+</option>
+								<option value="8">8+</option>
+								<option value="10">10+</option>
+								<option value="12">12+</option>
+							</select>
+							<span class="filter-dash">—</span>
+							<select id="filter-age-max" class="form-select form-select-sm">
+								<option value="" data-i18n="to">Do</option>
+								<option value="6">6</option>
+								<option value="8">8</option>
+								<option value="10">10</option>
+								<option value="12">12</option>
+								<option value="14">14</option>
+								<option value="16">16+</option>
+							</select>
+						</div>
+					</div>
+
+					<div class="filter-group">
+						<label class="filter-label" data-i18n="players">Počet hráčů</label>
+						<select id="filter-players" class="form-select">
+							<option value="" data-i18n="any_option">Libovolný</option>
+							<option value="solo" data-i18n="players_solo">Sólo (1)</option>
+							<option value="small" data-i18n="players_small">Malý (2–5)</option>
+							<option value="medium" data-i18n="players_medium">Střední (6–15)</option>
+							<option value="large" data-i18n="players_large">Velký (16–30)</option>
+						</select>
+					</div>
+
+					<div class="filter-group">
+						<label class="filter-label" data-i18n="duration">Délka</label>
+						<select id="filter-duration" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="quick" data-i18n="duration_quick">Krátká (5–15 min)</option>
+							<option value="medium" data-i18n="duration_medium">Střední (15–30 min)</option>
+							<option value="long" data-i18n="duration_long">Dlouhá (30–60 min)</option>
+						</select>
+					</div>
+
+					<div class="filter-group">
+						<label class="filter-label" data-i18n="setting">Prostředí</label>
+						<div class="setting-toggles">
+							<button class="btn btn-retro btn-toggle active" id="setting-any" onclick="App.Filters.setSetting('any')">
+								<i class="bi bi-globe2"></i> <span data-i18n="setting_all">Vše</span>
+							</button>
+							<button class="btn btn-retro btn-toggle" id="setting-indoor" onclick="App.Filters.setSetting('indoor')">
+								<i class="bi bi-house"></i> <span data-i18n="setting_indoor">Uvnitř</span>
+							</button>
+							<button class="btn btn-retro btn-toggle" id="setting-outdoor" onclick="App.Filters.setSetting('outdoor')">
+								<i class="bi bi-tree"></i> <span data-i18n="setting_outdoor">Venku</span>
+							</button>
+						</div>
+					</div>
+
+					<!-- ENERGY LEVEL (all modes) -->
+					<div class="filter-group">
+						<label class="filter-label" data-i18n="energy">Energie</label>
+						<select id="filter-energy" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="low" data-i18n="energy_low">Klidná</option>
+							<option value="medium" data-i18n="energy_medium">Střední</option>
+							<option value="high" data-i18n="energy_high">Vysoká</option>
+						</select>
+					</div>
+
+					<!-- ACTIVITY MODE (circus only) -->
+					<div class="filter-group filter-circus-only" id="filter-group-activity" style="display:none;">
+						<label class="filter-label" data-i18n="activity_mode">Typ aktivity</label>
+						<select id="filter-activity" class="form-select">
+							<option value="" data-i18n="any_option">Libovolný</option>
+							<option value="solo" data-i18n="activity_solo">Sólo</option>
+							<option value="pair" data-i18n="activity_pair">Dvojice</option>
+							<option value="group" data-i18n="activity_group">Skupinka</option>
+							<option value="mass" data-i18n="activity_mass">Hromadná</option>
+						</select>
+					</div>
+
+					<!-- EMOTIONAL DEPTH (reflection only) -->
+					<div class="filter-group filter-reflection-only" id="filter-group-depth" style="display:none;">
+						<label class="filter-label" data-i18n="emotional_depth">Emoční hloubka</label>
+						<select id="filter-depth" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="light" data-i18n="depth_light">Lehká</option>
+							<option value="medium" data-i18n="depth_medium">Střední</option>
+							<option value="deep" data-i18n="depth_deep">Hluboká</option>
+						</select>
+					</div>
+					<!-- CUISINE TYPE (cooking only) -->
+					<div class="filter-group filter-cooking-only" id="filter-group-cuisine" style="display:none;">
+						<label class="filter-label" data-i18n="cuisine_type">Typ kuchyně</label>
+						<select id="filter-cuisine" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="sweet" data-i18n="cuisine_sweet">Sladká</option>
+							<option value="savory" data-i18n="cuisine_savory">Slaná</option>
+							<option value="healthy" data-i18n="cuisine_healthy">Zdravá</option>
+							<option value="international" data-i18n="cuisine_international">Světová</option>
+						</select>
+					</div>
+
+					<!-- FOCUS TYPE (meditation only) -->
+					<div class="filter-group filter-meditation-only" id="filter-group-focus" style="display:none;">
+						<label class="filter-label" data-i18n="focus_type">Zaměření</label>
+						<select id="filter-focus" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolné</option>
+							<option value="breath" data-i18n="focus_breath">Dech</option>
+							<option value="body" data-i18n="focus_body">Tělo</option>
+							<option value="visualization" data-i18n="focus_visualization">Vizualizace</option>
+							<option value="movement" data-i18n="focus_movement">Pohyb (jóga)</option>
+						</select>
+					</div>
+				</div>
+
+				<!-- RVP FILTERS (classroom mode primarily, but available always) -->
+				<div class="panel-section" id="rvp-filters-section">
+					<label class="panel-label"><i class="bi bi-mortarboard"></i> <span data-i18n="rvp_filters">RVP Filtry</span></label>
+
+					<div class="filter-group">
+						<label class="filter-label" data-i18n="school_level">Stupeň ZŠ</label>
+						<select id="filter-stupen" class="form-select">
+							<option value="" data-i18n="any_option">Libovolný</option>
+							<option value="prvni" data-i18n="level_first">1. stupeň (6–11 let)</option>
+							<option value="druhy" data-i18n="level_second">2. stupeň (11–15 let)</option>
+						</select>
+					</div>
+
+					<div class="filter-group">
+						<label class="filter-label" data-i18n="competence">Kompetence</label>
+						<select id="filter-kompetence" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="k-uceni" data-i18n="comp_learning">Kompetence k učení</option>
+							<option value="k-reseni-problemu" data-i18n="comp_problem">K řešení problémů</option>
+							<option value="komunikativni" data-i18n="comp_comm">Komunikativní</option>
+							<option value="socialni-personalni" data-i18n="comp_social">Sociální a personální</option>
+							<option value="obcanske" data-i18n="comp_civic">Občanské</option>
+							<option value="pracovni" data-i18n="comp_work">Pracovní</option>
+							<option value="digitalni" data-i18n="comp_digital">Digitální</option>
+						</select>
+					</div>
+
+					<div class="filter-group">
+						<label class="filter-label" data-i18n="edu_area">Vzdělávací oblast</label>
+						<select id="filter-oblast" class="form-select">
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="jazyk" data-i18n="edu_jazyk">Jazyk a jazyková komunikace</option>
+							<option value="matematika" data-i18n="edu_matematika">Matematika a její aplikace</option>
+							<option value="ict" data-i18n="edu_ict">Informatika</option>
+							<option value="clovek-svet" data-i18n="edu_clovek_svet">Člověk a jeho svět</option>
+							<option value="clovek-spolecnost" data-i18n="edu_clovek_spolecnost">Člověk a společnost</option>
+							<option value="clovek-priroda" data-i18n="edu_clovek_priroda">Člověk a příroda</option>
+							<option value="umeni-kultura" data-i18n="edu_umeni_kultura">Umění a kultura</option>
+							<option value="clovek-zdravi" data-i18n="edu_clovek_zdravi">Člověk a zdraví</option>
+							<option value="clovek-prace" data-i18n="edu_clovek_prace">Člověk a svět práce</option>
+						</select>
+					</div>
+				</div>
+
+				<!-- DESCRIPTION / POPIS -->
+				<div class="panel-section">
+					<label class="panel-label"><i class="bi bi-pencil-square"></i> <span data-i18n="description_label">Popis</span></label>
+					<textarea id="filter-description" class="form-textarea" rows="2" maxlength="200" data-i18n-placeholder="description_placeholder" placeholder="Krátký popis nebo zadání hry..."></textarea>
+				</div>
+
+				<!-- GENERATE BUTTON -->
+				<button class="btn btn-retro btn-generate" id="btn-generate" onclick="App.generate()">
+					<i class="bi bi-dice-5-fill"></i>
+					<span id="generate-text" data-i18n="generate">GENEROVAT HRU</span>
+				</button>
+
+				<button class="btn btn-retro btn-surprise" onclick="App.surprise()">
+					<i class="bi bi-shuffle"></i> <span data-i18n="surprise">Překvap mě!</span>
+				</button>
+
+				<!-- ENGINE STATUS -->
+				<div class="panel-section panel-engine">
+					<label class="panel-label"><i class="bi bi-cpu"></i> <span data-i18n="engine_label">IndieWeb Engine</span></label>
+					<div class="engine-info" id="engine-info">
+						<span class="engine-indicator engine-ai" id="engine-indicator">🤖 AI Engine</span>
+					</div>
+					<div class="knowledge-status" id="knowledge-status" style="display:none;" title="Source of Knowledge">
+						<i class="bi bi-database"></i>
+						<span id="knowledge-count">0</span> <span data-i18n="knowledge_files">files</span>
+					</div>
+				</div>
+			</aside>
+
+			<!-- ─── MAIN AREA: GAME DISPLAY ─── -->
+			<main id="game-viewport">
+				<!-- Welcome screen -->
+				<div id="welcome-screen" class="welcome-screen">
+					<div class="welcome-icon"><i class="bi bi-controller"></i></div>
+					<h2 class="welcome-title" data-i18n="welcome_title">Připraveni generovat?</h2>
+					<p class="welcome-text" data-i18n="welcome_text">Nastavte filtry a stiskněte <strong>GENEROVAT HRU</strong><br>nebo zkuste <strong>Překvap mě!</strong> pro náhodný výběr.</p>
+					<div class="welcome-hint">
+						<i class="bi bi-arrow-left"></i> <span data-i18n="welcome_hint">Filtry vlevo | Výsledky vpravo</span> <i class="bi bi-arrow-right"></i>
+					</div>
+				</div>
+
+				<!-- Loading animation -->
+				<div id="loading-screen" class="loading-screen" style="display:none;">
+					<div class="loading-dice">
+						<div class="dice-face">⚄</div>
+					</div>
+					<p class="loading-text" data-i18n="loading">Generuji vaši hru...</p>
+					<div class="loading-bar"><div class="loading-fill"></div></div>
+				</div>
+
+				<!-- Generated game card -->
+				<div id="game-card" class="game-card" style="display:none;">
+					<div class="game-card-header">
+						<div class="game-mode-badge" id="game-mode-badge"></div>
+						<h2 id="game-title" class="game-title"></h2>
+						<div class="game-badges" id="game-badges"></div>
+					</div>
+					<!-- TIMER BLOCK -->
+					<div id="game-timer-block" class="game-timer-block" style="display:none;">
+						<div class="timer-display" id="timer-display">00:00</div>
+						<button class="btn btn-retro btn-timer-ready" id="btn-timer-ready" onclick="App.Timer.start()">
+							<i class="bi bi-play-fill"></i> <span data-i18n="timer_ready">READY</span>
+						</button>
+						<span class="timer-status" id="timer-status"></span>
+					</div>
+
+					<div id="game-pitch" class="game-pitch"></div>
+
+					<div class="game-meta-row" id="game-meta-row"></div>
+
+					<div class="game-sections">
+
+						<div class="game-section">
+							<h3 class="section-title"><i class="bi bi-box-seam"></i> <span data-i18n="materials">Pomůcky</span></h3>
+							<ul id="game-materials" class="game-list"></ul>
+						</div>
+
+						<div class="game-section">
+							<h3 class="section-title"><i class="bi bi-list-ol"></i> <span data-i18n="instructions">Instrukce</span></h3>
+							<ol id="game-instructions" class="game-list game-list-numbered"></ol>
+						</div>
+
+						<div class="game-section">
+							<h3 class="section-title"><i class="bi bi-mortarboard"></i> <span data-i18n="learning_goals">Vzdělávací cíle</span></h3>
+							<div id="game-goals" class="game-tags"></div>
+						</div>
+
+						<!-- RVP SECTION -->
+						<div class="game-section collapsible" data-section="rvp">
+							<h3 class="section-title clickable" onclick="App.UI.toggleSection('rvp')">
+								<i class="bi bi-journal-bookmark"></i> <span data-i18n="rvp_mapping">RVP Mapování</span>
+								<i class="bi bi-chevron-down toggle-icon"></i>
+							</h3>
+							<div class="section-body" id="section-rvp">
+								<div class="rvp-subsection">
+									<span class="rvp-sub-label" data-i18n="key_competences">Klíčové kompetence</span>
+									<div id="rvp-kompetence" class="rvp-badges"></div>
+								</div>
+								<div class="rvp-subsection">
+									<span class="rvp-sub-label" data-i18n="edu_areas">Vzdělávací oblasti</span>
+									<div id="rvp-oblasti" class="rvp-badges"></div>
+								</div>
+								<div class="rvp-subsection">
+									<span class="rvp-sub-label" data-i18n="level">Stupeň</span>
+									<div id="rvp-stupen" class="rvp-badges"></div>
+								</div>
+								<div class="rvp-subsection">
+									<span class="rvp-sub-label" data-i18n="cross_topics">Průřezová témata</span>
+									<div id="rvp-prurezova" class="rvp-badges"></div>
+								</div>
+								<div class="rvp-subsection">
+									<span class="rvp-sub-label" data-i18n="expected_outcomes">Očekávané výstupy</span>
+									<ul id="rvp-vystupy" class="game-list"></ul>
+								</div>
+								<div class="rvp-subsection">
+									<span class="rvp-sub-label" data-i18n="recommended_eval">Doporučené hodnocení</span>
+									<div id="rvp-hodnoceni" class="rvp-badges"></div>
+								</div>
+							</div>
+						</div>
+
+						<div class="game-section collapsible" data-section="reflection">
+							<h3 class="section-title clickable" onclick="App.UI.toggleSection('reflection')">
+								<i class="bi bi-chat-dots"></i> <span data-i18n="reflection_prompts">Reflexní otázky</span>
+								<i class="bi bi-chevron-down toggle-icon"></i>
+							</h3>
+							<div class="section-body" id="section-reflection">
+								<ul id="game-reflection" class="game-list"></ul>
+							</div>
+						</div>
+
+						<div class="game-section collapsible" data-section="safety">
+							<h3 class="section-title clickable" onclick="App.UI.toggleSection('safety')">
+								<i class="bi bi-shield-check"></i> <span data-i18n="safety_notes">Bezpečnostní poznámky</span>
+								<i class="bi bi-chevron-down toggle-icon"></i>
+							</h3>
+							<div class="section-body" id="section-safety">
+								<ul id="game-safety" class="game-list"></ul>
+							</div>
+						</div>
+
+						<div class="game-section collapsible" data-section="adaptation">
+							<h3 class="section-title clickable" onclick="App.UI.toggleSection('adaptation')">
+								<i class="bi bi-arrows-angle-expand"></i> <span data-i18n="adaptation_tips">Tipy na úpravy</span>
+								<i class="bi bi-chevron-down toggle-icon"></i>
+							</h3>
+							<div class="section-body" id="section-adaptation">
+								<ul id="game-adaptation" class="game-list"></ul>
+							</div>
+						</div>
+
+						<div class="game-section collapsible" data-section="facilitator">
+							<h3 class="section-title clickable" onclick="App.UI.toggleSection('facilitator')">
+								<i class="bi bi-person-badge"></i> <span data-i18n="facilitator_notes">Poznámky pro vedoucího</span>
+								<i class="bi bi-chevron-down toggle-icon"></i>
+							</h3>
+							<div class="section-body" id="section-facilitator">
+								<p id="game-facilitator" class="facilitator-text"></p>
+							</div>
+						</div>
+
+					</div>
+
+					<div class="game-card-footer">
+						<button class="btn btn-retro btn-action" onclick="App.exportGame()">
+							<i class="bi bi-download"></i> Export
+						</button>
+						<button class="btn btn-retro btn-action" onclick="App.copyGame()">
+							<i class="bi bi-clipboard"></i> <span data-i18n="copy">Kopírovat</span>
+						</button>
+						<button class="btn btn-retro btn-action btn-regenerate" onclick="App.generate()">
+							<i class="bi bi-arrow-repeat"></i> <span data-i18n="new_game">Nová hra</span>
+						</button>
+					</div>
+				</div>
+			</main>
+
+			<!-- ─── RIGHT PANEL: PREVIEW & HISTORY ─── -->
+			<aside class="right-panel">
+				<div class="panel-section narrator-section" data-narrator-zone>
+					<label class="panel-label"><i class="bi bi-mic"></i> SMARTA</label>
+					<div class="narrator-area-select-wrap">
+						<select id="narrator-area" class="narrator-area-select" title="Vyber oblasť RVP pre zaujímavosť">
+							<option value="">Náhodná oblasť</option>
+						</select>
+					</div>
+					<label class="narrator-genz-wrap">
+						<input type="checkbox" id="narrator-genz" title="Gen Z slovník — obsah rovnaký, len iný štýl">
+						<span>Gen Z štýl</span>
+					</label>
+					<button type="button" class="narrator-bot" id="narrator-bot" title="Klikni — SMARTA ti povie zaujímavosť nahlas. Vypočuj si ju a získaš 50 coinov!">
+						<div class="narrator-avatar-pixel smarta" aria-hidden="true">
+							<span></span><span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span></span><span></span>
+							<span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-eye"></span><span class="px-eye"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-smile"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
+							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
+							<span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-body"></span><span class="px-body"></span><span class="px-hair"></span><span></span><span></span>
+						</div>
+						<span class="narrator-hint" data-i18n="narrator_click">Klikni a počúvaj</span>
+					</button>
+					<div id="narrator-fact" class="narrator-fact narrator-fact-placeholder" aria-hidden="true" data-speechify-ignore>
+						<i class="bi bi-mic"></i>
+						<span data-i18n="narrator_click">Klikni a počúvaj</span>
+					</div>
+					<div id="quick-view" class="quick-view quick-view-compact" style="margin-top:8px">
+						<div class="quick-placeholder">
+							<i class="bi bi-dice-3"></i>
+							<span data-i18n="no_game">Žádná hra</span>
+						</div>
+					</div>
+				</div>
+
+				<div class="panel-section tamagochi-section">
+					<label class="panel-label tamagochi-label"><i class="bi bi-heart-pulse"></i> gIVEMEGOCHI</label>
+					<a href="tamagochi/index.html" target="_blank" class="tamagochi-embed tamagochi-avatar-skin" title="Otvoriť hru">
+						<div class="tamagochi-device">
+							<div class="tamagochi-top-strip">
+								<div class="tamagochi-leds"><span class="led red"></span><span class="led green"></span></div>
+								<div class="tamagochi-brand">gIVEMEGOCHI<br>SCREEN MAX</div>
+								<div class="tamagochi-speaker"><span></span><span></span><span></span></div>
+							</div>
+							<div class="tamagochi-screen">
+								<div class="tamagochi-avatar-pixel" aria-hidden="true">
+									<span></span><span></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span><span></span>
+									<span></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span>
+									<span></span><span class="px-y"></span><span class="px-y"></span><span class="px-d"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span>
+									<span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span>
+									<span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span><span></span>
+									<span></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span><span></span><span></span>
+									<span></span><span></span><span class="px-o"></span><span class="px-o"></span><span></span><span class="px-o"></span><span class="px-o"></span><span></span>
+									<span></span><span class="px-o"></span><span class="px-o"></span><span class="px-o"></span><span class="px-o"></span><span class="px-o"></span><span></span><span></span><span></span>
+								</div>
+								<div class="tamagochi-avatar-hint">Klikni pre hru</div>
+							</div>
+						</div>
+					</a>
+				</div>
+				<div class="panel-section panel-scrollable">
+					<label class="panel-label"><i class="bi bi-clock-history"></i> <span data-i18n="history">Historie</span></label>
+					<div class="panel-scroll-inner">
+						<div id="history-list" class="history-list">
+							<div class="history-empty">
+								<i class="bi bi-hourglass"></i>
+								<span data-i18n="history_empty">Vygenerované hry se zobrazí zde</span>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="panel-section">
+					<label class="panel-label"><i class="bi bi-bar-chart"></i> <span data-i18n="stats">Statistiky</span></label>
+					<div class="stats-grid">
+						<div class="stat-item">
+							<span class="stat-value" id="stat-generated">0</span>
+							<span class="stat-label" data-i18n="stat_generated">Vygenerováno</span>
+						</div>
+						<div class="stat-item">
+							<span class="stat-value" id="stat-exported">0</span>
+							<span class="stat-label" data-i18n="stat_exported">Exportováno</span>
+						</div>
+					</div>
+				</div>
+			</aside>
+
+		</div>
+
+		<!-- ═══════════════════ FOOTER ═══════════════════ -->
+		<footer>
+			<span class="footer-status">
+				<span class="status-indicator"></span>
+				<span data-i18n="status_label">STAV:</span> <span id="status-text" data-i18n="status_ready">PŘIPRAVEN</span>
+			</span>
+			<span id="footer-text" class="footer-credit">
+				<span class="indiweb-logo" title="IndiWeb">IW</span>
+				&copy; 2026 gIVEMEGAME.IO &mdash; IndiWeb
+			</span>
+		</footer>
+
+	</div>
+
+	<!-- ═══════════════════ MODALS ═══════════════════ -->
+
+	<!-- Profile Modal (gIVEME) — profil + sociálna sieť -->
+	<div id="profile-modal" class="modal-overlay">
+		<div class="modal-box profile-modal profile-modal-wide">
+			<div class="profile-modal-header">
+				<div class="modal-title">📱 gIVEME</div>
+				<button class="profile-modal-close" onclick="App.UI.closeModal('profile-modal')">✕</button>
+			</div>
+			<div class="profile-tabs">
+				<button class="profile-tab active" data-tab="profil" onclick="App.Profile.switchTab('profil')">Profil</button>
+				<button class="profile-tab" data-tab="giveme" onclick="App.Profile.switchTab('giveme')">gIVEME</button>
+			</div>
+			<div class="profile-tab-content" id="profile-tab-profil">
+				<div class="profile-header" id="profile-header" style="display:none;">
+					<div class="profile-avatar" id="profile-avatar">👤</div>
+					<div class="profile-info">
+						<div class="profile-name" id="profile-name"></div>
+						<div class="profile-email" id="profile-email"></div>
+					</div>
+				</div>
+				<div class="profile-login-cta" id="profile-login-cta" style="display:none;">
+					<p>Prihlás sa cez Google pre prístup k profilu, coinom a gIVEME sociálnej sieti.</p>
+					<a href="login.html" class="btn btn-retro btn-google-login">🔐 Prihlás sa cez Google</a>
+				</div>
+				<div class="profile-coins-section">
+					<div class="profile-coins-label">gIVEMECOIN</div>
+					<div class="profile-coins-value" id="profile-coins">0</div>
+					<p class="profile-coins-hint">Coiny z Robot Challenge, Timer, módu — uložené v profile</p>
+				</div>
+				<div class="profile-logout-section" id="profile-logout-section" style="display:none;">
+					<button class="btn btn-retro btn-logout" id="profile-logout-btn" onclick="App.Profile.logout()">🚪 Odhlásiť sa z Google</button>
+				</div>
+				<div class="profile-actions">
+					<button class="btn btn-retro" onclick="App.UI.closeModal('profile-modal')">Zavrieť</button>
+				</div>
+			</div>
+			<div class="profile-tab-content" id="profile-tab-giveme" style="display:none;">
+				<iframe id="giveme-iframe" src="gIVEME/index.html" title="gIVEME sociálna sieť" onload="App.Profile.onGivemeLoad(this)"></iframe>
+			</div>
+		</div>
+	</div>
+
+	<!-- Help Modal -->
+	<div id="help-modal" class="modal-overlay">
+		<div class="modal-box help-modal">
+			<div class="modal-title" data-i18n="help_title">NÁPOVĚDA</div>
+			<div class="help-content">
+				<div class="help-section">
+					<div class="help-title" data-i18n="help_what">Co je gIVEMEGAME.IO?</div>
+					<p data-i18n="help_what_text">Generátor vzdělávacích her s 4 režimy: Párty, Třída, Reflexe a Cirkus. Hry jsou mapovány na RVP ZV a podporují cirkusovou pedagogiku, Montessori přístup a brain-compatible learning.</p>
+				</div>
+				<div class="help-section">
+					<div class="help-title" data-i18n="help_modes_title">Režimy generování</div>
+					<p><strong>🎉 Párty</strong> — <span data-i18n="help_mode_party">Zábavné, rychlé, energické hry pro volný čas.</span></p>
+					<p><strong>📚 Třída</strong> — <span data-i18n="help_mode_classroom">Vzdělávací hry s vazbou na kurikulum.</span></p>
+					<p><strong>🪞 Reflexe</strong> — <span data-i18n="help_mode_reflection">Hry pro budování důvěry, empatie a sebepoznání.</span></p>
+					<p><strong>🎪 Cirkus</strong> — <span data-i18n="help_mode_circus">Pohybové aktivity inspirované cirkusovou pedagogikou.</span></p>
+				<p><strong>🍳 Vaření</strong> — <span data-i18n="help_mode_cooking">Kulinářské aktivity a kreativní recepty.</span></p>
+					<p><strong>🧘 Meditace</strong> — <span data-i18n="help_mode_meditation">Mindfulness cvičení pro zdraví a klid.</span></p>
+				</div>
+				<div class="help-section">
+					<div class="help-title" data-i18n="help_how">Jak používat</div>
+					<div class="help-item"><span data-i18n="help_step1">1. Vyberte režim</span><span class="help-key">Levý panel</span></div>
+					<div class="help-item"><span data-i18n="help_step2">2. Nastavte filtry</span><span class="help-key">Filtry</span></div>
+					<div class="help-item"><span data-i18n="help_step3">3. Stiskněte Generovat</span><span class="help-key">Tlačítko</span></div>
+					<div class="help-item"><span data-i18n="help_step4">4. Exportujte nebo kopírujte</span><span class="help-key">Karta</span></div>
+				</div>
+				<div class="help-section">
+					<div class="help-title" data-i18n="help_keys">Klávesové zkratky</div>
+					<div class="help-item"><span data-i18n="key_generate">Generovat</span><span class="help-key">Space / Enter</span></div>
+					<div class="help-item"><span data-i18n="key_surprise">Překvapení</span><span class="help-key">S</span></div>
+					<div class="help-item"><span data-i18n="key_copy">Kopírovat hru</span><span class="help-key">Ctrl+C</span></div>
+					<div class="help-item"><span data-i18n="key_theme">Přepnout vzhled</span><span class="help-key">T</span></div>
+					<div class="help-item"><span data-i18n="key_music">Hudba zap/vyp</span><span class="help-key">M</span></div>
+				</div>
+			</div>
+			<div class="d-flex gap-2 mt-2">
+				<button class="btn btn-retro" onclick="App.UI.closeModal('help-modal')" style="background:#888;width:100%;"><span data-i18n="close">Zavřít</span></button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Export Modal -->
+	<div id="export-modal" class="modal-overlay">
+		<div class="modal-box">
+			<div class="modal-title" data-i18n="export_title">EXPORT HRY</div>
+			<p style="margin: 10px 0;" data-i18n="export_choose">Vyberte formát exportu:</p>
+			<div class="export-options">
+				<button class="btn btn-retro" onclick="App.exportAs('json')"><i class="bi bi-filetype-json"></i> JSON</button>
+				<button class="btn btn-retro" onclick="App.exportAs('text')"><i class="bi bi-file-text"></i> <span data-i18n="export_text">Prostý text</span></button>
+				<button class="btn btn-retro" onclick="App.exportAs('markdown')"><i class="bi bi-markdown"></i> Markdown</button>
+			</div>
+			<div class="d-flex gap-2 mt-2">
+				<button class="btn btn-retro" onclick="App.UI.closeModal('export-modal')" style="background:#888;width:100%;"><span data-i18n="cancel">Zrušit</span></button>
+			</div>
+		</div>
+	</div>
+
+	<!-- ═══════════════════ ROBOT CHALLENGE MODAL ═══════════════════ -->
+	<div id="robot-challenge-overlay" class="robot-overlay" style="display:none;">
+		<div class="robot-card">
+			<!-- Header -->
+			<div class="robot-header">
+				<div class="robot-brand">
+					<span class="robot-shield">🛡️</span>
+					<span class="robot-title">RobotCheck</span>
+				</div>
+				<div class="robot-secure">● <span data-i18n="robot_secure">Secure</span></div>
+			</div>
+
+			<!-- Progress -->
+			<div class="robot-progress" id="robot-progress" style="display:none;">
+				<div class="robot-progress-bar">
+					<div class="robot-progress-fill" id="robot-progress-fill"></div>
+				</div>
+				<span class="robot-progress-text" id="robot-progress-text">1/3</span>
+				<span class="robot-attempts" id="robot-attempts">●●● 3</span>
+			</div>
+
+			<!-- Challenge content area -->
+			<div class="robot-content" id="robot-content">
+				<!-- JS fills this dynamically -->
+			</div>
+
+			<!-- Footer -->
+			<div class="robot-footer">
+				<span>Protected by gIVEMEGAME™</span>
+			</div>
+		</div>
+	</div>
+
+	<!-- Toast -->
+	<div id="toast" class="toast"></div>
+
+	<!-- ═══════════════════ CURSOR EFFECT CANVAS ═══════════════════ -->
+	<canvas id="cursor-canvas" class="cursor-canvas"></canvas>
+
+	<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
+	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+	<script src="script.js?v=7"></script>
+	<script src="cursor-effect.js?v=2"></script>
+
+</body>
+</html>

@@ -1,0 +1,14 @@
+---
+description: Po každej úprave kódu pushnúť zmeny na GitHub
+alwaysApply: true
+---
+
+# Git push po úpravách
+
+Po každej zmene súborov v projekte **vždy pushni zmeny na GitHub**:
+
+1. `git add` (prípadne všetky zmenené súbory)
+2. `git commit` s výstižnou správou
+3. `git push`
+
+Používateľ chce môcť kontrolovať zmeny online (Vercel deploy z GitHubu).

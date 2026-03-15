@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gIVEMEGOCHI</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    :root {
+      --bg: #080910;
+      --bg-2: #10131f;
+      --yellow-1: #f3d646;
+      --yellow-2: #c3a21c;
+      --yellow-3: #7c6200;
+      --yellow-4: #4d3d00;
+      --shell-1: #24262f;
+      --shell-2: #16171d;
+      --shell-3: #3b3d48;
+      --screen-1: #9cca12;
+      --screen-2: #84ad08;
+      --screen-3: #6b9004;
+      --screen-dark: #223400;
+      --line: #0d1207;
+      --white: #eef6de;
+      --cyan: #7fe9ff;
+      --pink: #ff86b6;
+      --red: #eb655f;
+      --green: #66d45f;
+      --blue: #66cbe9;
+      --brown: #7b4f24;
+      --black: #0a0c10;
+      --pet-outline: #0e2430;
+      --pet-dark: #13374a;
+      --pet-mid: #1d4f67;
+      --pet-light: #2c6a83;
+      --pet-shine: #4f8dab;
+      --dead-1: #56646b;
+      --dead-2: #79868d;
+    }
+
+    * {
+      box-sizing: border-box;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(80, 36, 133, 0.16), transparent 28%),
+        radial-gradient(circle at 80% 20%, rgba(24, 108, 146, 0.16), transparent 26%),
+        linear-gradient(180deg, var(--bg) 0%, #0b0d15 100%);
+      color: var(--white);
+      display: flex;
+      justify-content: center;
+      padding: 20px 12px 40px;
+    }
+
+    .page {
+      width: min(100%, 780px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .hero-title {
+      color: var(--yellow-1);
+      font-size: 16px;
+      letter-spacing: 2px;
+      line-height: 1.6;
+      text-align: center;
+      text-shadow:
+        4px 0 0 var(--yellow-4),
+        0 4px 0 var(--yellow-4),
+        4px 4px 0 var(--yellow-4),
+        0 0 18px rgba(243, 214, 70, 0.2);
+    }
+
+    .toast {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-120px);
+      background: #17181e;
+      color: var(--yellow-1);
+      border: 4px solid #0b0c10;
+      box-shadow: 4px 0 0 #393b46, 0 4px 0 #393b46, 8px 8px 0 rgba(0,0,0,0.35);
+      padding: 10px 14px;
+      font-size: 7px;
+      line-height: 1.7;
+      z-index: 999;
+      transition: transform 0.18s steps(4);
+      text-align: center;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .console {
+      width: 100%;
+      max-width: 560px;
+      background: var(--yellow-1);
+      border: 4px solid var(--yellow-4);
+      padding: 12px;
+      box-shadow:
+        4px 0 0 var(--yellow-2),
+        0 4px 0 var(--yellow-2),
+        8px 8px 0 var(--yellow-4),
+        16px 16px 0 rgba(0, 0, 0, 0.28);
+      clip-path: polygon(
+        0 12px,
+        12px 12px,
+        12px 0,
+        calc(100% - 12px) 0,
+        calc(100% - 12px) 12px,
+        100% 12px,
+        100% calc(100% - 12px),
+        calc(100% - 12px) calc(100% - 12px),
+        calc(100% - 12px) 100%,
+        12px 100%,
+        12px calc(100% - 12px),
+        0 calc(100% - 12px)
+      );
+      position: relative;
+    }
+
+    .console::before {
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border: 4px solid rgba(255,255,255,0.18);
+      pointer-events: none;
+      clip-path: inherit;
+    }
+
+    .top-strip {
+      display: grid;
+      grid-template-columns: 56px 1fr 56px;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: var(--yellow-4);
+      font-size: 7px;
+      line-height: 1.7;
+    }
+
+    .lights {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .led {
+      width: 10px;
+      height: 10px;
+      border: 2px solid rgba(0,0,0,0.35);
+    }
+
+    .led.red { background: var(--red); }
+    .led.green { background: var(--green); }
+
+    .brand {
+      text-align: center;
+      word-break: break-word;
+    }
+
+    .speaker {
+      justify-self: end;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+      width: 30px;
+    }
+
+    .speaker span {
+      display: block;
+      width: 6px;
+      height: 6px;
+      background: rgba(77,61,0,0.45);
+    }
+
+    .inner-shell {
+      background: linear-gradient(180deg, var(--shell-1) 0%, var(--shell-2) 100%);
+      border: 4px solid #0b0c10;
+      box-shadow:
+        4px 0 0 var(--shell-3),
+        0 4px 0 var(--shell-3),
+        8px 8px 0 rgba(0,0,0,0.45),
+        inset 0 0 0 4px rgba(255,255,255,0.03);
+      padding: 10px;
+    }
+
+    .screen-wrap {
+      background: #14170f;
+      border: 4px solid #090b07;
+      box-shadow:
+        4px 0 0 #363933,
+        0 4px 0 #363933,
+        inset 0 0 0 4px rgba(255,255,255,0.03);
+      padding: 8px;
+      margin-bottom: 10px;
+    }
+
+    .screen {
+      position: relative;
+      height: 430px;
+      background: linear-gradient(180deg, var(--screen-1) 0%, var(--screen-2) 100%);
+      border: 4px solid #233500;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 4px rgba(255,255,255,0.05);
+    }
+
+    .screen::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.08) 0, transparent 25%),
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.05) 0, rgba(0,0,0,0.05) 4px, transparent 4px, transparent 8px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,0.035) 0, rgba(0,0,0,0.035) 4px, transparent 4px, transparent 8px);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .screen-top {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      z-index: 3;
+      display: grid;
+      gap: 6px;
+    }
+
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      color: var(--screen-dark);
+      font-size: 7px;
+      line-height: 1.7;
+    }
+
+    .hud-chip {
+      background: rgba(150, 195, 24, 0.85);
+      border: 3px solid #233500;
+      padding: 4px 6px;
+      min-width: 0;
+      text-align: center;
+      flex: 1;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .stat {
+      background: rgba(150, 195, 24, 0.86);
+      border: 3px solid #233500;
+      padding: 4px;
+      color: var(--screen-dark);
+      font-size: 6px;
+      line-height: 1.5;
+    }
+
+    .stat-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .meter {
+      height: 12px;
+      background: #405605;
+      border: 2px solid #1d2d00;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .meter::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(90deg, transparent 0, transparent 10px, rgba(0,0,0,0.18) 10px, rgba(0,0,0,0.18) 12px);
+      pointer-events: none;
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 100%;
+      transition: width 0.22s steps(12);
+    }
+
+    .fill-hunger { background: #d97724; }
+    .fill-happy { background: #e7d63c; }
+    .fill-energy { background: #5fd36b; }
+    .fill-clean { background: #66d6e9; }
+
+    #petCanvas {
+      display: block;
+      width: 100%;
+      height: 430px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .message-box {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      min-height: 42px;
+      background: rgba(149, 192, 20, 0.92);
+      color: var(--screen-dark);
+      border: 3px solid #233500;
+      padding: 8px;
+      font-size: 7px;
+      line-height: 1.7;
+      z-index: 4;
+    }
+
+    .status-icons {
+      position: absolute;
+      right: 10px;
+      top: 108px;
+      z-index: 4;
+      color: var(--screen-dark);
+      font-size: 9px;
+      line-height: 1.8;
+      text-align: right;
+      display: grid;
+      gap: 6px;
+    }
+
+    .state-box {
+      display: none;
+      background: rgba(149, 192, 20, 0.88);
+      border: 3px solid #233500;
+      padding: 5px 6px;
+    }
+
+    .state-box.show {
+      display: block;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(35, 52, 0, 0.96);
+      border: 4px solid #1d2d00;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+      padding: 14px;
+      z-index: 6;
+      color: var(--screen-dark);
+    }
+
+    .overlay.show {
+      display: flex;
+    }
+
+    .overlay-title {
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .overlay-text {
+      font-size: 7px;
+      line-height: 1.8;
+    }
+
+    .mini-btn {
+      font-family: 'Press Start 2P', monospace;
+      border: none;
+      background: var(--yellow-1);
+      color: var(--yellow-4);
+      border: 4px solid var(--yellow-3);
+      box-shadow: 4px 4px 0 var(--yellow-4);
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 7px;
+    }
+
+    .mini-btn:active {
+      transform: translate(4px, 4px);
+      box-shadow: none;
+    }
+
+    .mg-box {
+      width: min(100%, 300px);
+      height: 150px;
+      background: rgba(150, 195, 24, 0.85);
+      border: 4px solid #233500;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mg-target {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--screen-dark);
+      font-size: 22px;
+      user-select: none;
+    }
+
+    .mg-bar {
+      width: min(100%, 300px);
+      height: 12px;
+      background: #405605;
+      border: 2px solid #1d2d00;
+      overflow: hidden;
+    }
+
+    .mg-bar-fill {
+      width: 100%;
+      height: 100%;
+      background: #e7d63c;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 82px 1fr 82px;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .panel {
+      background: rgba(0,0,0,0.12);
+      border: 3px solid rgba(255,255,255,0.04);
+      padding: 6px;
+      min-width: 0;
+    }
+
+    .panel-label {
+      text-align: center;
+      color: #8b7700;
+      font-size: 6px;
+      line-height: 1.6;
+      margin-top: 6px;
+      min-height: 18px;
+    }
+
+    .dpad {
+      width: 66px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 20px);
+      grid-template-rows: repeat(3, 20px);
+      gap: 3px;
+    }
+
+    .d-btn,
+    .ab-btn,
+    .action-btn,
+    .download-btn {
+      font-family: 'Press Start 2P', monospace;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      background: transparent;
+    }
+
+    .d-btn-shell {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #3b3d46;
+      color: #f0f1f6;
+      border: 3px solid #17181d;
+      box-shadow: 3px 3px 0 #090a0d;
+      font-size: 8px;
+      user-select: none;
+      transition: transform 0.05s steps(2);
+    }
+
+    .d-btn:active .d-btn-shell,
+    .d-btn.pressed .d-btn-shell,
+    .ab-btn:active .ab-shell,
+    .ab-btn.pressed .ab-shell,
+    .action-btn:active .action-shell,
+    .action-btn.pressed .action-shell,
+    .download-btn:active .download-shell {
+      transform: translate(3px, 3px);
+      box-shadow: none;
+    }
+
+    .d-empty .d-btn-shell {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      cursor: default;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .action-shell {
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.45;
+      font-size: 6px;
+      padding: 6px 4px;
+      border: 4px solid #0f1116;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.45);
+      transition: transform 0.05s steps(2);
+      user-select: none;
+      color: #101317;
+    }
+
+    .gold .action-shell { background: var(--yellow-1); border-color: #8d7000; color: #463700; box-shadow: 4px 4px 0 #5b4700; }
+    .green .action-shell { background: var(--green); border-color: #225927; color: #113414; box-shadow: 4px 4px 0 #183d1b; }
+    .blue .action-shell { background: var(--blue); border-color: #185f72; color: #073744; box-shadow: 4px 4px 0 #133942; }
+    .pink .action-shell { background: var(--pink); border-color: #823052; color: #4b142e; box-shadow: 4px 4px 0 #52182f; }
+    .red .action-shell { background: var(--red); border-color: #812721; color: #4b1411; box-shadow: 4px 4px 0 #4a1613; }
+
+    .action-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .ab-grid {
+      width: 66px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .ab-shell {
+      width: 30px;
+      height: 30px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 4px solid #17181d;
+      box-shadow: 4px 4px 0 #090a0d;
+      font-size: 8px;
+      color: #101317;
+      transition: transform 0.05s steps(2);
+      user-select: none;
+    }
+
+    .ab-a { background: var(--green); }
+    .ab-b { background: var(--red); }
+    .ab-x { background: var(--blue); }
+    .ab-y { background: var(--yellow-1); color: #463700; }
+
+    .brand-bottom {
+      text-align: center;
+      color: var(--yellow-4);
+      font-size: 8px;
+      letter-spacing: 4px;
+      line-height: 1.7;
+      margin-top: 10px;
+    }
+
+    .status-panel {
+      width: 100%;
+      max-width: 560px;
+      background: #17181e;
+      border: 4px solid #0b0c10;
+      box-shadow: 4px 0 0 #393b46, 0 4px 0 #393b46, 8px 8px 0 rgba(0,0,0,0.35);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .status-main {
+      color: #97cf19;
+      font-size: 8px;
+      line-height: 1.9;
+    }
+
+    .status-sub {
+      color: #7d8195;
+      font-size: 6px;
+      line-height: 1.7;
+      margin-top: 8px;
+    }
+
+    .download-btn {
+      text-decoration: none;
+      color: #463700;
+    }
+
+    .download-shell {
+      min-width: 134px;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.6;
+      font-size: 8px;
+      padding: 8px 10px;
+      background: var(--yellow-1);
+      border: 4px solid #8d7000;
+      box-shadow: 4px 4px 0 #5b4700;
+      transition: transform 0.05s steps(2);
+    }
+
+    @media (max-width: 640px) {
+      .hero-title {
+        font-size: 12px;
+      }
+
+      .console,
+      .status-panel {
+        max-width: 100%;
+      }
+
+      .screen {
+        height: 360px;
+      }
+
+      #petCanvas {
+        height: 360px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .action-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .status-panel {
+        grid-template-columns: 1fr;
+        text-align: center;
+        justify-items: center;
+      }
+    }
+
+    /* Embed mode — kompaktný v hlavnej aplikácii */
+    body.embed-mode {
+      padding: 8px;
+    }
+    body.embed-mode .hero-title,
+    body.embed-mode .status-panel,
+    body.embed-mode .brand-bottom {
+      display: none !important;
+    }
+    body.embed-mode .page {
+      width: 100%;
+      gap: 4px;
+    }
+    body.embed-mode .console {
+      max-width: 100%;
+      padding: 6px;
+    }
+    body.embed-mode .screen {
+      height: 180px;
+    }
+    body.embed-mode #petCanvas {
+      height: 180px;
+    }
+    body.embed-mode .screen-wrap {
+      margin-bottom: 8px;
+    }
+    body.embed-mode .hud-chip,
+    body.embed-mode .stat {
+      font-size: 5px;
+    }
+    body.embed-mode .controls {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+    body.embed-mode .panel {
+      padding: 4px;
+    }
+    body.embed-mode .action-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 4px;
+    }
+    body.embed-mode .action-shell,
+    body.embed-mode .ab-shell {
+      font-size: 5px;
+      padding: 4px 2px;
+      min-height: 36px;
+    }
+    body.embed-mode .dpad {
+      display: none;
+    }
+    body.embed-mode .message-box {
+      min-height: 28px;
+      font-size: 5px;
+      padding: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="hero-title">gIVEMEGOCHI</div>
+    <div class="toast" id="toast"></div>
+
+    <div class="console">
+      <div class="top-strip">
+        <div class="lights">
+          <span class="led red"></span>
+          <span class="led green"></span>
+        </div>
+        <div class="brand">gIVEMEGOCHI<br>SCREEN MAX</div>
+        <div class="speaker">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <div class="inner-shell">
+        <div class="screen-wrap">
+          <div class="screen">
+            <div class="screen-top">
+              <div class="hud-row">
+                <div class="hud-chip">VEK <span id="ageVal">0</span></div>
+                <div class="hud-chip">LVL <span id="levelVal">1</span></div>
+                <div class="hud-chip">XP <span id="xpVal">0</span></div>
+                <div class="hud-chip">MINCE <span id="coinsVal">0</span></div>
+              </div>
+              <div class="stats-grid">
+                <div class="stat">
+                  <div class="stat-top"><span>HLAD</span><span id="txtHunger">100</span></div>
+                  <div class="meter"><div class="meter-fill fill-hunger" id="barHunger"></div></div>
+                </div>
+                <div class="stat">
+                  <div class="stat-top"><span>RADOST</span><span id="txtHappy">100</span></div>
+                  <div class="meter"><div class="meter-fill fill-happy" id="barHappy"></div></div>
+                </div>
+                <div class="stat">
+                  <div class="stat-top"><span>ENERGIA</span><span id="txtEnergy">100</span></div>
+                  <div class="meter"><div class="meter-fill fill-energy" id="barEnergy"></div></div>
+                </div>
+                <div class="stat">
+                  <div class="stat-top"><span>CISTOTA</span><span id="txtClean">100</span></div>
+                  <div class="meter"><div class="meter-fill fill-clean" id="barClean"></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="status-icons">
+              <div class="state-box" id="poopIndicator">POOP<br>YES</div>
+              <div class="state-box" id="sickIndicator">SICK<br>MED</div>
+              <div class="state-box" id="sleepIndicator">SLEEP<br>Z Z Z</div>
+            </div>
+
+            <canvas id="petCanvas" width="384" height="430"></canvas>
+
+            <div class="overlay" id="gameOverOverlay">
+              <div class="overlay-title">GAME OVER</div>
+              <div class="overlay-text">Tvoje gIVEMEGOCHI zomrelo.<br>Vek: <span id="deadAge">0</span></div>
+              <button class="mini-btn" id="restartBtn" type="button">ZNOVA</button>
+            </div>
+
+            <div class="overlay" id="minigameOverlay">
+              <div class="overlay-title">MINI HRA</div>
+              <div class="overlay-text">Klikaj na hviezdu.<br>Skore: <span id="mgScore">0</span></div>
+              <div class="mg-box" id="mgBox">
+                <div class="mg-target" id="mgTarget">★</div>
+              </div>
+              <div class="mg-bar"><div class="mg-bar-fill" id="mgBar"></div></div>
+            </div>
+
+            <div class="message-box" id="messageBox">Ahoj. Som tvoj gIVEMEGOCHI. Teraz mam vacsi screen a menej prazdneho miesta.</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="panel">
+            <div class="dpad">
+              <button class="d-btn d-empty" type="button"><div class="d-btn-shell"></div></button>
+              <button class="d-btn" id="moveUp" type="button"><div class="d-btn-shell">▲</div></button>
+              <button class="d-btn d-empty" type="button"><div class="d-btn-shell"></div></button>
+              <button class="d-btn" id="moveLeft" type="button"><div class="d-btn-shell">◀</div></button>
+              <button class="d-btn" id="moveCenter" type="button"><div class="d-btn-shell">■</div></button>
+              <button class="d-btn" id="moveRight" type="button"><div class="d-btn-shell">▶</div></button>
+              <button class="d-btn d-empty" type="button"><div class="d-btn-shell"></div></button>
+              <button class="d-btn" id="moveDown" type="button"><div class="d-btn-shell">▼</div></button>
+              <button class="d-btn d-empty" type="button"><div class="d-btn-shell"></div></button>
+            </div>
+            <div class="panel-label">MOVE<br>PAD</div>
+          </div>
+
+          <div class="panel">
+            <div class="action-grid">
+              <button class="action-btn gold" id="btnFeed" type="button"><div class="action-shell">FEED</div></button>
+              <button class="action-btn pink" id="btnPet" type="button"><div class="action-shell">PET</div></button>
+              <button class="action-btn gold" id="btnGame" type="button"><div class="action-shell">PLAY</div></button>
+              <button class="action-btn blue" id="btnClean" type="button"><div class="action-shell">WASH</div></button>
+              <button class="action-btn red" id="btnHeal" type="button"><div class="action-shell">MED</div></button>
+              <button class="action-btn green" id="btnSleep" type="button"><div class="action-shell">SLEEP</div></button>
+              <button class="action-btn pink" id="btnSnack" type="button"><div class="action-shell">SNACK</div></button>
+              <button class="action-btn blue" id="btnTrain" type="button"><div class="action-shell">TRAIN</div></button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="ab-grid">
+              <button class="ab-btn" id="quickA" type="button"><div class="ab-shell ab-a">A</div></button>
+              <button class="ab-btn" id="quickB" type="button"><div class="ab-shell ab-b">B</div></button>
+              <button class="ab-btn" id="quickX" type="button"><div class="ab-shell ab-x">X</div></button>
+              <button class="ab-btn" id="quickY" type="button"><div class="ab-shell ab-y">Y</div></button>
+            </div>
+            <div class="panel-label">QUICK<br>KEYS</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="brand-bottom">G I V E M E G O C H I</div>
+    </div>
+
+    <div class="status-panel">
+      <div>
+        <div class="status-main">VARIANTA B+ • VACSIA OBRAZOVKA • KOMPAKTNE OVLADANIE</div>
+        <div class="status-sub">screen teraz zabera vacsinu konzoly • tlacidlo STIAHNUT vytvori html subor • sipky alebo D-pad hybu postavickou</div>
+      </div>
+      <a class="download-btn" id="downloadBtn" href="#">
+        <div class="download-shell">STIAHNUT</div>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    if (location.search.includes('embed=1')) document.body.classList.add('embed-mode');
+    const canvas = document.getElementById('petCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const ui = {
+      barHunger: document.getElementById('barHunger'),
+      barHappy: document.getElementById('barHappy'),
+      barEnergy: document.getElementById('barEnergy'),
+      barClean: document.getElementById('barClean'),
+      txtHunger: document.getElementById('txtHunger'),
+      txtHappy: document.getElementById('txtHappy'),
+      txtEnergy: document.getElementById('txtEnergy'),
+      txtClean: document.getElementById('txtClean'),
+      ageVal: document.getElementById('ageVal'),
+      levelVal: document.getElementById('levelVal'),
+      xpVal: document.getElementById('xpVal'),
+      coinsVal: document.getElementById('coinsVal'),
+      poopIndicator: document.getElementById('poopIndicator'),
+      sickIndicator: document.getElementById('sickIndicator'),
+      sleepIndicator: document.getElementById('sleepIndicator'),
+      messageBox: document.getElementById('messageBox'),
+      toast: document.getElementById('toast'),
+      gameOverOverlay: document.getElementById('gameOverOverlay'),
+      deadAge: document.getElementById('deadAge'),
+      minigameOverlay: document.getElementById('minigameOverlay'),
+      mgScore: document.getElementById('mgScore'),
+      mgBar: document.getElementById('mgBar'),
+      mgBox: document.getElementById('mgBox'),
+      mgTarget: document.getElementById('mgTarget')
+    };
+
+    const COLORS = {
+      line: '#223400',
+      bgA: '#9cca12',
+      bgB: '#85af08',
+      bgC: '#6b9004',
+      ground: '#5e8203',
+      shadow: '#456102',
+      outline: '#0e2430',
+      dark: '#13374a',
+      mid: '#1d4f67',
+      light: '#2c6a83',
+      shine: '#4f8dab',
+      eye: '#eef6de',
+      cyan: '#7fe9ff',
+      pink: '#ff86b6',
+      yellow: '#f3d646',
+      red: '#eb655f',
+      brown: '#7b4f24',
+      black: '#0a0c10'
+    };
+
+    const SCALE = 6;
+    let frame = 0;
+    let tick = 0;
+    let blinkTimer = 0;
+    let blinkOn = false;
+    let messageTimer = 0;
+    let particles = [];
+    let minigameActive = false;
+    let mgScore = 0;
+    let mgTime = 100;
+    let mgInterval = null;
+
+    function createPet() {
+      return {
+        hunger: 100,
+        happy: 100,
+        energy: 100,
+        clean: 100,
+        age: 0,
+        xp: 0,
+        level: 1,
+        coins: 0,
+        alive: true,
+        sick: false,
+        poop: false,
+        sleeping: false,
+        x: 0,
+        y: 0,
+        accessory: 'none'
+      };
+    }
+
+    let pet = createPet();
+
+    function clamp(v, min = 0, max = 100) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function setMessage(text, sticky = false) {
+      ui.messageBox.textContent = text;
+      if (!sticky) messageTimer = 6;
+    }
+
+    function showToast(text) {
+      ui.toast.textContent = text;
+      ui.toast.classList.add('show');
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => ui.toast.classList.remove('show'), 1400);
+    }
+
+    function flashButton(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.add('pressed');
+      setTimeout(() => el.classList.remove('pressed'), 120);
+    }
+
+    function gainXP(amount) {
+      pet.xp += amount;
+      while (pet.xp >= pet.level * 30) {
+        pet.xp -= pet.level * 30;
+        pet.level += 1;
+        pet.coins += 4;
+        showToast('LEVEL ' + pet.level);
+        if (pet.level >= 3) pet.accessory = 'hat';
+        if (pet.level >= 5) pet.accessory = 'bow';
+      }
+    }
+
+    function mood() {
+      if (!pet.alive) return 'dead';
+      if (pet.sleeping) return 'sleep';
+      if (pet.sick) return 'sick';
+      if (pet.hunger < 25 || pet.happy < 25 || pet.clean < 25 || pet.energy < 18) return 'sad';
+      if (pet.happy > 75 && pet.hunger > 60 && pet.energy > 45) return 'happy';
+      return 'ok';
+    }
+
+    function canAct(allowSleepToggle = false) {
+      if (!pet.alive) {
+        setMessage('Tamagochi je mrtve. Stlac ZNOVA.');
+        return false;
+      }
+      if (minigameActive) {
+        setMessage('Dokoncujes mini hru.');
+        return false;
+      }
+      if (pet.sleeping && !allowSleepToggle) {
+        setMessage('Tamagochi spi. Zobud ho cez SLEEP.');
+        return false;
+      }
+      return true;
+    }
+
+    function updateUI() {
+      const vals = {
+        hunger: Math.round(pet.hunger),
+        happy: Math.round(pet.happy),
+        energy: Math.round(pet.energy),
+        clean: Math.round(pet.clean)
+      };
+
+      ui.barHunger.style.width = vals.hunger + '%';
+      ui.barHappy.style.width = vals.happy + '%';
+      ui.barEnergy.style.width = vals.energy + '%';
+      ui.barClean.style.width = vals.clean + '%';
+      ui.txtHunger.textContent = vals.hunger;
+      ui.txtHappy.textContent = vals.happy;
+      ui.txtEnergy.textContent = vals.energy;
+      ui.txtClean.textContent = vals.clean;
+      ui.ageVal.textContent = pet.age;
+      ui.levelVal.textContent = pet.level;
+      ui.xpVal.textContent = pet.xp;
+      ui.coinsVal.textContent = pet.coins;
+      ui.deadAge.textContent = pet.age;
+
+      ui.poopIndicator.classList.toggle('show', pet.poop && pet.alive);
+      ui.sickIndicator.classList.toggle('show', pet.sick && pet.alive);
+      ui.sleepIndicator.classList.toggle('show', pet.sleeping && pet.alive);
+      ui.gameOverOverlay.classList.toggle('show', !pet.alive);
+
+      const disable = !pet.alive || minigameActive;
+      ['btnFeed','btnPet','btnGame','btnClean','btnHeal','btnSnack','btnTrain'].forEach(id => {
+        document.getElementById(id).disabled = disable;
+      });
+      document.getElementById('btnSleep').disabled = !pet.alive || minigameActive;
+    }
+
+    function spawnParticles(char, count, x = 192, y = 205) {
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x,
+          y,
+          vx: (Math.random() - 0.5) * 3.2,
+          vy: -2.5 - Math.random() * 1.8,
+          life: 30,
+          char,
+          size: 10 + Math.random() * 4
+        });
+      }
+    }
+
+    function feedPet() {
+      if (!canAct()) return;
+      pet.hunger = clamp(pet.hunger + 26);
+      pet.happy = clamp(pet.happy + 4);
+      pet.clean = clamp(pet.clean - 2);
+      pet.coins += 1;
+      gainXP(8);
+      flashButton('btnFeed');
+      flashButton('quickA');
+      setMessage('Nakrmene. Hlad ide hore.');
+      spawnParticles('F', 5);
+      updateUI();
+    }
+
+    function petPet() {
+      if (!canAct()) return;
+      pet.happy = clamp(pet.happy + 18);
+      pet.energy = clamp(pet.energy - 3);
+      gainXP(5);
+      flashButton('btnPet');
+      flashButton('quickX');
+      setMessage('Pohladkanie zabralo.');
+      spawnParticles('❤', 5);
+      updateUI();
+    }
+
+    function cleanPet() {
+      if (!canAct()) return;
+      pet.clean = clamp(pet.clean + 34);
+      pet.poop = false;
+      pet.happy = clamp(pet.happy + 5);
+      gainXP(7);
+      flashButton('btnClean');
+      setMessage('Umyte a vycistene.');
+      spawnParticles('W', 5);
+      updateUI();
+    }
+
+    function healPet() {
+      if (!canAct()) return;
+      flashButton('btnHeal');
+      if (!pet.sick) {
+        setMessage('Liek teraz netreba.');
+        return;
+      }
+      pet.sick = false;
+      pet.happy = clamp(pet.happy + 10);
+      pet.energy = clamp(pet.energy + 8);
+      gainXP(10);
+      setMessage('Liek zabral. Je mu lepsie.');
+      spawnParticles('+', 5);
+      updateUI();
+    }
+
+    function toggleSleep() {
+      if (!canAct(true)) return;
+      pet.sleeping = !pet.sleeping;
+      flashButton('btnSleep');
+      flashButton('quickY');
+      if (pet.sleeping) {
+        setMessage('Ide spat.');
+        spawnParticles('Z', 4);
+      } else {
+        setMessage('Je hore.');
+      }
+      updateUI();
+    }
+
+    function buySnack() {
+      if (!canAct()) return;
+      flashButton('btnSnack');
+      if (pet.coins < 3) {
+        setMessage('Na snack potrebujes 3 mince.');
+        return;
+      }
+      pet.coins -= 3;
+      pet.hunger = clamp(pet.hunger + 10);
+      pet.happy = clamp(pet.happy + 14);
+      pet.clean = clamp(pet.clean - 4);
+      gainXP(6);
+      setMessage('Snack kupeny.');
+      spawnParticles('S', 4);
+      updateUI();
+    }
+
+    function trainPet() {
+      if (!canAct()) return;
+      flashButton('btnTrain');
+      if (pet.energy < 16) {
+        setMessage('Nema dost energie na trening.');
+        return;
+      }
+      pet.energy = clamp(pet.energy - 18);
+      pet.hunger = clamp(pet.hunger - 8);
+      pet.happy = clamp(pet.happy + 8);
+      pet.coins += 2;
+      gainXP(12);
+      setMessage('Trening hotovy.');
+      spawnParticles('T', 5);
+      updateUI();
+    }
+
+    function movePet(dx, dy) {
+      if (!pet.alive || minigameActive) return;
+      pet.x = clamp(pet.x + dx, -8, 8);
+      pet.y = clamp(pet.y + dy, -5, 5);
+    }
+
+    function centerPet() {
+      if (!pet.alive || minigameActive) return;
+      pet.x = 0;
+      pet.y = 0;
+      flashButton('moveCenter');
+      setMessage('Tamagochi je naspat v strede.');
+    }
+
+    function startMinigame() {
+      if (!canAct()) return;
+      flashButton('btnGame');
+      flashButton('quickB');
+      if (pet.energy < 14) {
+        setMessage('Je unavene na hru.');
+        return;
+      }
+      minigameActive = true;
+      mgScore = 0;
+      mgTime = 100;
+      ui.mgScore.textContent = '0';
+      ui.mgBar.style.width = '100%';
+      ui.minigameOverlay.classList.add('show');
+      moveTarget();
+      mgInterval = setInterval(() => {
+        mgTime -= 2;
+        ui.mgBar.style.width = Math.max(0, mgTime) + '%';
+        if (mgTime <= 0) endMinigame();
+      }, 120);
+      setMessage('Mini hra start. Klikaj na hviezdu.', true);
+      updateUI();
+    }
+
+    function moveTarget() {
+      const maxX = ui.mgBox.clientWidth - 30;
+      const maxY = ui.mgBox.clientHeight - 30;
+      const x = Math.floor(Math.random() * Math.max(1, maxX));
+      const y = Math.floor(Math.random() * Math.max(1, maxY));
+      ui.mgTarget.style.left = x + 'px';
+      ui.mgTarget.style.top = y + 'px';
+    }
+
+    function minigameHit() {
+      if (!minigameActive) return;
+      mgScore += 1;
+      ui.mgScore.textContent = mgScore;
+      spawnParticles('★', 3, 192, 120);
+      moveTarget();
+    }
+
+    function endMinigame() {
+      clearInterval(mgInterval);
+      minigameActive = false;
+      ui.minigameOverlay.classList.remove('show');
+      const happyGain = Math.min(40, mgScore * 5);
+      pet.happy = clamp(pet.happy + happyGain);
+      pet.energy = clamp(pet.energy - 15);
+      pet.coins += Math.floor(mgScore / 2);
+      gainXP(Math.max(5, mgScore * 2));
+      setMessage('Mini hra hotova. Skore ' + mgScore + '.');
+      spawnParticles('P', 5);
+      updateUI();
+    }
+
+    function killPet() {
+      pet.alive = false;
+      pet.sleeping = false;
+      clearInterval(mgInterval);
+      minigameActive = false;
+      ui.minigameOverlay.classList.remove('show');
+      setMessage('gIVEMEGOCHI zomrelo. Stlac ZNOVA.', true);
+      showToast('GAME OVER');
+      updateUI();
+    }
+
+    function resetGame() {
+      pet = createPet();
+      frame = 0;
+      tick = 0;
+      blinkTimer = 0;
+      blinkOn = false;
+      particles = [];
+      minigameActive = false;
+      clearInterval(mgInterval);
+      ui.minigameOverlay.classList.remove('show');
+      setMessage('Novy start. Staraj sa o svoje gIVEMEGOCHI.');
+      updateUI();
+    }
+
+    function gameTick() {
+      if (!pet.alive || minigameActive) return;
+      tick += 1;
+      messageTimer = Math.max(0, messageTimer - 1);
+
+      if (pet.sleeping) {
+        pet.energy = clamp(pet.energy + 7);
+        pet.hunger = clamp(pet.hunger - 1.2);
+        pet.clean = clamp(pet.clean - 0.5);
+        if (pet.energy >= 100) {
+          pet.sleeping = false;
+          setMessage('Je vyspate.');
+        }
+      } else {
+        pet.hunger = clamp(pet.hunger - 1.7);
+        pet.happy = clamp(pet.happy - 1.1);
+        pet.energy = clamp(pet.energy - 0.9);
+        pet.clean = clamp(pet.clean - 0.85);
+      }
+
+      if (!pet.poop && Math.random() < 0.08) {
+        pet.poop = true;
+        pet.clean = clamp(pet.clean - 14);
+        setMessage('Ups. Treba vycistit.');
+      }
+
+      if (!pet.sick && (pet.clean < 22 || pet.hunger < 12) && Math.random() < 0.18) {
+        pet.sick = true;
+        setMessage('Je chore. Daj liek.');
+      }
+
+      if (tick % 20 === 0) pet.age += 1;
+      if (tick % 12 === 0) pet.coins += 1;
+
+      if (messageTimer === 0 && tick % 8 === 0) {
+        if (pet.hunger < 18) setMessage('Som hladne.');
+        else if (pet.clean < 20 || pet.poop) setMessage('Chcem umyt.');
+        else if (pet.energy < 18) setMessage('Som unavene.');
+        else if (pet.happy < 20) setMessage('Chcem sa hrat.');
+      }
+
+      if (pet.hunger <= 0 || pet.energy <= 0 || pet.clean <= 0 || (pet.sick && pet.happy <= 0)) {
+        killPet();
+        return;
+      }
+
+      updateUI();
+    }
+
+    function drawBackground() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let y = 0; y < canvas.height; y += 8) {
+        ctx.fillStyle = y < 120 ? COLORS.bgA : y < 300 ? COLORS.bgB : COLORS.bgC;
+        ctx.fillRect(0, y, canvas.width, 8);
+      }
+
+      ctx.fillStyle = 'rgba(34,52,0,0.11)';
+      for (let x = 0; x < canvas.width; x += 16) {
+        ctx.fillRect(x, 0, 2, canvas.height);
+      }
+
+      for (let y = 0; y < canvas.height; y += 16) {
+        ctx.fillRect(0, y, canvas.width, 2);
+      }
+
+      ctx.fillStyle = COLORS.shadow;
+      ctx.fillRect(38, 328, 308, 14);
+      ctx.fillRect(70, 318, 244, 10);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(26, 78, 20, 20);
+      ctx.fillRect(320, 64, 14, 14);
+      ctx.fillRect(300, 112, 18, 18);
+    }
+
+    function drawPixel(x, y, color, scale = SCALE) {
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.round(x) * scale, Math.round(y) * scale, scale, scale);
+    }
+
+    function drawRect(x, y, w, h, color, scale = SCALE) {
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.round(x) * scale, Math.round(y) * scale, Math.round(w) * scale, Math.round(h) * scale);
+    }
+
+    function drawMap(originX, originY, map, palette, scale = SCALE) {
+      for (let y = 0; y < map.length; y++) {
+        for (let x = 0; x < map[y].length; x++) {
+          const key = map[y][x];
+          if (key === '.') continue;
+          drawPixel(originX + x, originY + y, palette[key], scale);
+        }
+      }
+    }
+
+    function getPalette() {
+      if (!pet.alive) {
+        return {
+          '0': COLORS.outline,
+          '1': '#43545c',
+          '2': '#61737b',
+          '3': '#7e8f96',
+          '4': '#aebbc0',
+          '8': COLORS.pink
+        };
+      }
+      if (pet.sick) {
+        return {
+          '0': COLORS.outline,
+          '1': '#274e33',
+          '2': '#38734a',
+          '3': '#529866',
+          '4': '#7fc18e',
+          '8': COLORS.pink
+        };
+      }
+      return {
+        '0': COLORS.outline,
+        '1': COLORS.dark,
+        '2': COLORS.mid,
+        '3': COLORS.light,
+        '4': COLORS.shine,
+        '8': COLORS.pink
+      };
+    }
+
+    function bodyMap() {
+      return [
+        '...........00...........',
+        '.........000000.........',
+        '........00111100........',
+        '.......0011111100.......',
+        '......001111111100......',
+        '.....00111111111100.....',
+        '....0011111111111100....',
+        '....0111111111111110....',
+        '...001111111111111100...',
+        '...011111111111111110...',
+        '..00111111111111111100..',
+        '..01111111111111111110..',
+        '..01111111111111111110..',
+        '..01111111111111111110..',
+        '..01111111111111111110..',
+        '..01111111111111111110..',
+        '..01111111111111111110..',
+        '..00111111111111111100..',
+        '...011111111111111110...',
+        '...001111111111111100...',
+        '....0111111111111110....',
+        '....0011111111111100....',
+        '.....00111111111100.....',
+        '......001111111100......',
+        '.......0011111100.......',
+        '........00111100........',
+        '.........000000.........'
+      ];
+    }
+
+    function drawPet() {
+      const pal = getPalette();
+      const m = mood();
+      const bob = pet.sleeping ? 1 : Math.round(Math.sin(frame * 0.09) * 1);
+      const baseX = 18 + pet.x;
+      const baseY = 16 + pet.y + bob;
+
+      drawMap(baseX, baseY, bodyMap(), pal);
+
+      drawRect(baseX + 9, baseY + 5, 5, 2, pal['4']);
+      drawRect(baseX + 7, baseY + 9, 3, 2, pal['4']);
+      drawRect(baseX + 18, baseY + 8, 2, 2, pal['4']);
+      drawRect(baseX + 10, baseY + 18, 10, 7, pal['2']);
+      drawRect(baseX + 12, baseY + 19, 6, 5, pal['4']);
+
+      const earLeft = [
+        '...00',
+        '..011',
+        '.0111',
+        '00111',
+        '01118',
+        '01188'
+      ];
+      const earRight = [
+        '00...',
+        '110..',
+        '1110.',
+        '11100',
+        '81110',
+        '88110'
+      ];
+      drawMap(baseX + 2, baseY - 4, earLeft, pal);
+      drawMap(baseX + 20, baseY - 4, earRight, pal);
+
+      const eyeLX = baseX + 8;
+      const eyeRX = baseX + 18;
+      const eyeY = baseY + 10;
+
+      if (m === 'sleep') {
+        drawRect(eyeLX, eyeY + 1, 4, 1, COLORS.black);
+        drawRect(eyeRX, eyeY + 1, 4, 1, COLORS.black);
+      } else if (m === 'happy') {
+        drawPixel(eyeLX, eyeY + 1, COLORS.black);
+        drawPixel(eyeLX + 1, eyeY, COLORS.black);
+        drawPixel(eyeLX + 2, eyeY + 1, COLORS.black);
+        drawPixel(eyeLX + 3, eyeY, COLORS.black);
+        drawPixel(eyeRX, eyeY + 1, COLORS.black);
+        drawPixel(eyeRX + 1, eyeY, COLORS.black);
+        drawPixel(eyeRX + 2, eyeY + 1, COLORS.black);
+        drawPixel(eyeRX + 3, eyeY, COLORS.black);
+      } else if (m === 'dead') {
+        drawPixel(eyeLX, eyeY, COLORS.black); drawPixel(eyeLX + 2, eyeY, COLORS.black);
+        drawPixel(eyeLX + 1, eyeY + 1, COLORS.black);
+        drawPixel(eyeLX, eyeY + 2, COLORS.black); drawPixel(eyeLX + 2, eyeY + 2, COLORS.black);
+        drawPixel(eyeRX, eyeY, COLORS.black); drawPixel(eyeRX + 2, eyeY, COLORS.black);
+        drawPixel(eyeRX + 1, eyeY + 1, COLORS.black);
+        drawPixel(eyeRX, eyeY + 2, COLORS.black); drawPixel(eyeRX + 2, eyeY + 2, COLORS.black);
+      } else if (m === 'sad' || m === 'sick') {
+        drawRect(eyeLX, eyeY, 3, 3, COLORS.eye);
+        drawRect(eyeRX, eyeY, 3, 3, COLORS.eye);
+        drawRect(eyeLX + 1, eyeY + 1, 2, 2, COLORS.black);
+        drawRect(eyeRX + 1, eyeY + 1, 2, 2, COLORS.black);
+        drawPixel(eyeLX + 1, eyeY + 3, COLORS.cyan);
+        drawPixel(eyeRX + 1, eyeY + 3, COLORS.cyan);
+      } else if (blinkOn) {
+        drawRect(eyeLX, eyeY + 1, 4, 1, COLORS.black);
+        drawRect(eyeRX, eyeY + 1, 4, 1, COLORS.black);
+      } else {
+        drawRect(eyeLX, eyeY, 4, 4, COLORS.black);
+        drawRect(eyeRX, eyeY, 4, 4, COLORS.black);
+        drawRect(eyeLX + 1, eyeY + 1, 2, 2, COLORS.eye);
+        drawRect(eyeRX + 1, eyeY + 1, 2, 2, COLORS.eye);
+        drawPixel(eyeLX + 1, eyeY + 1, COLORS.cyan);
+        drawPixel(eyeRX + 1, eyeY + 1, COLORS.cyan);
+        drawRect(eyeLX + 1, eyeY + 2, 2, 2, COLORS.black);
+        drawRect(eyeRX + 1, eyeY + 2, 2, 2, COLORS.black);
+      }
+
+      drawRect(baseX + 13, baseY + 15, 2, 1, COLORS.black);
+      drawRect(baseX + 14, baseY + 16, 1, 1, COLORS.black);
+
+      if (m === 'happy') {
+        drawRect(baseX + 10, baseY + 19, 8, 1, COLORS.yellow);
+        drawPixel(baseX + 9, baseY + 18, COLORS.black);
+        drawPixel(baseX + 18, baseY + 18, COLORS.black);
+        drawRect(baseX + 10, baseY + 20, 8, 1, COLORS.black);
+      } else if (m === 'sad' || m === 'sick') {
+        drawPixel(baseX + 10, baseY + 20, COLORS.black);
+        drawRect(baseX + 11, baseY + 19, 6, 1, COLORS.black);
+        drawPixel(baseX + 17, baseY + 20, COLORS.black);
+      } else if (m === 'sleep') {
+        drawRect(baseX + 12, baseY + 18, 4, 2, COLORS.black);
+        drawRect(baseX + 13, baseY + 19, 2, 1, COLORS.yellow);
+      } else {
+        drawPixel(baseX + 10, baseY + 19, COLORS.black);
+        drawRect(baseX + 11, baseY + 20, 6, 1, COLORS.black);
+        drawPixel(baseX + 17, baseY + 19, COLORS.black);
+      }
+
+      const armY = baseY + 18 + (pet.sleeping ? 1 : Math.round(Math.sin(frame * 0.12) * 1));
+      drawRect(baseX + 2, armY, 5, 2, pal['1']);
+      drawRect(baseX + 21, armY, 5, 2, pal['1']);
+      drawRect(baseX + 1, armY + 1, 2, 1, pal['0']);
+      drawRect(baseX + 25, armY + 1, 2, 1, pal['0']);
+
+      const step = pet.sleeping ? 0 : Math.round(Math.sin(frame * 0.14) * 1);
+      const legY = baseY + 28;
+      drawRect(baseX + 9, legY, 4, 3, pal['1']);
+      drawRect(baseX + 17, legY + step, 4, 3, pal['1']);
+      drawRect(baseX + 9, legY + 3, 5, 1, pal['0']);
+      drawRect(baseX + 17, legY + 3 + step, 5, 1, pal['0']);
+
+      const wag = pet.sleeping ? 0 : Math.round(Math.sin(frame * 0.18) * 2);
+      drawRect(baseX + 27, baseY + 22, 2, 2, pal['1']);
+      drawRect(baseX + 29, baseY + 21 - wag, 2, 2, pal['2']);
+      drawRect(baseX + 31, baseY + 20 - wag, 2, 2, pal['3']);
+
+      if (pet.accessory === 'hat') {
+        drawRect(baseX + 8, baseY - 3, 12, 2, COLORS.red);
+        drawRect(baseX + 10, baseY - 7, 8, 4, COLORS.red);
+        drawRect(baseX + 10, baseY - 5, 8, 1, COLORS.yellow);
+      }
+      if (pet.accessory === 'bow') {
+        drawRect(baseX + 7, baseY + 3, 3, 3, COLORS.pink);
+        drawRect(baseX + 10, baseY + 4, 2, 1, COLORS.red);
+        drawRect(baseX + 12, baseY + 3, 3, 3, COLORS.pink);
+      }
+
+      if (pet.poop && pet.alive) {
+        drawRect(8, 48, 4, 2, COLORS.brown);
+        drawRect(9, 46, 3, 2, COLORS.brown);
+        drawRect(10, 44, 2, 2, COLORS.brown);
+        drawPixel(10, 43, COLORS.brown);
+        drawPixel(10, 45, COLORS.black);
+      }
+
+      if (pet.sleeping && pet.alive) {
+        const z = 8 + Math.floor((frame * 0.25) % 16);
+        drawRect(56, z, 3, 1, COLORS.line);
+        drawPixel(58, z + 1, COLORS.line);
+        drawRect(56, z + 2, 3, 1, COLORS.line);
+        drawRect(61, z - 4, 4, 1, COLORS.line);
+        drawPixel(64, z - 3, COLORS.line);
+        drawRect(61, z - 2, 4, 1, COLORS.line);
+      }
+    }
+
+    function drawParticles() {
+      particles = particles.filter(p => p.life > 0);
+      ctx.save();
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.06;
+        p.life -= 1;
+        ctx.globalAlpha = p.life / 30;
+        ctx.fillStyle = COLORS.line;
+        ctx.font = Math.round(p.size) + 'px monospace';
+        ctx.fillText(p.char, p.x, p.y);
+      }
+      ctx.restore();
+    }
+
+    function render() {
+      frame += 1;
+      blinkTimer += 1;
+      if (blinkTimer > 90 + Math.random() * 50) blinkOn = true;
+      if (blinkOn && blinkTimer > 98) {
+        blinkOn = false;
+        blinkTimer = 0;
+      }
+      drawBackground();
+      drawPet();
+      drawParticles();
+    }
+
+    function refreshDownloadLink() {
+      const html = document.documentElement.outerHTML;
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.getElementById('downloadBtn');
+      link.href = url;
+      link.download = 'givemegochi.html';
+    }
+
+    function notifyParentCoin(action) {
+      try { if (window.parent !== window) window.parent.postMessage({ type: 'tamagochi_coin', action: action || 'tap' }, '*'); } catch (e) {}
+    }
+
+    document.getElementById('btnFeed').addEventListener('click', () => { notifyParentCoin(); feedPet(); });
+    document.getElementById('btnPet').addEventListener('click', () => { notifyParentCoin(); petPet(); });
+    document.getElementById('btnGame').addEventListener('click', () => { notifyParentCoin(); startMinigame(); });
+    document.getElementById('btnClean').addEventListener('click', () => { notifyParentCoin(); cleanPet(); });
+    document.getElementById('btnHeal').addEventListener('click', () => { notifyParentCoin(); healPet(); });
+    document.getElementById('btnSleep').addEventListener('click', () => { notifyParentCoin(); toggleSleep(); });
+    document.getElementById('btnSnack').addEventListener('click', () => { notifyParentCoin(); buySnack(); });
+    document.getElementById('btnTrain').addEventListener('click', () => { notifyParentCoin(); trainPet(); });
+    document.getElementById('restartBtn').addEventListener('click', () => { notifyParentCoin(); resetGame(); });
+
+    document.getElementById('quickA').addEventListener('click', () => { notifyParentCoin(); flashButton('quickA'); feedPet(); });
+    document.getElementById('quickB').addEventListener('click', () => { notifyParentCoin(); flashButton('quickB'); startMinigame(); });
+    document.getElementById('quickX').addEventListener('click', () => { notifyParentCoin(); flashButton('quickX'); petPet(); });
+    document.getElementById('quickY').addEventListener('click', () => { notifyParentCoin(); flashButton('quickY'); toggleSleep(); });
+
+    document.getElementById('moveUp').addEventListener('click', () => { notifyParentCoin(); flashButton('moveUp'); movePet(0, -1); });
+    document.getElementById('moveDown').addEventListener('click', () => { notifyParentCoin(); flashButton('moveDown'); movePet(0, 1); });
+    document.getElementById('moveLeft').addEventListener('click', () => { notifyParentCoin(); flashButton('moveLeft'); movePet(-1, 0); });
+    document.getElementById('moveRight').addEventListener('click', () => { notifyParentCoin(); flashButton('moveRight'); movePet(1, 0); });
+    document.getElementById('moveCenter').addEventListener('click', () => { notifyParentCoin(); centerPet(); });
+
+    ui.mgTarget.addEventListener('click', () => { notifyParentCoin(); minigameHit(); });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp') { notifyParentCoin(); movePet(0, -1); }
+      if (e.key === 'ArrowDown') { notifyParentCoin(); movePet(0, 1); }
+      if (e.key === 'ArrowLeft') { notifyParentCoin(); movePet(-1, 0); }
+      if (e.key === 'ArrowRight') { notifyParentCoin(); movePet(1, 0); }
+    });
+
+    updateUI();
+    refreshDownloadLink();
+    setInterval(render, 1000 / 30);
+    setInterval(gameTick, 1000);
+  </script>
+</body>
+</html>

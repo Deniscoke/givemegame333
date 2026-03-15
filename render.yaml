@@ -1,0 +1,15 @@
+# Render.com — bezplatné nasadenie
+# https://render.com
+services:
+  - type: web
+    name: givemegame-io
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o

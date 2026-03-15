@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>gIVEME — Sociálna sieť</title>
+		<link rel="stylesheet" href="styles.css">
+		<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+		<div class="coin-toast" id="coinToast">
+			<div class="toast-coin">🪙</div>
+			<span>+1 COIN EARNED!</span>
+		</div>
+		<header class="header">
+			<div class="header-logo">
+				<div class="logo-icon"></div>
+				<h1>gIVEME</h1>
+			</div>
+			<div class="header-actions">
+				<div class="coin-display" id="coinCounter" onclick="showCoinHistory()">
+					<div class="coin-icon">₿</div>
+					<span id="totalCoins">42</span>
+				</div>
+				<button class="header-btn" onclick="earnCoin('notification')">🔔<div class="notif-dot"></div></button>
+				<button class="header-btn">✉️</button>
+			</div>
+			<div class="xp-bar-container">
+				<div class="xp-bar-fill" id="xpBar"></div>
+			</div>
+		</header>
+		<main class="main-content">
+			<section class="stories-section">
+				<div class="stories-container" id="storiesContainer">
+					<div class="story-item" onclick="openCreateStory()">
+						<div class="story-avatar-ring add-story">
+							<div class="story-avatar">🎨</div>
+							<div class="story-add-badge">+</div>
+						</div>
+						<span class="story-name">Tvoj príbeh</span>
+					</div>
+					<div class="story-item" onclick="openStory(0)"><div class="story-avatar-ring"><div class="story-avatar">🧙</div></div><span class="story-name">pixel_mage</span></div>
+					<div class="story-item" onclick="openStory(1)"><div class="story-avatar-ring"><div class="story-avatar">🐉</div></div><span class="story-name">dragon_art</span></div>
+					<div class="story-item" onclick="openStory(2)"><div class="story-avatar-ring"><div class="story-avatar">⚔️</div></div><span class="story-name">sword_pixl</span></div>
+					<div class="story-item" onclick="openStory(3)"><div class="story-avatar-ring viewed"><div class="story-avatar">🏰</div></div><span class="story-name">castle_8bit</span></div>
+					<div class="story-item" onclick="openStory(4)"><div class="story-avatar-ring"><div class="story-avatar">🌲</div></div><span class="story-name">nature_px</span></div>
+					<div class="story-item" onclick="openStory(5)"><div class="story-avatar-ring"><div class="story-avatar">👾</div></div><span class="story-name">retro_game</span></div>
+					<div class="story-item" onclick="openStory(6)"><div class="story-avatar-ring viewed"><div class="story-avatar">🌙</div></div><span class="story-name">moon_pixel</span></div>
+				</div>
+			</section>
+			<div class="feed" id="feed">
+				<div class="feed-loading" id="feedLoading">Načítavam feed...</div>
+				<div class="feed-empty" id="feedEmpty" style="display:none;">
+					<p id="feedEmptyText">🎨 Zatiaľ žiadne posty. Prihlás sa a vytvor prvý pixel art!</p>
+					<button class="btn-create-first" onclick="openCreateModal()">Tvoriť</button>
+				</div>
+			</div>
+		</main>
+		<div class="story-modal" id="storyModal">
+			<div class="story-progress-bar" id="storyProgressBar"><div class="story-progress-segment"><div class="fill"></div></div><div class="story-progress-segment"><div class="fill"></div></div><div class="story-progress-segment"><div class="fill"></div></div></div>
+			<div class="story-viewer-header"><div class="story-viewer-user"><div class="story-viewer-avatar" id="storyViewerAvatar">🧙</div><div><div class="story-viewer-name" id="storyViewerName">pixel_mage</div><div class="story-viewer-time">pred 2h</div></div></div><button class="story-close-btn" onclick="closeStory()">✕</button></div>
+			<div class="story-content"><canvas id="storyCanvas" width="16" height="28"></canvas></div>
+			<div class="story-actions-bar"><input type="text" class="story-reply-input" placeholder="Odpovedať na príbeh..." onkeydown="handleStoryReply(event)"><button class="story-action-btn" onclick="likeStory()">❤️</button><button class="story-action-btn" onclick="sendStoryCoin()">🪙</button><button class="story-action-btn" onclick="shareStory()">📤</button></div>
+		</div>
+		<div class="comment-modal" id="commentModal">
+			<div class="comment-modal-header"><h3>💬 Komentáre</h3><button class="comment-modal-close" onclick="closeComments()">✕</button></div>
+			<div class="comments-list" id="commentsList"></div>
+			<div class="comment-input-bottom"><input type="text" placeholder="Napíš komentár..." id="modalCommentInput" onkeydown="handleModalComment(event)"><button onclick="submitModalComment()">Odoslať</button></div>
+		</div>
+		<div class="share-modal-overlay" id="shareModal" onclick="closeShare(event)">
+			<div class="share-modal">
+				<h3>📤 Zdieľať príspevok</h3>
+				<div class="share-options">
+					<div class="share-option" onclick="shareAction('dm')"><div class="share-option-icon">✉️</div><span class="share-option-label">Správa</span></div>
+					<div class="share-option" onclick="shareAction('story')"><div class="share-option-icon">📱</div><span class="share-option-label">Príbeh</span></div>
+					<div class="share-option" onclick="shareAction('twitter')"><div class="share-option-icon">🐦</div><span class="share-option-label">Twitter</span></div>
+					<div class="share-option" onclick="shareAction('discord')"><div class="share-option-icon">🎮</div><span class="share-option-label">Discord</span></div>
+					<div class="share-option" onclick="shareAction('reddit')"><div class="share-option-icon">🤖</div><span class="share-option-label">Reddit</span></div>
+					<div class="share-option" onclick="shareAction('whatsapp')"><div class="share-option-icon">📞</div><span class="share-option-label">WhatsApp</span></div>
+					<div class="share-option" onclick="shareAction('email')"><div class="share-option-icon">📧</div><span class="share-option-label">Email</span></div>
+					<div class="share-option" onclick="shareAction('download')"><div class="share-option-icon">💾</div><span class="share-option-label">Stiahnuť</span></div>
+				</div>
+				<div class="share-link-copy"><input type="text" value="pixelgram.art/p/xK9mP2" readonly id="shareLinkInput"><button onclick="copyShareLink()">Kopírovať</button></div>
+			</div>
+		</div>
+		<div class="create-modal" id="createModal" onclick="if(event.target===this)closeCreateModal()">
+			<div class="create-modal-content" onclick="event.stopPropagation()">
+				<h2>🎨 Nový Pixel Art</h2>
+				<div class="create-prompt-section">
+					<label class="create-prompt-label">📋 Zadanie — čo mám namaľovať?</label>
+					<div class="create-prompt-row">
+						<input type="text" id="createPromptInput" class="create-prompt-input" placeholder="napr. Namaľuj draka, hrad, strom...">
+						<button class="create-prompt-random" onclick="pickRandomPrompt()" title="Náhodné zadanie">🎲</button>
+					</div>
+					<div class="create-prompt-suggestions" id="promptSuggestions"></div>
+				</div>
+				<div class="create-canvas-area">
+					<canvas id="createCanvas" width="32" height="32"></canvas>
+					<button class="create-clear-btn" onclick="clearCanvas()" title="Vymazať plátno">🗑️</button>
+				</div>
+				<div class="create-tools" id="colorPalette"></div>
+				<textarea class="create-caption-input" id="createCaptionInput" placeholder="Popis (voliteľné)..."></textarea>
+				<div class="create-buttons"><button class="create-btn cancel-btn" onclick="closeCreateModal()">Zrušiť</button><button class="create-btn post-btn" onclick="publishPost()">Uverejniť 🚀</button></div>
+			</div>
+		</div>
+		<div class="user-profile-modal" id="userProfileModal" onclick="if(event.target===this)closeUserProfile()">
+			<div class="user-profile-content" onclick="event.stopPropagation()">
+				<button class="user-profile-close" onclick="closeUserProfile()">✕</button>
+				<div class="user-profile-header">
+					<div class="user-profile-avatar" id="userProfileAvatar">🎨</div>
+					<div class="user-profile-info">
+						<h2 class="user-profile-name" id="userProfileName">—</h2>
+						<div class="user-profile-stats">
+							<span id="userProfilePostsCount">0</span> postov · <span id="userProfileFollowersCount">0</span> sledujúcich · <span id="userProfileFollowingCount">0</span> sledovaných
+						</div>
+					</div>
+				</div>
+				<div class="user-profile-actions" id="userProfileActions"></div>
+				<div class="user-profile-posts-wrap">
+					<div class="user-profile-posts-loading" id="userProfilePostsLoading">Načítavam...</div>
+					<div class="user-profile-posts" id="userProfilePosts"></div>
+				</div>
+			</div>
+		</div>
+		<nav class="bottom-nav">
+			<a class="nav-item active" href="javascript:void(0)" onclick="setActiveNav(this); return false;"><span class="nav-icon">🏠</span><span class="nav-label">Domov</span></a>
+			<a class="nav-item" href="javascript:void(0)" onclick="setActiveNav(this); return false;"><span class="nav-icon">🔍</span><span class="nav-label">Hľadať</span></a>
+			<button type="button" class="nav-item nav-item-create" id="nav-btn-create" onclick="handleCreateClick(event)"><span class="nav-icon">+</span><span class="nav-label">Tvoriť</span></button>
+			<a class="nav-item" href="javascript:void(0)" onclick="setActiveNav(this); return false;"><span class="nav-icon">🪙</span><span class="nav-label">Obchod</span><div class="nav-badge">3</div></a>
+			<a class="nav-item" id="nav-btn-profile" href="javascript:void(0)" onclick="openMyProfile(event); return false;"><span class="nav-icon">👤</span><span class="nav-label">Profil</span></a>
+		</nav>
+		<script src="script.js"></script>
+</body>
+</html>
