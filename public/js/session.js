@@ -25,6 +25,7 @@ const Session = (() => {
 	let _isHost    = false;
 	let _channel   = null;  // Supabase Realtime channel
 	let _pollTimer = null;  // fallback polling interval for lobby participants
+	let _lastKnownStatus = 'waiting'; // track session status for poll-based transition
 
 	// ─── Public API ───────────────────────────────────────────────
 
@@ -307,6 +308,12 @@ const Session = (() => {
 			if (!res.ok) return;
 			const data = await res.json();
 			_renderParticipants(data.participants || []);
+			_renderStatus(data.status);
+			// Realtime fallback: detect status change via polling
+			if (data.status && data.status !== _lastKnownStatus) {
+				_lastKnownStatus = data.status;
+				_onSessionUpdate(data);
+			}
 		} catch (e) { /* silent */ }
 	}
 
