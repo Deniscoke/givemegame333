@@ -2013,7 +2013,7 @@ app.patch('/api/user/preferences', async (req, res) => {
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
 	const { narrator_styles, narrator_lang } = req.body || {};
-	const VALID_LANGS   = ['sk', 'cs', 'en', 'es'];
+	const VALID_LANGS   = ['sk', 'cs', 'de', 'en', 'es'];
 	const VALID_STYLES  = ['sangvinik', 'flegmatik', 'cholerik', 'melancholik', 'genz'];
 	const updates = [];
 	const params  = [user.id]; // $1 is always user_id
@@ -2046,7 +2046,7 @@ app.patch('/api/user/preferences', async (req, res) => {
 });
 
 // ─── Pripravené zaujímavosti pre vypraváča ───
-let narratorFacts = { sk: [], cs: [], en: [], es: [] };
+let narratorFacts = { sk: [], cs: [], de: [], en: [], es: [] };
 try {
 	const factsPath = path.join(__dirname, 'data', 'narrator-facts.json');
 	narratorFacts = JSON.parse(fs.readFileSync(factsPath, 'utf-8'));
@@ -2055,6 +2055,7 @@ try {
 const FALLBACK_FACTS = {
 	sk: ['Medúzy existujú na Zemi už viac ako 650 miliónov rokov – sú staršie ako dinosaury!', 'Včely komunikujú tancom.'],
 	cs: ['Medúzy existují na Zemi už více než 650 milionů let – jsou starší než dinosauři!', 'Včely komunikují tancem.'],
+	de: ['Quallen gibt es seit über 650 Millionen Jahren auf der Erde – älter als Dinosaurier!', 'Bienen kommunizieren durch Tanz.'],
 	en: ['Jellyfish have existed on Earth for over 650 million years – older than dinosaurs!', 'Bees communicate through dance.'],
 	es: ['Las medusas existen en la Tierra desde hace más de 650 millones de años.', 'Las abejas se comunican bailando.']
 };
@@ -2152,7 +2153,7 @@ app.get('/api/random-fact', async (req, res) => {
 
 	// OpenAI API — GPT-5.4 (Chat) pre generovanie, TTS pre čítanie
 	if (!openai) openai = new OpenAI({ apiKey: effectiveKey });
-	const langNames = { sk: 'Slovenčina', cs: 'Čeština', en: 'English', es: 'Español' };
+	const langNames = { sk: 'Slovenčina', cs: 'Čeština', de: 'Deutsch', en: 'English', es: 'Español' };
 	const langName = langNames[lang] || 'Slovenčina';
 
 	let areaContext = '';

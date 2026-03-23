@@ -72,6 +72,7 @@ const Narrator = (() => {
 	const FALLBACK_FACTS = {
 		sk: ['Medúzy existujú na Zemi už viac ako 650 miliónov rokov – sú staršie ako dinosaury!', 'Včely komunikujú tancom.'],
 		cs: ['Medúzy existují na Zemi už více než 650 milionů let – jsou starší než dinosauři!', 'Včely komunikují tancem.'],
+		de: ['Quallen gibt es seit über 650 Millionen Jahren auf der Erde – älter als Dinosaurier!', 'Bienen kommunizieren durch Tanz.'],
 		en: ['Jellyfish have existed on Earth for over 650 million years – older than dinosaurs!', 'Bees communicate through dance.'],
 		es: ['Las medusas existen en la Tierra desde hace más de 650 millones de años.', 'Las abejas se comunican bailando.']
 	};
@@ -91,7 +92,7 @@ const Narrator = (() => {
 	}
 
 	function getLangBcp47(lang) {
-		return lang === 'sk' ? 'sk-SK' : lang === 'cs' ? 'cs-CZ' : lang === 'es' ? 'es-ES' : 'en-US';
+		return lang === 'sk' ? 'sk-SK' : lang === 'cs' ? 'cs-CZ' : lang === 'de' ? 'de-DE' : lang === 'es' ? 'es-ES' : 'en-US';
 	}
 
 	function getPreferredVoice(lang) {
@@ -335,7 +336,7 @@ const Narrator = (() => {
 		}
 		awardedForCurrent = false;
 
-		const langMap = { sk: 'sk', cs: 'cs', en: 'en', es: 'es' };
+		const langMap = { sk: 'sk', cs: 'cs', de: 'de', en: 'en', es: 'es' };
 		const activeLang = document.querySelector('.btn-lang.active')?.dataset?.lang || window.givemegame_currentLang || 'cs';
 		const lang = langMap[activeLang] || 'sk';
 		const areaEl = document.getElementById('narrator-area');
