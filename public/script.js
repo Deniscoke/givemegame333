@@ -1368,7 +1368,7 @@ const App = (() => {
 				billingSection.style.display = 'block';
 				if (App?.Billing?.refreshState) App.Billing.refreshState();
 			} else if (billingSection) billingSection.style.display = 'none';
-			switchTab('giveme');
+			switchTab('profil'); // Profil tab — billing section visible hneď
 			GameUI.openModal('profile-modal');
 		}
 
