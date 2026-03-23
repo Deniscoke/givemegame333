@@ -666,6 +666,16 @@
 					<div class="profile-coins-value" id="profile-coins">0</div>
 					<p class="profile-coins-hint">Coiny z Robot Challenge, Timer, módu — uložené v profile</p>
 				</div>
+				<!-- Billing (Pro plan) — only for logged-in users -->
+				<div class="profile-billing-section" id="profile-billing-section" style="display:none;">
+					<div class="profile-billing-label">Plán</div>
+					<div class="profile-billing-status" id="profile-billing-status">Free</div>
+					<div class="profile-billing-actions">
+						<button type="button" class="btn btn-retro btn-billing-upgrade" id="btn-billing-upgrade" onclick="App.Billing.upgrade()">⬆️ Upgrade to Pro</button>
+						<button type="button" class="btn btn-retro btn-billing-manage" id="btn-billing-manage" onclick="App.Billing.manage()" style="display:none;">⚙️ Manage billing</button>
+					</div>
+					<p class="profile-billing-hint" id="profile-billing-hint">Pro: 30 hier/min, viac premium funkcií</p>
+				</div>
 				<!-- Competency progression — loaded lazily when Profil tab activates -->
 				<div class="profile-comp-section" id="profile-competencies" style="display:none">
 					<div class="profile-comp-title" data-i18n="comp_panel_title">Kompetencie</div>

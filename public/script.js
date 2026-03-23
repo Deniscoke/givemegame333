@@ -241,6 +241,18 @@ const App = (() => {
 		Narrator.init();
 		UserPreferences.bindAutoSync();
 		setMode('party'); // Výchozí režim
+		// Handle billing redirect params (?billing=success|cancel)
+		const params = new URLSearchParams(window.location.search);
+		const billingStatus = params.get('billing');
+		if (billingStatus === 'success' || billingStatus === 'cancel') {
+			try {
+				const url = new URL(window.location.href);
+				url.searchParams.delete('billing');
+				window.history.replaceState({}, '', url.toString());
+			} catch (e) {}
+			if (billingStatus === 'success') GameUI.toast('✅ Platba dokončená. Prístup bude aktivovaný o chvíľu.');
+		}
+
 		// Load persisted narrator prefs from server (overrides localStorage defaults).
 		// Falls back silently for guests or if the API is unavailable.
 		const prefsLoaded = await UserPreferences.load();
@@ -1363,6 +1375,11 @@ const App = (() => {
 			}
 			if (coinsEl) coinsEl.textContent = Coins.getBalance();
 			if (coinsSection) coinsSection.style.display = 'block';
+			const billingSection = document.getElementById('profile-billing-section');
+			if (user && billingSection) {
+				billingSection.style.display = 'block';
+				if (App?.Billing?.refreshState) App.Billing.refreshState();
+			} else if (billingSection) billingSection.style.display = 'none';
 			switchTab('giveme');
 			GameUI.openModal('profile-modal');
 		}
@@ -1389,6 +1406,7 @@ const App = (() => {
 				const coinsEl = document.getElementById('profile-coins');
 				if (coinsEl) coinsEl.textContent = Coins.getBalance();
 				_loadProfileCompetencies();
+				if (App?.Billing?.refreshState) App.Billing.refreshState();
 			}
 			if (tab === 'analytics') _loadAnalytics();
 			if (tab === 'giveme') {
@@ -1524,6 +1542,78 @@ const App = (() => {
 		return { open, switchTab, onGivemeLoad, syncGivemeIframe, logout, startPhoneVibrate, stopPhoneVibrate };
 	})();
 
+	// ─── Billing (Stripe Pro plan) ───
+	const Billing = (() => {
+		async function getToken() {
+			try {
+				const { data: { session } } = await supabaseClient?.auth?.getSession();
+				return session?.access_token || null;
+			} catch { return null; }
+		}
+
+		async function refreshState() {
+			const section = document.getElementById('profile-billing-section');
+			const statusEl = document.getElementById('profile-billing-status');
+			const upgradeBtn = document.getElementById('btn-billing-upgrade');
+			const manageBtn = document.getElementById('btn-billing-manage');
+			const hintEl = document.getElementById('profile-billing-hint');
+			if (!section || !statusEl) return;
+			const token = await getToken();
+			if (!token) { section.style.display = 'none'; return; }
+			try {
+				const res = await fetch('/api/billing/state', {
+					headers: { ...ngrokHeaders(), 'Authorization': `Bearer ${token}` }
+				});
+				if (!res.ok) { statusEl.textContent = 'Free'; upgradeBtn.style.display = 'block'; manageBtn.style.display = 'none'; return; }
+				const data = await res.json();
+				statusEl.textContent = data.hasPaidAccess ? 'Pro' : (data.planCode === 'pro_teacher_monthly' ? data.subscriptionStatus || 'Free' : 'Free');
+				upgradeBtn.style.display = data.hasPaidAccess ? 'none' : 'block';
+				manageBtn.style.display = (data.hasPaidAccess || data.hasCustomer) ? 'block' : 'none';
+				if (hintEl) hintEl.textContent = data.hasPaidAccess ? '30 hier/min, premium funkcie' : 'Pro: 30 hier/min, viac premium funkcií';
+			} catch (e) {
+				statusEl.textContent = 'Free';
+				upgradeBtn.style.display = 'block';
+				manageBtn.style.display = 'none';
+			}
+		}
+
+		async function upgrade() {
+			const token = await getToken();
+			if (!token) { GameUI.toast('Prihlás sa pre upgrade'); return; }
+			try {
+				const res = await fetch('/api/billing/create-checkout-session', {
+					method: 'POST',
+					headers: { ...ngrokHeaders(), 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+				});
+				const data = await res.json();
+				if (!res.ok) throw new Error(data.error || 'Checkout failed');
+				if (data.url) window.location.href = data.url;
+				else throw new Error('No checkout URL');
+			} catch (e) {
+				GameUI.toast('❌ ' + (e.message || 'Chyba pri vytvorení platby'));
+			}
+		}
+
+		async function manage() {
+			const token = await getToken();
+			if (!token) return;
+			try {
+				const res = await fetch('/api/billing/create-portal-session', {
+					method: 'POST',
+					headers: { ...ngrokHeaders(), 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+				});
+				const data = await res.json();
+				if (!res.ok) throw new Error(data.error || 'Portal failed');
+				if (data.url) window.location.href = data.url;
+				else throw new Error('No portal URL');
+			} catch (e) {
+				GameUI.toast('❌ ' + (e.message || 'Chyba pri otvorení portálu'));
+			}
+		}
+
+		return { refreshState, upgrade, manage };
+	})();
+
 	// ─── Game Library (extracted → js/library.js) ───
 	const Library = window.Library; // bridge to extracted module
 
@@ -1551,6 +1641,7 @@ const App = (() => {
 		Filters,
 		RobotChallenge,
 		Profile,
+		Billing,
 		UI: GameUI,
 		API: GameAPI,
 		Data: GameData

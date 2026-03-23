@@ -479,6 +479,17 @@ header {
 	opacity: 0.7;
 	margin-top: 8px;
 }
+.profile-billing-section {
+	text-align: center;
+	padding: 16px;
+	background: rgba(0,0,0,0.04);
+	border: 2px solid var(--border);
+	margin-bottom: 16px;
+}
+.profile-billing-label { font-family: 'Press Start 2P', cursive; font-size: 8px; text-transform: uppercase; margin-bottom: 4px; }
+.profile-billing-status { font-family: 'Press Start 2P', cursive; font-size: 14px; margin-bottom: 8px; }
+.profile-billing-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 4px; }
+.profile-billing-hint { font-size: 10px; opacity: 0.7; }
 .profile-logout-section { margin-bottom: 16px; }
 .profile-logout-section .btn-logout { width: 100%; background: rgba(231, 76, 60, 0.2); border: 2px solid #e74c3c; color: #e74c3c; padding: 10px 16px; }
 .profile-logout-section .btn-logout:hover { background: rgba(231, 76, 60, 0.35); }

@@ -5,6 +5,7 @@
      • GameData       — declared in game-data.js (shared global scope)
      • GameUI.toast() — declared in game-ui.js   (shared global scope)
      • ngrokHeaders() — declared in script.js     (shared global scope)
+     • supabaseClient — declared in script.js     (shared global scope, for auth token)
      • fetch()        — browser built-in
 
    Exposes: window.GameAPI  (also visible as global `const GameAPI`)
@@ -15,6 +16,17 @@
 // ─────────────────────────────────────────────────
 const GameAPI = (() => {
 	let engineMode = 'ai'; // default: vždy AI
+
+	async function getAuthHeaders() {
+		const headers = { ...(typeof ngrokHeaders === 'function' ? ngrokHeaders() : {}), 'Content-Type': 'application/json' };
+		try {
+			if (typeof supabaseClient !== 'undefined' && supabaseClient?.auth) {
+				const { data: { session } } = await supabaseClient.auth.getSession();
+				if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+			}
+		} catch (e) { /* ignore */ }
+		return headers;
+	}
 
 	async function generateGame(filters) {
 		// Vždy skúsime AI prvý; ak server neodpovie, fallback na local
@@ -39,7 +51,7 @@ const GameAPI = (() => {
 		try {
 			const res = await fetch('/api/generate-game', {
 				method: 'POST',
-				headers: { ...ngrokHeaders(), 'Content-Type': 'application/json' },
+				headers: await getAuthHeaders(),
 				body: JSON.stringify({ filters })
 			});
 
@@ -68,7 +80,7 @@ const GameAPI = (() => {
 		try {
 			const res = await fetch('/api/generate-game', {
 				method: 'POST',
-				headers: { ...ngrokHeaders(), 'Content-Type': 'application/json' },
+				headers: await getAuthHeaders(),
 				body: JSON.stringify({ filters, remix: sourceGame })
 			});
 			if (!res.ok) {

@@ -14,6 +14,16 @@ const path = require('path');
 const fs = require('fs');
 const { Pool } = require('pg');
 const { validateDurationGate, validateParticipantGate, validateHostCooldownGate } = require('./lib/reward-validation');
+const Stripe = require('stripe');
+const {
+	getUserBillingState,
+	hasPaidAccess,
+	upsertBillingFromWebhook,
+	revokeBilling,
+	wasEventProcessed,
+	recordEventProcessed,
+	PLAN_PRO
+} = require('./lib/billing');
 
 const SESSION_JOIN_COST = 100;
 const COMPETENCY_AWARD  = 50;
@@ -60,6 +70,31 @@ const app = express();
 // Trust proxy for correct req.ip behind Vercel/nginx
 app.set('trust proxy', 1);
 app.use(cors());
+
+// Stripe webhook MUST use raw body for signature verification — register BEFORE express.json
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+	const stripe = getStripeClient();
+	const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+	if (!stripe || !webhookSecret) {
+		console.warn('[Billing] Webhook: Stripe not configured');
+		return res.status(503).json({ error: 'Billing not configured' });
+	}
+	let event;
+	try {
+		event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], webhookSecret);
+	} catch (err) {
+		console.error('[Billing] Webhook signature verification failed:', err.message);
+		return res.status(400).json({ error: 'Invalid signature' });
+	}
+	// Handle asynchronously to return 200 quickly
+	handleStripeWebhook(event).then(() => {
+		res.status(200).json({ received: true });
+	}).catch(err => {
+		console.error('[Billing] Webhook processing error:', err);
+		res.status(500).json({ error: 'Webhook processing failed' });
+	});
+});
+
 app.use(express.json());
 
 // Favicon — predchádza 404
@@ -213,6 +248,20 @@ async function requireSupabaseUser(req, res) {
 	}
 }
 
+/** Like requireSupabaseUser but never responds — returns null if no/invalid auth. */
+async function optionalSupabaseUser(req) {
+	const authHeader = req.headers.authorization || '';
+	if (!authHeader.startsWith('Bearer ')) return null;
+	const token = authHeader.slice(7).trim();
+	if (!token) return null;
+	try {
+		const user = await fetchSupabaseUser(token);
+		return user || null;
+	} catch {
+		return null;
+	}
+}
+
 function generateJoinCode() {
 	let code = '';
 	for (let i = 0; i < JOIN_CODE_LENGTH; i++) {
@@ -235,6 +284,139 @@ function respondCoinApiDisabled(res) {
 async function queryCoinsDb(text, params = []) {
 	if (!coinsDbPool) throw new Error('Coin DB pool nie je inicializovaný');
 	return coinsDbPool.query(text, params);
+}
+
+// ─── Stripe billing (webhook-first) ───
+let stripeClient = null;
+function getStripeClient() {
+	if (!stripeClient && process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.startsWith('sk_placeholder')) {
+		stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+	}
+	return stripeClient;
+}
+
+async function handleStripeWebhook(event) {
+	const pool = coinsDbPool;
+	if (!pool) {
+		console.error('[Billing] Webhook: no DB pool');
+		throw new Error('DB not available');
+	}
+	const id = event.id;
+	const type = event.type;
+	if (await wasEventProcessed(pool, id)) {
+		console.log('[Billing] Webhook: event already processed', id);
+		return;
+	}
+	let userId = null;
+	if (event.data?.object?.client_reference_id) {
+		userId = event.data.object.client_reference_id;
+	}
+	if (event.data?.object?.metadata?.app_user_id) {
+		userId = event.data.object.metadata.app_user_id;
+	}
+	if (event.data?.object?.subscription) {
+		const subId = event.data.object.subscription;
+		try {
+			const stripe = getStripeClient();
+			const sub = await stripe.subscriptions.retrieve(subId);
+			userId = sub.metadata?.app_user_id || userId;
+		} catch (e) {
+			console.warn('[Billing] Webhook: could not retrieve subscription', e.message);
+		}
+	}
+	if (event.data?.object?.customer) {
+		const custId = event.data.object.customer;
+		try {
+			const { rows } = await pool.query('SELECT user_id FROM public.user_billing WHERE stripe_customer_id = $1 LIMIT 1', [custId]);
+			if (rows[0]) userId = rows[0].user_id;
+		} catch (e) {
+			console.warn('[Billing] Webhook: lookup by customer failed', e.message);
+		}
+	}
+	const log = (msg) => console.log('[Billing]', type, msg);
+	switch (type) {
+		case 'checkout.session.completed': {
+			const obj = event.data.object;
+			const subId = obj.subscription;
+			userId = userId || obj.client_reference_id || (obj.metadata && obj.metadata.app_user_id);
+			if (!userId) { log('no user id'); await recordEventProcessed(pool, id, type); return; }
+			if (subId) {
+				const stripe = getStripeClient();
+				const sub = await stripe.subscriptions.retrieve(subId);
+				const item = sub.items?.data?.[0];
+				await upsertBillingFromWebhook(pool, userId, {
+					stripeCustomerId: obj.customer,
+					stripeSubscriptionId: sub.id,
+					stripePriceId: item?.price?.id,
+					subscriptionStatus: sub.status,
+					currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
+					planCode: PLAN_PRO
+				});
+				log(`provisioned user ${userId}`);
+			}
+			break;
+		}
+		case 'customer.subscription.created':
+		case 'customer.subscription.updated': {
+			const sub = event.data.object;
+			userId = userId || sub.metadata?.app_user_id;
+			if (!userId) {
+				const { rows } = await pool.query('SELECT user_id FROM public.user_billing WHERE stripe_subscription_id = $1', [sub.id]);
+				if (rows[0]) userId = rows[0].user_id;
+			}
+			if (!userId) { log('no user id'); await recordEventProcessed(pool, id, type); return; }
+			const item = sub.items?.data?.[0];
+			await upsertBillingFromWebhook(pool, userId, {
+				stripeCustomerId: sub.customer,
+				stripeSubscriptionId: sub.id,
+				stripePriceId: item?.price?.id,
+				subscriptionStatus: sub.status,
+				currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
+				planCode: PLAN_PRO
+			});
+			log(`updated user ${userId} status=${sub.status}`);
+			break;
+		}
+		case 'customer.subscription.deleted': {
+			const sub = event.data.object;
+			userId = userId || sub.metadata?.app_user_id;
+			if (!userId) {
+				const { rows } = await pool.query('SELECT user_id FROM public.user_billing WHERE stripe_subscription_id = $1', [sub.id]);
+				if (rows[0]) userId = rows[0].user_id;
+			}
+			if (userId) {
+				await revokeBilling(pool, userId);
+				log(`revoked user ${userId}`);
+			}
+			break;
+		}
+		case 'invoice.payment_failed': {
+			const inv = event.data.object;
+			log(`payment failed customer=${inv.customer} subscription=${inv.subscription || 'none'}`);
+			if (inv.subscription) {
+				const stripe = getStripeClient();
+				const sub = await stripe.subscriptions.retrieve(inv.subscription);
+				userId = userId || sub.metadata?.app_user_id;
+				if (!userId) {
+					const { rows } = await pool.query('SELECT user_id FROM public.user_billing WHERE stripe_subscription_id = $1', [inv.subscription]);
+					if (rows[0]) userId = rows[0].user_id;
+				}
+				if (userId) {
+					await upsertBillingFromWebhook(pool, userId, {
+						stripeSubscriptionId: sub.id,
+						subscriptionStatus: sub.status,
+						currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
+						planCode: PLAN_PRO
+					});
+					log(`updated status to ${sub.status} for user ${userId}`);
+				}
+			}
+			break;
+		}
+		default:
+			log('unhandled event type');
+	}
+	await recordEventProcessed(pool, id, type);
 }
 
 // ─── OpenAI klient ───
@@ -659,37 +841,48 @@ IMPORTANT: Generate "id" as "ai-" + random 6-character code. All fields are requ
 // Computed once at startup — identical string every call → OpenAI prompt cache activates.
 const STATIC_SYSTEM_PROMPT = buildSystemPrompt();
 
-// ─── Rate limit for /api/generate-game (per-IP, 10/min) ───
+// ─── Rate limit for /api/generate-game (per-IP or per-user, paid=higher limit) ───
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT_MAX = 10;
-const generateGameRateMap = new Map(); // ip -> { count, resetAt }
+const RATE_LIMIT_MAX_FREE = 10;
+const RATE_LIMIT_MAX_PRO = 30;
+const generateGameRateMap = new Map(); // key -> { count, resetAt }
 
 function cleanupRateLimitMap() {
 	const now = Date.now();
-	for (const [ip, data] of generateGameRateMap.entries()) {
-		if (data.resetAt < now) generateGameRateMap.delete(ip);
+	for (const [key, data] of generateGameRateMap.entries()) {
+		if (data.resetAt < now) generateGameRateMap.delete(key);
 	}
 }
 setInterval(cleanupRateLimitMap, 60 * 1000);
 
-function checkGenerateGameRateLimit(req) {
-	const ip = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+function checkGenerateGameRateLimit(key, limit) {
 	const now = Date.now();
-	let data = generateGameRateMap.get(ip);
+	let data = generateGameRateMap.get(key);
 	if (!data || data.resetAt < now) {
 		data = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
-		generateGameRateMap.set(ip, data);
+		generateGameRateMap.set(key, data);
 	}
 	data.count++;
-	if (data.count > RATE_LIMIT_MAX) {
-		return { ok: false, ip };
-	}
+	if (data.count > limit) return { ok: false };
 	return { ok: true };
 }
 
 // ─── API endpoint ───
-app.post('/api/generate-game', (req, res, next) => {
-	const rate = checkGenerateGameRateLimit(req);
+app.post('/api/generate-game', async (req, res, next) => {
+	const ip = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+	let limit = RATE_LIMIT_MAX_FREE;
+	let key = `ip:${ip}`;
+	try {
+		const user = await optionalSupabaseUser(req);
+		if (user && coinsDbPool) {
+			key = `user:${user.id}`;
+			const state = await getUserBillingState(coinsDbPool, user.id);
+			if (hasPaidAccess(state)) limit = RATE_LIMIT_MAX_PRO;
+		}
+	} catch (e) {
+		console.warn('[GenerateGame] Rate limit user lookup:', e.message);
+	}
+	const rate = checkGenerateGameRateLimit(key, limit);
 	if (!rate.ok) {
 		return res.status(429).json({
 			error: 'Príliš veľa požiadaviek. Skúste znova o minútu.',
@@ -1026,6 +1219,95 @@ app.post('/api/coins/log', async (req, res) => {
 	} catch (err) {
 		console.error('[Coins] log insert failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa zaznamenať transakciu', code: 'LOG_ERROR' });
+	}
+});
+
+// ─── Billing API (Stripe Checkout + Portal, webhook-first) ───
+function billingReady() {
+	return Boolean(getStripeClient() && process.env.STRIPE_PRICE_PRO_MONTHLY);
+}
+
+app.get('/api/billing/state', async (req, res) => {
+	if (!coinApiReady()) return res.status(503).json({ error: 'Service unavailable', code: 'DB_UNAVAILABLE' });
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	try {
+		const state = await getUserBillingState(coinsDbPool, user.id);
+		res.json({
+			planCode: state?.plan_code || 'free',
+			subscriptionStatus: state?.subscription_status || 'none',
+			hasPaidAccess: hasPaidAccess(state),
+			currentPeriodEnd: state?.current_period_end || null,
+			hasCustomer: Boolean(state?.stripe_customer_id)
+		});
+	} catch (err) {
+		console.error('[Billing] state failed:', err.message);
+		res.status(500).json({ error: 'Failed to load billing state', code: 'BILLING_ERROR' });
+	}
+});
+
+app.post('/api/billing/create-checkout-session', async (req, res) => {
+	if (!billingReady()) return res.status(503).json({ error: 'Billing not configured', code: 'BILLING_DISABLED' });
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const stripe = getStripeClient();
+	const priceId = process.env.STRIPE_PRICE_PRO_MONTHLY;
+	const successUrl = process.env.STRIPE_CHECKOUT_SUCCESS_URL || `${req.protocol || 'https'}://${req.get('host') || 'localhost'}/index.html?billing=success`;
+	const cancelUrl = process.env.STRIPE_CHECKOUT_CANCEL_URL || `${req.protocol || 'https'}://${req.get('host') || 'localhost'}/index.html?billing=cancel`;
+	try {
+		let customerId = null;
+		const { rows } = await queryCoinsDb('SELECT stripe_customer_id FROM public.user_billing WHERE user_id = $1', [user.id]);
+		if (rows[0]?.stripe_customer_id) {
+			customerId = rows[0].stripe_customer_id;
+		} else {
+			const customer = await stripe.customers.create({
+				email: user.email || undefined,
+				metadata: { app_user_id: user.id }
+			});
+			customerId = customer.id;
+			await queryCoinsDb(
+				`INSERT INTO public.user_billing (user_id, stripe_customer_id, plan_code) VALUES ($1, $2, 'free')
+				 ON CONFLICT (user_id) DO UPDATE SET stripe_customer_id = EXCLUDED.stripe_customer_id`,
+				[user.id, customerId]
+			);
+		}
+		const session = await stripe.checkout.sessions.create({
+			customer: customerId,
+			mode: 'subscription',
+			line_items: [{ price: priceId, quantity: 1 }],
+			success_url: successUrl,
+			cancel_url: cancelUrl,
+			client_reference_id: user.id,
+			metadata: { app_user_id: user.id },
+			subscription_data: { metadata: { app_user_id: user.id } }
+		});
+		res.json({ url: session.url });
+	} catch (err) {
+		console.error('[Billing] checkout failed:', err.message);
+		res.status(500).json({ error: 'Failed to create checkout session', code: 'CHECKOUT_ERROR' });
+	}
+});
+
+app.post('/api/billing/create-portal-session', async (req, res) => {
+	if (!billingReady()) return res.status(503).json({ error: 'Billing not configured', code: 'BILLING_DISABLED' });
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const returnUrl = process.env.STRIPE_PORTAL_RETURN_URL || `${req.protocol || 'https'}://${req.get('host') || 'localhost'}/index.html`;
+	try {
+		const { rows } = await queryCoinsDb('SELECT stripe_customer_id FROM public.user_billing WHERE user_id = $1', [user.id]);
+		const customerId = rows[0]?.stripe_customer_id;
+		if (!customerId) {
+			return res.status(400).json({ error: 'No billing account found', code: 'NO_CUSTOMER' });
+		}
+		const stripe = getStripeClient();
+		const session = await stripe.billingPortal.sessions.create({
+			customer: customerId,
+			return_url: returnUrl
+		});
+		res.json({ url: session.url });
+	} catch (err) {
+		console.error('[Billing] portal failed:', err.message);
+		res.status(500).json({ error: 'Failed to create portal session', code: 'PORTAL_ERROR' });
 	}
 });
 
