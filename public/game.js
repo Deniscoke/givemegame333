@@ -68,6 +68,53 @@ const GP = (() => {
 		container.appendChild(m);
 	}
 
+	function _toggleSection(id, show) {
+		const s = el(id);
+		if (s) s.style.display = show ? '' : 'none';
+	}
+
+	function _renderPlayerBrief(pb) {
+		if (!pb || typeof pb !== 'object') { _toggleSection('section-player-brief', false); return; }
+		const has = (pb.goal && pb.goal.trim()) || (pb.rules && pb.rules.length) || (pb.roles && pb.roles.length) || (pb.winCondition && pb.winCondition.trim());
+		_toggleSection('section-player-brief', !!has);
+		if (!has) return;
+		const wrap = el('game-player-brief');
+		if (!wrap) return;
+		let h = '';
+		if (pb.goal && pb.goal.trim()) h += `<p class="player-brief-goal"><strong>Cíl:</strong> ${esc(pb.goal)}</p>`;
+		if (pb.rules && pb.rules.length) h += `<div class="player-brief-rules"><strong>Pravidla:</strong><ul>${pb.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>`;
+		if (pb.roles && pb.roles.length) h += `<div class="player-brief-roles"><strong>Role:</strong> ${esc(pb.roles.join(', '))}</div>`;
+		if (pb.winCondition && pb.winCondition.trim()) h += `<p class="player-brief-win"><strong>Výhra:</strong> ${esc(pb.winCondition)}</p>`;
+		wrap.innerHTML = h;
+	}
+
+	function _renderLessonFlow(flow) {
+		if (!Array.isArray(flow) || flow.length === 0) { _toggleSection('section-lesson-flow', false); return; }
+		_toggleSection('section-lesson-flow', true);
+		const wrap = el('game-lesson-flow');
+		if (!wrap) return;
+		wrap.innerHTML = flow.map(p => {
+			let h = `<div class="lesson-phase"><div class="lesson-phase-header">${esc(p.phase)}`;
+			if (p.minutes > 0) h += ` <span class="lesson-phase-min">(${p.minutes} min)</span>`;
+			h += `</div>`;
+			if (p.teacherActions && p.teacherActions.length) h += `<div class="lesson-teacher"><strong>Učitel:</strong><ul>${p.teacherActions.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>`;
+			if (p.studentActions && p.studentActions.length) h += `<div class="lesson-student"><strong>Žáci:</strong><ul>${p.studentActions.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>`;
+			h += `</div>`;
+			return h;
+		}).join('');
+	}
+
+	function _renderAdaptations(adaptations) {
+		if (!Array.isArray(adaptations) || adaptations.length === 0) { _toggleSection('section-adaptations', false); return; }
+		_toggleSection('section-adaptations', true);
+		const wrap = el('game-adaptations');
+		if (!wrap) return;
+		wrap.innerHTML = adaptations.map(a => {
+			if (!a.scenario && !a.adjustment) return '';
+			return `<div class="adaptation-pair"><span class="adaptation-scenario">${esc(a.scenario || '')}</span> → <span class="adaptation-adjustment">${esc(a.adjustment || '')}</span></div>`;
+		}).filter(Boolean).join('');
+	}
+
 	// ─── Section toggle (same `.collapsed` mechanism as main app) ─
 
 	function toggleSection(name) {
@@ -110,8 +157,12 @@ const GP = (() => {
 	// ─── Render ──────────────────────────────────────────────────
 
 	function renderGame(game, rvp) {
+		game = (window.normalizeGameSchema && window.normalizeGameSchema(game)) || game;
 		const settingLabels = { indoor: 'Uvnitř', outdoor: 'Venku', any: 'Kdekoli' };
 		const modeEmojis    = { party: '🎉', classroom: '📚', reflection: '🪞', circus: '🎪', cooking: '🍳', meditation: '🧘' };
+		const pc = game.playerCount || { min: 1, max: 30 };
+		const dur = game.duration || { min: 15, max: 30 };
+		const age = game.ageRange || { min: 6, max: 15 };
 
 		// Mode badge
 		const badge = el('game-mode-badge');
@@ -131,17 +182,27 @@ const GP = (() => {
 		badges.innerHTML = '';
 		const settingLabel = settingLabels[game.setting] || game.setting || '';
 		addBadge(badges, settingLabel, 'setting', game.setting === 'outdoor' ? 'bi-tree' : game.setting === 'indoor' ? 'bi-house' : 'bi-globe2');
-		addBadge(badges, `${game.playerCount?.min}–${game.playerCount?.max} hráčů`, 'players', 'bi-people');
-		addBadge(badges, `${game.duration?.min}–${game.duration?.max} min`, 'duration', 'bi-clock');
-		addBadge(badges, `Věk ${game.ageRange?.min}–${game.ageRange?.max}`, 'age', 'bi-person');
+		addBadge(badges, `${pc.min}–${pc.max} hráčů`, 'players', 'bi-people');
+		addBadge(badges, `${dur.min}–${dur.max} min`, 'duration', 'bi-clock');
+		addBadge(badges, `Věk ${age.min}–${age.max}`, 'age', 'bi-person');
 
 		// Meta row
 		const metaRow = el('game-meta-row');
 		metaRow.innerHTML = '';
-		addMeta(metaRow, 'bi-people-fill', `${game.playerCount?.min}–${game.playerCount?.max}`, 'Hráči');
-		addMeta(metaRow, 'bi-clock-fill',  `${game.duration?.min}–${game.duration?.max}m`,       'Délka');
-		addMeta(metaRow, 'bi-geo-alt-fill', settingLabel,                                         'Prostředí');
-		addMeta(metaRow, 'bi-person-fill',  `${game.ageRange?.min}–${game.ageRange?.max}`,        'Věk');
+		addMeta(metaRow, 'bi-people-fill', `${pc.min}–${pc.max}`, 'Hráči');
+		addMeta(metaRow, 'bi-clock-fill',  `${dur.min}–${dur.max}m`, 'Délka');
+		addMeta(metaRow, 'bi-geo-alt-fill', settingLabel, 'Prostředí');
+		addMeta(metaRow, 'bi-person-fill',  `${age.min}–${age.max}`, 'Věk');
+
+		// Game Pack
+		_renderPlayerBrief(game.playerBrief);
+		_renderLessonFlow(game.lessonFlow);
+		_renderAdaptations(game.adaptations);
+		renderList('game-risk-notes', game.riskNotes);
+		_toggleSection('section-risk', Array.isArray(game.riskNotes) && game.riskNotes.length > 0);
+		renderList('game-teacher-guide', game.teacherGuide);
+		const tgEl = el('game-teacher-guide');
+		if (tgEl) tgEl.style.display = (game.teacherGuide && game.teacherGuide.length) ? '' : 'none';
 
 		// Lists
 		renderList('game-materials',    game.materials);

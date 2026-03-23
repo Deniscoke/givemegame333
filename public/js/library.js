@@ -244,6 +244,10 @@ const Library = (() => {
 				'<textarea class="lib-edit-textarea" id="lib-ei-adap-' + id + '" rows="2">' + escapeHtml(arr(game.adaptationTips)) + '</textarea>' +
 				'<span class="lib-edit-label">Poznámky pre vedúceho</span>' +
 				'<textarea class="lib-edit-textarea" id="lib-ei-fac-' + id + '" rows="2">' + escapeHtml(game.facilitatorNotes || '') + '</textarea>' +
+				'<span class="lib-edit-label">Príručka pre učiteľa (jeden bod na riadok)</span>' +
+				'<textarea class="lib-edit-textarea" id="lib-ei-tguide-' + id + '" rows="2">' + escapeHtml(arr(game.teacherGuide)) + '</textarea>' +
+				'<span class="lib-edit-label">Riziká (jedno na riadok)</span>' +
+				'<textarea class="lib-edit-textarea" id="lib-ei-risk-' + id + '" rows="2">' + escapeHtml(arr(game.riskNotes)) + '</textarea>' +
 				'<div class="lib-edit-actions">' +
 				'<button class="library-action-btn" onclick="event.stopPropagation(); App.Library._saveEdit(\'' + id + '\', this)"><i class="bi bi-check-lg"></i> Uložiť</button>' +
 				'<button class="library-action-btn" onclick="event.stopPropagation(); App.Library._cancelEdit(\'' + id + '\', this)"><i class="bi bi-x-lg"></i> Zrušiť</button>' +
@@ -270,7 +274,9 @@ const Library = (() => {
 			reflectionPrompts: toArr(v('refl')),
 			safetyNotes:       toArr(v('safe')),
 			adaptationTips:    toArr(v('adap')),
-			facilitatorNotes:  v('fac').trim()
+			facilitatorNotes:  v('fac').trim(),
+			teacherGuide:      toArr(v('tguide')),
+			riskNotes:         toArr(v('risk'))
 		};
 		if (!patch.title) { GameUI.toast('Názov nemôže byť prázdny'); return; }
 		const headers = await getAuthHeader();
