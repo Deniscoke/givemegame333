@@ -137,20 +137,29 @@ const Reflection = (() => {
 		const submitBtn = document.getElementById('btn-reflection-submit');
 		if (submitBtn) submitBtn.disabled = true;
 
+		let res;
 		try {
 			if (sessionCode && supabaseClient) {
-				const { data: { session: authSession } } = await supabaseClient.auth.getSession();
+				const { data: { session: authSession } } = await Promise.race([
+					supabaseClient.auth.getSession(),
+					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+				]);
 				const token = authSession?.access_token;
 				if (!token) throw new Error(_t('refl_no_auth', 'Prihlás sa pre odoslanie reflexie'));
 
-				const res = await fetch(`/api/sessions/${sessionCode}/reflect`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'Authorization': `Bearer ${token}`
-					},
-					body: JSON.stringify({ reflection_data: data })
-				});
+				const ctrl = new AbortController();
+				const fetchTimeout = setTimeout(() => ctrl.abort(), 12000);
+				try {
+					res = await fetch(`/api/sessions/${sessionCode}/reflect`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${token}`
+						},
+						signal: ctrl.signal,
+						body: JSON.stringify({ reflection_data: data })
+					});
+				} finally { clearTimeout(fetchTimeout); }
 				if (!res.ok) {
 					const err = await res.json().catch(() => ({}));
 					throw new Error(err.error || _t('refl_error', 'Chyba pri odosielaní reflexie'));

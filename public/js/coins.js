@@ -82,7 +82,10 @@ const Coins = (() => {
 	async function logTransaction(amount, action) {
 		if (!supabaseClient) return;
 		try {
-			const { data: { session } } = await supabaseClient.auth.getSession();
+			const { data: { session } } = await Promise.race([
+				supabaseClient.auth.getSession(),
+				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+			]);
 			if (!session?.access_token) return;
 			fetch('/api/coins/log', {
 				method: 'POST',

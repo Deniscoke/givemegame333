@@ -37,7 +37,7 @@ const Session = (() => {
 		if (!token) { GameUI.toast(_t('sess_login_create', 'Prihlás sa pre vytvorenie session')); return; }
 
 		try {
-			const res = await fetch('/api/sessions', {
+			const res = await fetchApi('/api/sessions', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
 				body: JSON.stringify({ game_json: gameJson })
@@ -66,7 +66,7 @@ const Session = (() => {
 		if (!token) { GameUI.toast(_t('sess_login_join', 'Prihlás sa pre pripojenie do session')); return; }
 
 		try {
-			const res = await fetch(`/api/sessions/${code}/join`, {
+			const res = await fetchApi(`/api/sessions/${code}/join`, {
 				method: 'POST',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
@@ -92,7 +92,7 @@ const Session = (() => {
 		const token = await _token();
 		if (!token) return;
 		try {
-			const res = await fetch(`/api/sessions/${_code}/start`, {
+			const res = await fetchApi(`/api/sessions/${_code}/start`, {
 				method: 'POST',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
@@ -109,7 +109,7 @@ const Session = (() => {
 		const token = await _token();
 		if (!token) return;
 		try {
-			const res = await fetch(`/api/sessions/${_code}/complete`, {
+			const res = await fetchApi(`/api/sessions/${_code}/complete`, {
 				method: 'POST',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
@@ -310,7 +310,7 @@ const Session = (() => {
 		const token = await _token();
 		if (!token) return;
 		try {
-			const res = await fetch(`/api/sessions/${_code}`, {
+			const res = await fetchApi(`/api/sessions/${_code}`, {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 			if (!res.ok) return;
@@ -373,16 +373,26 @@ const Session = (() => {
 
 	async function _token() {
 		try {
-			const { data: { session } } = await supabaseClient.auth.getSession();
+			const { data: { session } } = await Promise.race([
+				supabaseClient.auth.getSession(),
+				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+			]);
 			return session?.access_token || null;
 		} catch { return null; }
+	}
+
+	async function fetchApi(url, opts = {}, ms = 12000) {
+		const ctrl = new AbortController();
+		const t = setTimeout(() => ctrl.abort(), ms);
+		try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+		finally { clearTimeout(t); }
 	}
 
 	async function _loadAndRenderCompetencies() {
 		try {
 			const token = await _token();
 			if (!token) return;
-			const res = await fetch('/api/profile/competencies', {
+			const res = await fetchApi('/api/profile/competencies', {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 			if (!res.ok) return;
@@ -398,7 +408,7 @@ const Session = (() => {
 		try {
 			const token = await _token();
 			if (!token) return;
-			const res = await fetch(`/api/sessions/${_code}/my-reward`, {
+			const res = await fetchApi(`/api/sessions/${_code}/my-reward`, {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 			if (!res.ok) return;

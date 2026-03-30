@@ -21,11 +21,21 @@ const GameAPI = (() => {
 		const headers = { ...(typeof ngrokHeaders === 'function' ? ngrokHeaders() : {}), 'Content-Type': 'application/json' };
 		try {
 			if (typeof supabaseClient !== 'undefined' && supabaseClient?.auth) {
-				const { data: { session } } = await supabaseClient.auth.getSession();
+				const { data: { session } } = await Promise.race([
+					supabaseClient.auth.getSession(),
+					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+				]);
 				if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
 			}
-		} catch (e) { /* ignore */ }
+		} catch (e) { /* ignore — no auth header on timeout */ }
 		return headers;
+	}
+
+	async function fetchApi(url, opts = {}, ms = 15000) {
+		const ctrl = new AbortController();
+		const t = setTimeout(() => ctrl.abort(), ms);
+		try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+		finally { clearTimeout(t); }
 	}
 
 	async function generateGame(filters) {
@@ -49,11 +59,12 @@ const GameAPI = (() => {
 		console.log('[GameAPI] Generujem cez AI...', filters);
 
 		try {
-			const res = await fetch('/api/generate-game', {
+			// 65s — matches Vercel maxDuration:60 + buffer for auth header
+		const res = await fetchApi('/api/generate-game', {
 				method: 'POST',
 				headers: await getAuthHeaders(),
 				body: JSON.stringify({ filters })
-			});
+			}, 65000);
 
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
@@ -78,11 +89,11 @@ const GameAPI = (() => {
 	async function remixGame(sourceGame, filters) {
 		console.log('[GameAPI] Remixujem hru:', sourceGame?.title, filters);
 		try {
-			const res = await fetch('/api/generate-game', {
+			const res = await fetchApi('/api/generate-game', {
 				method: 'POST',
 				headers: await getAuthHeaders(),
 				body: JSON.stringify({ filters, remix: sourceGame })
-			});
+			}, 65000);
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
 				throw new Error(err.error || `Server vrátil ${res.status}`);

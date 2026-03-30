@@ -79,7 +79,10 @@ const App = (() => {
 
 		async function _getToken() {
 			try {
-				const { data: { session } } = await supabaseClient.auth.getSession();
+				const { data: { session } } = await Promise.race([
+					supabaseClient.auth.getSession(),
+					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+				]);
 				return session?.access_token || null;
 			} catch { return null; }
 		}
@@ -182,7 +185,10 @@ const App = (() => {
 		// Load competency points on startup
 		(async () => {
 			try {
-				const { data: { session } } = await supabaseClient.auth.getSession();
+				const { data: { session } } = await Promise.race([
+					supabaseClient.auth.getSession(),
+					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+				]);
 				if (!session?.access_token) return;
 				const res = await fetch('/api/profile/competencies', {
 					headers: { 'Authorization': `Bearer ${session.access_token}` }
@@ -199,35 +205,41 @@ const App = (() => {
 			if (!window.currentGame) return;
 			Reflection.open(window.currentGame, null, async (reflectionData) => {
 				try {
-					const { data: { session } } = await supabaseClient.auth.getSession();
+					const { data: { session } } = await Promise.race([
+						supabaseClient.auth.getSession(),
+						new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+					]);
 					const token = session?.access_token;
 					if (!token) { GameUI.toast(t('sess_no_login_points', 'Prihlás sa pre získanie bodov')); return; }
 
-					const res = await fetch('/api/profile/complete-solo', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${token}`
-						},
-						body: JSON.stringify({ game_json: window.currentGame })
-					});
-					const data = await res.json();
-					if (!res.ok) {
-						if (data.code === 'SOLO_DAILY_LIMIT') {
-							throw new Error(data.error || t('err_solo_daily_limit', 'Denný limit solo hier dosiahnutý'));
+					const ctrl = new AbortController();
+					const _ft = setTimeout(() => ctrl.abort(), 12000);
+					try {
+						let res;
+						try {
+							res = await fetch('/api/profile/complete-solo', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+								signal: ctrl.signal,
+								body: JSON.stringify({ game_json: window.currentGame })
+							});
+						} finally { clearTimeout(_ft); }
+						const data = await res.json();
+						if (!res.ok) {
+							if (data.code === 'SOLO_DAILY_LIMIT') {
+								throw new Error(data.error || t('err_solo_daily_limit', 'Denný limit solo hier dosiahnutý'));
+							}
+							throw new Error(data.error || 'Chyba servera');
 						}
-						throw new Error(data.error || 'Chyba servera');
+						const kompCount = Object.keys(data.awarded || {}).length;
+						GameUI.toast(t('solo_comp_awarded', '🧠 +{pts} bodov! 🪙 +{coins} coinov')
+							.replace('{pts}', kompCount * 50).replace('{coins}', 100));
+						if (window.Coins?.load) window.Coins.load();
+						if (GameUI.renderCompetencies) GameUI.renderCompetencies(data.competencies || data.competency_points || {});
+						if (GameUI.showLevelUpFeedback && data.level_changes) GameUI.showLevelUpFeedback(data.level_changes);
+					} catch (err) {
+						GameUI.toast(`❌ ${err.message}`);
 					}
-
-					const kompCount = Object.keys(data.awarded || {}).length;
-					GameUI.toast(t('solo_comp_awarded', '🧠 +{pts} bodov! 🪙 +{coins} coinov')
-						.replace('{pts}', kompCount * 50).replace('{coins}', 100));
-					if (window.Coins?.load) window.Coins.load();
-					if (GameUI.renderCompetencies) GameUI.renderCompetencies(data.competencies || data.competency_points || {});
-					if (GameUI.showLevelUpFeedback && data.level_changes) GameUI.showLevelUpFeedback(data.level_changes);
-				} catch (err) {
-					GameUI.toast(`❌ ${err.message}`);
-				}
 			});
 		});
 
@@ -846,7 +858,10 @@ const App = (() => {
 	async function syncAuthFromSupabase() {
 		if (!supabaseClient) return;
 		try {
-			const { data: { session } } = await supabaseClient.auth.getSession();
+			const { data: { session } } = await Promise.race([
+				supabaseClient.auth.getSession(),
+				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+			]);
 			if (session?.user) {
 				const user = {
 					uid: session.user.id,
@@ -1416,12 +1431,21 @@ const App = (() => {
 				return;
 			}
 			try {
-				const { data: { session } } = await supabaseClient.auth.getSession();
+				const { data: { session } } = await Promise.race([
+					supabaseClient.auth.getSession(),
+					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+				]);
 				const token = session?.access_token;
 				if (!token) { compSection.style.display = 'none'; return; }
-				const res = await fetch('/api/profile/competencies', {
-					headers: { 'Authorization': `Bearer ${token}` }
-				});
+				const ctrl = new AbortController();
+				const _cft = setTimeout(() => ctrl.abort(), 10000);
+				let res;
+				try {
+					res = await fetch('/api/profile/competencies', {
+						headers: { 'Authorization': `Bearer ${token}` },
+						signal: ctrl.signal
+					});
+				} finally { clearTimeout(_cft); }
 				if (!res.ok) { compSection.style.display = 'none'; return; }
 				const data = await res.json();
 				GameUI.renderProfileCompetencies(compBars, data.competencies || data.competency_points || {});
@@ -1551,7 +1575,10 @@ const App = (() => {
 	const Billing = (() => {
 		async function getToken() {
 			try {
-				const { data: { session } } = await supabaseClient?.auth?.getSession();
+				const { data: { session } } = await Promise.race([
+					supabaseClient?.auth?.getSession(),
+					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+				]);
 				return session?.access_token || null;
 			} catch { return null; }
 		}

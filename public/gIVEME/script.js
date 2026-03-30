@@ -29,7 +29,10 @@ function getCurrentUser() {
 async function syncAuthFromSupabase() {
 	if (!supabase) return null;
 	try {
-		const { data: { session } } = await supabase.auth.getSession();
+		const { data: { session } } = await Promise.race([
+			supabase.auth.getSession(),
+			new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+		]);
 		if (session?.user) {
 			const user = {
 				uid: session.user.id,

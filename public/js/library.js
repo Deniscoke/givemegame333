@@ -19,10 +19,20 @@ const Library = (() => {
 	async function getAuthHeader() {
 		if (!supabaseClient) return null;
 		try {
-			const { data: { session } } = await supabaseClient.auth.getSession();
+			const { data: { session } } = await Promise.race([
+				supabaseClient.auth.getSession(),
+				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+			]);
 			if (!session?.access_token) return null;
 			return { Authorization: `Bearer ${session.access_token}` };
 		} catch { return null; }
+	}
+
+	async function fetchApi(url, opts = {}, ms = 12000) {
+		const ctrl = new AbortController();
+		const t = setTimeout(() => ctrl.abort(), ms);
+		try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+		finally { clearTimeout(t); }
 	}
 
 	async function saveCurrentGame() {
@@ -40,7 +50,7 @@ const Library = (() => {
 		try {
 			const headers = await getAuthHeader();
 			if (!headers) { GameUI.toast('Chyba autentifikácie'); return; }
-			const resp = await fetch('/api/games/save', {
+			const resp = await fetchApi('/api/games/save', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...headers },
 				body: JSON.stringify({ game: currentGame })
@@ -98,7 +108,7 @@ const Library = (() => {
 				listEl.innerHTML = '<div class="library-empty">Chyba autentifikácie.</div>';
 				return;
 			}
-			const resp = await fetch('/api/games/library?limit=50', { headers });
+			const resp = await fetchApi('/api/games/library?limit=50', { headers });
 			if (!resp.ok) throw new Error('Nepodarilo sa načítať');
 			const { games } = await resp.json();
 
@@ -218,7 +228,7 @@ const Library = (() => {
 		if (!headers) return;
 		btn.disabled = true;
 		try {
-			const resp = await fetch('/api/games/' + id, { headers });
+			const resp = await fetchApi('/api/games/' + id, { headers });
 			if (!resp.ok) throw new Error('Nepodarilo sa načítať hru');
 			const game = await resp.json();
 			item._originalInfoHtml = info.innerHTML;
@@ -283,7 +293,7 @@ const Library = (() => {
 		if (!headers) return;
 		btn.disabled = true;
 		try {
-			const resp = await fetch('/api/games/' + id, {
+			const resp = await fetchApi('/api/games/' + id, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json', ...headers },
 				body: JSON.stringify(patch)
