@@ -268,14 +268,26 @@ const Coins = (() => {
 		}
 
 		try {
-			const { data: { session } } = await supabaseClient.auth.getSession();
-			if (!session?.access_token) {
+			// 8s timeout — prevents hanging if Supabase auth is slow on token refresh
+			const sessionResult = await Promise.race([
+				supabaseClient.auth.getSession(),
+				new Promise((_, reject) => setTimeout(() => reject(new Error('session_timeout')), 8000))
+			]);
+			if (!sessionResult.data?.session?.access_token) {
 				if (listEl) listEl.innerHTML = '<div class="coin-history-empty">Prihlás sa pre históriu</div>';
 				return;
 			}
-			const resp = await fetch('/api/coins/history?limit=10', {
-				headers: { Authorization: `Bearer ${session.access_token}` }
-			});
+			const controller = new AbortController();
+			const fetchTimeout = setTimeout(() => controller.abort(), 10000);
+			let resp;
+			try {
+				resp = await fetch('/api/coins/history?limit=10', {
+					headers: { Authorization: `Bearer ${sessionResult.data.session.access_token}` },
+					signal: controller.signal
+				});
+			} finally {
+				clearTimeout(fetchTimeout);
+			}
 			if (!resp.ok) throw new Error(resp.status);
 			const { transactions } = await resp.json();
 			if (!listEl) return;

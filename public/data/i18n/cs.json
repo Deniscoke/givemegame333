@@ -264,6 +264,7 @@
   "comp_panel_title":     "Kompetence",
   "solo_comp_awarded":   "🧠 +{pts} bodů! 🪙 +{coins} coinů",
   "tab_analytics":        "Analytika",
+  "ana_hint":             "📊 Klikni na záložku Analytika",
   "ana_loading":          "Načítám...",
   "ana_login_required":   "Přihlas se pro statistiky",
   "ana_no_data":          "Zatím bez dat",

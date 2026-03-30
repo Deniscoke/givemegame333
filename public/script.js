@@ -1453,12 +1453,24 @@ const App = (() => {
 			}
 			el.innerHTML = `<p class="analytics-loading">${t('ana_loading', 'Načítavam...')}</p>`;
 			try {
-				const { data: { session } } = await supabaseClient.auth.getSession();
-				const token = session?.access_token;
-				if (!token) { el.innerHTML = ''; return; }
-				const res = await fetch('/api/profile/analytics', {
-					headers: { 'Authorization': `Bearer ${token}` }
-				});
+				// 8s timeout — prevents hanging if Supabase auth is slow on token refresh
+				const sessionResult = await Promise.race([
+					supabaseClient.auth.getSession(),
+					new Promise((_, reject) => setTimeout(() => reject(new Error('session_timeout')), 8000))
+				]);
+				const token = sessionResult.data?.session?.access_token;
+				if (!token) { el.innerHTML = `<p class="analytics-hint">${t('ana_login_required', 'Prihlás sa pre štatistiky')}</p>`; return; }
+				const controller = new AbortController();
+				const fetchTimeout = setTimeout(() => controller.abort(), 10000);
+				let res;
+				try {
+					res = await fetch('/api/profile/analytics', {
+						headers: { 'Authorization': `Bearer ${token}` },
+						signal: controller.signal
+					});
+				} finally {
+					clearTimeout(fetchTimeout);
+				}
 				if (!res.ok) { el.innerHTML = `<p class="analytics-hint">${t('ana_no_data', 'Zatiaľ bez dát')}</p>`; return; }
 				const data = await res.json();
 				el.innerHTML = _renderAnalytics(data);

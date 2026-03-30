@@ -259,6 +259,7 @@
   "comp_panel_title":     "Competencies",
   "solo_comp_awarded":   "🧠 +{pts} pts! 🪙 +{coins} coins",
   "tab_analytics":        "Analytics",
+  "ana_hint":             "📊 Click the Analytics tab",
   "ana_loading":          "Loading...",
   "ana_login_required":   "Sign in for stats",
   "ana_no_data":          "No data yet",

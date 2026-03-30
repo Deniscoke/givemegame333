@@ -260,6 +260,7 @@
   "comp_panel_title":     "Kompetenzen",
   "solo_comp_awarded":   "🧠 +{pts} Pkt! 🪙 +{coins} Coins",
   "tab_analytics":        "Analytik",
+  "ana_hint":             "📊 Analytik-Tab anklicken",
   "ana_loading":          "Laden...",
   "ana_login_required":   "Anmelden für Statistik",
   "ana_no_data":          "Noch keine Daten",

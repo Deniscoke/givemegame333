@@ -253,6 +253,7 @@
   "comp_panel_title":     "Kompetencie",
   "solo_comp_awarded":   "🧠 +{pts} bodov! 🪙 +{coins} coinov",
   "tab_analytics":        "Analytika",
+  "ana_hint":             "📊 Klikni na záložku Analýza",
   "ana_loading":          "Načítavam...",
   "ana_login_required":   "Prihlás sa pre štatistiky",
   "ana_no_data":          "Zatiaľ bez dát",
