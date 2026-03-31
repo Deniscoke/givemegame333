@@ -356,9 +356,6 @@ const App = (() => {
 		isGenerating = true;
 		if (window.SFX) SFX.play('generate');
 
-		// Deduct coins immediately
-		Coins.spend(costAction);
-
 		const btn = document.getElementById('btn-generate');
 		const btnText = document.getElementById('generate-text');
 		btn.classList.add('generating');
@@ -372,6 +369,10 @@ const App = (() => {
 			const game = sourceGame
 				? await GameAPI.remixGame(sourceGame, filters)
 				: await GameAPI.generateGame(filters);
+
+			// Deduct coins ONLY after successful generation
+			Coins.spend(costAction);
+
 			currentGame = game;
 			const sessionBtn = document.getElementById('btn-create-session');
 			if (sessionBtn) sessionBtn.style.display = '';
@@ -398,8 +399,7 @@ const App = (() => {
 			GameUI.showScreen('welcome');
 
 			// Chyba — ale vďaka fallbacku v GameAPI sa sem dostaneme len zriedka
-			let errorMsg = t('status_error', 'ERROR') + ' — ' + err.message;
-
+			const errorMsg = t('status_error', 'ERROR') + ' — ' + err.message;
 			GameUI.toast(errorMsg);
 			GameUI.setStatus(t('status_error', 'ERROR'));
 		} finally {

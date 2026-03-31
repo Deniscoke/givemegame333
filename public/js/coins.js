@@ -24,17 +24,21 @@ const Coins = (() => {
 	};
 
 	const costs = {
-		generate: 125,
-		surprise: 50
+		generate: 50,
+		surprise: 25,
+		remix: 25
 	};
+
+	// Starter coins — enough for several generations without earning first
+	const STARTER_COINS = 500;
 
 	async function load() {
 		// 1. VŽDY načítaj z localStorage (pretrvá pri refreshi)
 		let fromStorage = Math.max(0, parseInt(localStorage.getItem(STORAGE_KEY)) || 0);
-		// Starter coiny pre nových používateľov (aby mohli generovať prvú hru)
+		// Starter coiny pre nových používateľov (aby mohli generovať prvé hry)
 		if (fromStorage === 0 && !localStorage.getItem(STORAGE_KEY + '_init')) {
-			fromStorage = 150;
-			localStorage.setItem(STORAGE_KEY, '150');
+			fromStorage = STARTER_COINS;
+			localStorage.setItem(STORAGE_KEY, String(STARTER_COINS));
 			localStorage.setItem(STORAGE_KEY + '_init', '1');
 		}
 
