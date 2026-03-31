@@ -15,7 +15,7 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 const Session = (() => {
-	const JOIN_COST = 200;
+	const JOIN_COST = 100; // musí byť rovnaké ako SESSION_JOIN_COST v server.js
 
 	// Resolve translation at call-time so language changes are respected
 	const _t = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
@@ -60,10 +60,24 @@ const Session = (() => {
 
 	async function join(rawCode) {
 		const code = (rawCode || '').toUpperCase().trim();
-		if (code.length !== 6) { GameUI.toast(_t('sess_bad_code', '⚠️ Zadaj 6-znakový kód')); return; }
+		if (code.length !== 6) {
+			_setJoinError(_t('sess_bad_code', '⚠️ Zadaj 6-znakový kód'));
+			return;
+		}
 
-		const token = await _token();
-		if (!token) { GameUI.toast(_t('sess_login_join', 'Prihlás sa pre pripojenie do session')); return; }
+		_setJoinLoading(true);
+
+		// Try to get token; if null, attempt a session refresh first (expired token scenario)
+		let token = await _token();
+		if (!token && typeof syncAuthFromSupabase === 'function') {
+			await syncAuthFromSupabase();
+			token = await _token();
+		}
+		if (!token) {
+			_setJoinLoading(false);
+			_setJoinError(_t('sess_login_join', 'Prihlás sa pre pripojenie'));
+			return;
+		}
 
 		try {
 			const res = await fetchApi(`/api/sessions/${code}/join`, {
@@ -71,19 +85,26 @@ const Session = (() => {
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 			const data = await res.json();
-			if (!res.ok) { GameUI.toast(`❌ ${data.error}`); return; }
+			if (!res.ok) {
+				_setJoinLoading(false);
+				_setJoinError(data.error || `Chyba ${res.status}`);
+				return;
+			}
 
 			_code      = code;
 			_sessionId = data.session_id;
 			_isHost    = false;
 
-			GameUI.toast(_t('sess_joined', '✅ Pripojený! Vstup stojí {cost} 🪙 — odráta sa pri štarte.').replace('{cost}', JOIN_COST));
+			_closeJoinModal();
 			_openLobby();
 			_subscribe();
 			_startPoll();
 			await _refreshParticipants();
 		} catch (err) {
-			GameUI.toast(`❌ ${err.message}`);
+			_setJoinLoading(false);
+			_setJoinError(err.name === 'AbortError'
+				? _t('sess_timeout', 'Server neodpovedal — skús znova')
+				: err.message);
 		}
 	}
 
@@ -137,9 +158,65 @@ const Session = (() => {
 		}
 	}
 
+	// ─── Join modal (replaces browser prompt for better UX) ──────────
+
 	function openJoinDialog() {
-		const code = prompt('Zadaj kód session (6 znakov):');
-		if (code?.trim()) join(code.trim());
+		let modal = document.getElementById('session-join-modal');
+		if (!modal) {
+			modal = document.createElement('div');
+			modal.id = 'session-join-modal';
+			modal.className = 'modal-overlay';
+			modal.style.cssText = 'display:flex;z-index:10000';
+			document.body.appendChild(modal);
+		}
+		modal.style.display = 'flex';
+		modal.innerHTML = `
+			<div class="modal-box" style="max-width:360px;text-align:center">
+				<div class="modal-header" style="justify-content:center">
+					<h3>🎮 ${_t('sess_join_title','Pripojiť sa k session')}</h3>
+				</div>
+				<p style="opacity:0.6;font-size:12px;margin-bottom:16px">
+					${_t('sess_join_hint','Zadaj 6-znakový kód od hostitela')}
+				</p>
+				<input id="join-code-input" type="text" maxlength="6"
+					placeholder="XXXXXX"
+					style="width:100%;font-size:24px;text-align:center;letter-spacing:6px;text-transform:uppercase;
+					       padding:10px;border-radius:8px;border:2px solid var(--accent,#633cff);background:var(--bg,#1a1a2e);color:var(--text,#fff);margin-bottom:12px;box-sizing:border-box"
+					oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
+					onkeydown="if(event.key==='Enter')Session._submitJoin()">
+				<div id="join-error" style="color:#f87171;font-size:12px;min-height:18px;margin-bottom:8px"></div>
+				<div style="display:flex;gap:8px">
+					<button class="btn btn-retro" style="flex:1" onclick="Session._closeJoinModal()">${_t('cancel','Zrušiť')}</button>
+					<button id="btn-join-submit" class="btn btn-retro" style="flex:2;background:var(--accent,#633cff);color:#fff"
+					        onclick="Session._submitJoin()">
+						${_t('sess_btn_join','Pripojiť sa')} · ${JOIN_COST} 🪙
+					</button>
+				</div>
+			</div>`;
+		setTimeout(() => document.getElementById('join-code-input')?.focus(), 50);
+	}
+
+	function _submitJoin() {
+		const input = document.getElementById('join-code-input');
+		if (input) join(input.value);
+	}
+
+	function _closeJoinModal() {
+		const modal = document.getElementById('session-join-modal');
+		if (modal) modal.style.display = 'none';
+	}
+
+	function _setJoinLoading(on) {
+		const btn = document.getElementById('btn-join-submit');
+		const input = document.getElementById('join-code-input');
+		if (btn) { btn.disabled = on; btn.textContent = on ? '⏳ Pripájam...' : `${_t('sess_btn_join','Pripojiť sa')} · ${JOIN_COST} 🪙`; }
+		if (input) input.disabled = on;
+	}
+
+	function _setJoinError(msg) {
+		const el = document.getElementById('join-error');
+		if (el) el.textContent = msg || '';
+		else GameUI.toast(`❌ ${msg}`);
 	}
 
 	// ─── Realtime ─────────────────────────────────────────────────
@@ -159,7 +236,8 @@ const Session = (() => {
 			.on('postgres_changes', {
 				event: '*',
 				schema: 'public',
-				table: 'session_participants'
+				table: 'session_participants',
+				filter: `session_id=eq.${_sessionId}`
 			}, () => _refreshParticipants())
 			.subscribe();
 	}
@@ -417,7 +495,7 @@ const Session = (() => {
 		} catch (e) { /* silent */ }
 	}
 
-	return { create, join, start, complete, openJoinDialog, _closeLobby };
+	return { create, join, start, complete, openJoinDialog, _closeLobby, _submitJoin, _closeJoinModal };
 })();
 
 window.Session = Session;
