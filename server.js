@@ -2405,6 +2405,14 @@ app.get('/api/status', (req, res) => {
 	});
 });
 
+// ─── gIVEMEEDU frontend pages ───
+app.get('/edu', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
+app.get('/edu/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
+app.get('/edu/index.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
+app.get('/edu/classes.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'classes.html')));
+app.get('/edu/gradebook.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'gradebook.html')));
+app.get('/edu/attendance.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'attendance.html')));
+
 // ─── Shareable game page — serves game.html for any valid UUID path ───
 app.get('/game/:id', (req, res) => {
 	const { id } = req.params;
