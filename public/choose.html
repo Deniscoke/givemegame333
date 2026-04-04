@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gIVEME — Vyber rozhranie</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      padding: 24px;
+    }
+
+    .logo {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 22px;
+      color: #fff;
+      margin-bottom: 8px;
+      letter-spacing: 2px;
+    }
+    .logo span { color: #8338ec; }
+
+    .subtitle {
+      font-size: 14px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 48px;
+    }
+
+    .user-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 40px;
+      padding: 8px 16px;
+      margin-bottom: 48px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+    }
+    .user-bar img {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+    }
+    .user-bar button {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.4);
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 8px;
+      text-decoration: underline;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      max-width: 700px;
+      width: 100%;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 36px 28px;
+      text-align: center;
+      cursor: pointer;
+      text-decoration: none;
+      color: #fff;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.09);
+    }
+
+    .card.game {
+      border-color: rgba(131, 56, 236, 0.5);
+    }
+    .card.game:hover {
+      border-color: #8338ec;
+      box-shadow: 0 0 40px rgba(131, 56, 236, 0.25);
+    }
+
+    .card.edu {
+      border-color: rgba(37, 99, 235, 0.5);
+    }
+    .card.edu:hover {
+      border-color: #2563eb;
+      box-shadow: 0 0 40px rgba(37, 99, 235, 0.25);
+    }
+
+    .card-icon {
+      font-size: 48px;
+      line-height: 1;
+    }
+
+    .card-name {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+    .card.game .card-name { color: #a855f7; }
+    .card.edu .card-name  { color: #60a5fa; }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: rgba(255,255,255,0.55);
+      line-height: 1.5;
+    }
+
+    .card-btn {
+      display: inline-block;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+    .card.game .card-btn {
+      background: #8338ec;
+      color: #fff;
+    }
+    .card.edu .card-btn {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    @media (max-width: 580px) {
+      .cards { grid-template-columns: 1fr; }
+      .logo { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo">gIVEME<span>.</span>IO</div>
+  <p class="subtitle">Vyber rozhranie</p>
+
+  <div id="user-bar" class="user-bar" style="display:none">
+    <img id="user-photo" src="" alt="" onerror="this.style.display='none'">
+    <span id="user-name"></span>
+    <button onclick="logout()">Odhlasiť</button>
+  </div>
+
+  <div class="cards">
+    <a href="/index.html" class="card game">
+      <div class="card-icon">🎮</div>
+      <div class="card-name">gIVEMEGAME</div>
+      <div class="card-title">Herné rozhranie</div>
+      <div class="card-desc">Generuj hry pomocou AI, hraj multiplayer sessiony, zbieraj kompetenie a mince.</div>
+      <span class="card-btn">Hrať →</span>
+    </a>
+
+    <a href="/edu/index.html" class="card edu">
+      <div class="card-icon">🏫</div>
+      <div class="card-name">gIVEMEEDU</div>
+      <div class="card-title">Školské rozhranie</div>
+      <div class="card-desc">Evidencia tried, žiakov, klasifikácia, dochádzka a prepojenie s hernými kompetenciami.</div>
+      <span class="card-btn">Spravovať →</span>
+    </a>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script>
+  (function () {
+    const SUPABASE_URL = 'https://vhpkkbixshfyytohkruv.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
+
+    // Check auth — if not logged in, redirect to login
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { detectSessionInUrl: true, persistSession: true }
+    });
+
+    sb.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        window.location.href = '/';
+        return;
+      }
+      // Show user bar
+      const stored = JSON.parse(sessionStorage.getItem('givemegame_user') || '{}');
+      const name = stored.name || session.user.email?.split('@')[0] || 'User';
+      const photo = stored.photo || session.user.user_metadata?.avatar_url || '';
+      document.getElementById('user-name').textContent = name;
+      document.getElementById('user-photo').src = photo;
+      document.getElementById('user-bar').style.display = 'flex';
+    });
+
+    window.logout = async function () {
+      await sb.auth.signOut();
+      sessionStorage.removeItem('givemegame_user');
+      window.location.href = '/';
+    };
+  })();
+  </script>
+</body>
+</html>

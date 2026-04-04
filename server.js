@@ -2405,6 +2405,9 @@ app.get('/api/status', (req, res) => {
 	});
 });
 
+// ─── App chooser page ───
+app.get('/choose.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'choose.html')));
+
 // ─── gIVEMEEDU frontend pages ───
 app.get('/edu', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
 app.get('/edu/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
