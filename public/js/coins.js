@@ -46,14 +46,13 @@ const Coins = (() => {
 		if (user && user.uid !== 'guest' && supabaseClient && supabaseProfilesOk) {
 			try {
 				const { data, error } = await supabaseClient.from('profiles').select('coins').eq('id', user.uid).single();
-				if (error) { supabaseProfilesOk = false; balance = fromStorage; }
+				if (error) { balance = fromStorage; }
 				else {
 					const fromSupabase = Math.max(0, parseInt(data?.coins) || 0);
 					balance = Math.max(fromSupabase, fromStorage);
 					if (balance > fromSupabase) save();
 				}
 			} catch (e) {
-				supabaseProfilesOk = false;
 				balance = fromStorage;
 			}
 		} else {
@@ -78,8 +77,8 @@ const Coins = (() => {
 				avatar_url: user.photo || null,
 				updated_at: new Date().toISOString()
 			}, { onConflict: 'id' }).then(({ error }) => {
-				if (error) supabaseProfilesOk = false;
-			}).catch(() => { supabaseProfilesOk = false; });
+				if (error) console.warn('[Coins] save error:', error.message);
+			}).catch(() => {});
 		}
 	}
 

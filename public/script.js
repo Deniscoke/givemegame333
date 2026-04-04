@@ -953,12 +953,15 @@ const App = (() => {
 		const user = getCurrentUser();
 		if (!user || !supabaseClient) return;
 		try {
-			const { data: rows, error } = await supabaseClient
-				.from('quest_log')
-				.select('game_data')
-				.eq('user_id', user.uid)
-				.order('created_at', { ascending: false })
-				.limit(100);
+			const { data: rows, error } = await Promise.race([
+				supabaseClient
+					.from('quest_log')
+					.select('game_data')
+					.eq('user_id', user.uid)
+					.order('created_at', { ascending: false })
+					.limit(100),
+				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+			]);
 			if (error) throw error;
 			const games = (rows || []).map(r => r.game_data).filter(Boolean);
 			if (games.length > 0) GameUI.loadHistory(games);
@@ -969,10 +972,10 @@ const App = (() => {
 		const user = getCurrentUser();
 		if (!user || !supabaseClient) return;
 		try {
-			await supabaseClient.from('quest_log').insert({
-				user_id: user.uid,
-				game_data: game
-			});
+			await Promise.race([
+				supabaseClient.from('quest_log').insert({ user_id: user.uid, game_data: game }),
+				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+			]);
 		} catch (e) { console.warn('[QuestLog] save:', e); }
 	}
 

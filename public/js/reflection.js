@@ -164,6 +164,15 @@ const Reflection = (() => {
 					const err = await res.json().catch(() => ({}));
 					throw new Error(err.error || _t('refl_error', 'Chyba pri odosielaní reflexie'));
 				}
+			} else {
+				// Solo flow — ulož reflexiu do localStorage ako záloha
+				try {
+					const key = 'givemegame_solo_reflections';
+					const existing = JSON.parse(localStorage.getItem(key) || '[]');
+					existing.unshift({ ts: new Date().toISOString(), data });
+					if (existing.length > 20) existing.length = 20; // max 20 záznamov
+					localStorage.setItem(key, JSON.stringify(existing));
+				} catch (e) {}
 			}
 
 			close();

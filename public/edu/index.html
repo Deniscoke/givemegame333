@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gIVEMEEDU — Dashboard</title>
+  <link rel="stylesheet" href="/edu/css/edu.css">
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <nav class="edu-sidebar">
+    <div class="edu-sidebar-brand">
+      <h1>gIVEME</h1>
+      <span class="brand-badge">EDU</span>
+    </div>
+    <ul class="edu-sidebar-nav">
+      <li><a href="/edu/index.html" class="active"><span class="nav-icon">&#9632;</span> Dashboard</a></li>
+      <li><a href="/edu/classes.html"><span class="nav-icon">&#9733;</span> Triedy</a></li>
+      <li><a href="/edu/gradebook.html"><span class="nav-icon">&#9998;</span> Klasifikacia</a></li>
+      <li><a href="/edu/attendance.html"><span class="nav-icon">&#10003;</span> Dochadzka</a></li>
+    </ul>
+    <div class="edu-sidebar-footer">
+      <a href="/index.html">&larr; gIVEMEGAME</a>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="edu-main">
+    <header class="edu-topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="edu-menu-toggle" onclick="EduApp.toggleSidebar()">&#9776;</button>
+        <h2>Dashboard</h2>
+      </div>
+      <div id="edu-topbar-user" class="edu-topbar-user"></div>
+    </header>
+
+    <main class="edu-content">
+      <div id="alerts"></div>
+
+      <!-- No school state -->
+      <div id="no-school" style="display:none">
+        <div class="edu-card">
+          <h3>Vitajte v gIVEMEEDU</h3>
+          <p style="margin:12px 0;color:var(--edu-text-muted)">Nie ste clenom ziadnej skoly. Vytvorte novu alebo poziadajte administratora o pridanie.</p>
+          <button class="edu-btn edu-btn-primary" onclick="showCreateSchool()">+ Vytvorit skolu</button>
+        </div>
+        <div id="create-school-form" style="display:none" class="edu-card">
+          <h3>Nova skola</h3>
+          <div class="edu-form-group">
+            <label>Nazov skoly *</label>
+            <input type="text" id="school-name" class="edu-input" placeholder="ZS s MS Nazov">
+          </div>
+          <div class="edu-form-group">
+            <label>Adresa</label>
+            <input type="text" id="school-address" class="edu-input" placeholder="Ulica 1, Mesto">
+          </div>
+          <div class="edu-form-group">
+            <label>ICO</label>
+            <input type="text" id="school-ico" class="edu-input" placeholder="12345678">
+          </div>
+          <button class="edu-btn edu-btn-primary" onclick="createSchool()">Vytvorit</button>
+        </div>
+      </div>
+
+      <!-- Dashboard content -->
+      <div id="dashboard" style="display:none">
+        <div class="edu-stats" id="stats-grid"></div>
+        <div class="edu-card">
+          <div class="edu-card-header">
+            <h3>Rychly pristup</h3>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <a href="/edu/classes.html" class="edu-btn edu-btn-primary">Triedy</a>
+            <a href="/edu/gradebook.html" class="edu-btn edu-btn-secondary">Klasifikacia</a>
+            <a href="/edu/attendance.html" class="edu-btn edu-btn-secondary">Dochadzka</a>
+            <a href="/index.html" class="edu-btn edu-btn-secondary">&rarr; gIVEMEGAME</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="edu-loading" id="loading"><div class="edu-spinner"></div></div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/edu/js/edu-auth.js"></script>
+  <script src="/edu/js/edu-app.js"></script>
+  <script>
+  (async function () {
+    const profile = await EduApp.init();
+    document.getElementById('loading').style.display = 'none';
+    if (!profile) return;
+
+    if (!EduApp.hasSchool()) {
+      document.getElementById('no-school').style.display = 'block';
+      return;
+    }
+
+    // Load dashboard data
+    document.getElementById('dashboard').style.display = 'block';
+    try {
+      const classData = await EduAuth.apiFetch('/classes');
+      const stats = document.getElementById('stats-grid');
+      stats.innerHTML = `
+        <div class="edu-stat-card">
+          <div class="stat-value">${classData.classes?.length || 0}</div>
+          <div class="stat-label">Triedy</div>
+        </div>
+        <div class="edu-stat-card">
+          <div class="stat-value">${profile.school.role}</div>
+          <div class="stat-label">Vasa rola</div>
+        </div>
+        <div class="edu-stat-card">
+          <div class="stat-value">${profile.school.name || '-'}</div>
+          <div class="stat-label">Skola</div>
+        </div>
+      `;
+    } catch (e) {
+      EduApp.showAlert('alerts', 'Chyba pri nacitavani dat: ' + e.message, 'error');
+    }
+  })();
+
+  function showCreateSchool() {
+    document.getElementById('create-school-form').style.display = 'block';
+  }
+
+  async function createSchool() {
+    const name = document.getElementById('school-name').value.trim();
+    if (!name) return EduApp.showAlert('alerts', 'Zadajte nazov skoly', 'error');
+    try {
+      await EduAuth.apiFetch('/schools', {
+        method: 'POST',
+        body: {
+          name,
+          address: document.getElementById('school-address').value.trim() || null,
+          ico: document.getElementById('school-ico').value.trim() || null
+        }
+      });
+      window.location.reload();
+    } catch (e) {
+      EduApp.showAlert('alerts', 'Chyba: ' + e.message, 'error');
+    }
+  }
+  </script>
+</body>
+</html>

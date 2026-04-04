@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gIVEMEEDU — Dochadzka</title>
+  <link rel="stylesheet" href="/edu/css/edu.css">
+</head>
+<body>
+  <nav class="edu-sidebar">
+    <div class="edu-sidebar-brand"><h1>gIVEME</h1><span class="brand-badge">EDU</span></div>
+    <ul class="edu-sidebar-nav">
+      <li><a href="/edu/index.html"><span class="nav-icon">&#9632;</span> Dashboard</a></li>
+      <li><a href="/edu/classes.html"><span class="nav-icon">&#9733;</span> Triedy</a></li>
+      <li><a href="/edu/gradebook.html"><span class="nav-icon">&#9998;</span> Klasifikacia</a></li>
+      <li><a href="/edu/attendance.html" class="active"><span class="nav-icon">&#10003;</span> Dochadzka</a></li>
+    </ul>
+    <div class="edu-sidebar-footer"><a href="/index.html">&larr; gIVEMEGAME</a></div>
+  </nav>
+
+  <div class="edu-main">
+    <header class="edu-topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="edu-menu-toggle" onclick="EduApp.toggleSidebar()">&#9776;</button>
+        <h2>Dochadzka</h2>
+      </div>
+      <div id="edu-topbar-user" class="edu-topbar-user"></div>
+    </header>
+
+    <main class="edu-content">
+      <div id="alerts"></div>
+
+      <div class="edu-card">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
+          <div class="edu-form-group" style="margin-bottom:0;flex:1;min-width:180px">
+            <label>Trieda</label>
+            <select id="att-class" class="edu-select" onchange="EduAttendance.loadAttendance()"></select>
+          </div>
+          <div class="edu-form-group" style="margin-bottom:0;min-width:160px">
+            <label>Datum</label>
+            <input type="date" id="att-date" class="edu-input" onchange="EduAttendance.loadAttendance()">
+          </div>
+        </div>
+      </div>
+
+      <div class="edu-card">
+        <div id="attendance-content">
+          <div class="edu-empty"><div class="edu-empty-icon">&#10003;</div><p>Vyberte triedu a datum</p></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/edu/js/edu-auth.js"></script>
+  <script src="/edu/js/edu-app.js"></script>
+  <script src="/edu/js/edu-attendance.js"></script>
+  <script>
+  (async function () {
+    const profile = await EduApp.init();
+    if (!profile || !EduApp.hasSchool()) {
+      window.location.href = '/edu/index.html';
+      return;
+    }
+    await EduAttendance.init();
+  })();
+  </script>
+</body>
+</html>

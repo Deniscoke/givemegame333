@@ -14,6 +14,7 @@ const path = require('path');
 const fs = require('fs');
 const { Pool } = require('pg');
 const { validateDurationGate, validateParticipantGate, validateHostCooldownGate } = require('./lib/reward-validation');
+const { createEduRouter } = require('./lib/edu-routes');
 const {
 	getUserBillingState,
 	hasPaidAccess,
@@ -263,6 +264,18 @@ function respondCoinApiDisabled(res) {
 async function queryCoinsDb(text, params = []) {
 	if (!coinsDbPool) throw new Error('Coin DB pool nie je inicializovaný');
 	return coinsDbPool.query(text, params);
+}
+
+// ─── gIVEMEEDU routes ───
+if (coinsDbPool) {
+	const eduRouter = createEduRouter({
+		pool: coinsDbPool,
+		requireSupabaseUser
+	});
+	app.use('/api/edu', eduRouter);
+	console.log('[EDU] gIVEMEEDU API mounted at /api/edu/*');
+} else {
+	console.warn('[EDU] gIVEMEEDU API disabled — SUPABASE_DB_URL not set.');
 }
 
 // ─── OpenAI klient ───

@@ -34,13 +34,23 @@ async function syncAuthFromSupabase() {
 			new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
 		]);
 		if (session?.user) {
+			const u = session.user;
 			const user = {
-				uid: session.user.id,
-				name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Player',
-				email: session.user.email,
-				photo: session.user.user_metadata?.avatar_url || null
+				uid: u.id,
+				name: u.user_metadata?.full_name || u.email?.split('@')[0] || 'Player',
+				email: u.email,
+				photo: u.user_metadata?.avatar_url || null
 			};
 			sessionStorage.setItem('givemegame_user', JSON.stringify(user));
+			// Upsert profiles — potrebné pre FK integrity (author_id → profiles.id)
+			supabase.from('profiles').upsert({
+				id: u.id,
+				display_name: user.name,
+				avatar_url: user.photo,
+				updated_at: new Date().toISOString()
+			}, { onConflict: 'id' }).then(({ error }) => {
+				if (error) console.warn('[gIVEME] profiles upsert:', error.message);
+			}).catch(() => {});
 			return user;
 		}
 	} catch (e) { /* ignore */ }
@@ -273,11 +283,14 @@ async function loadFeed() {
             if (txt) txt.textContent = '⚠️ Pripojenie k serveru zlyhalo. Skús obnoviť stránku.';
             return;
         }
-        const { data: posts, error } = await supabase
-            .from('giveme_posts')
-            .select('id, image_data, caption, prompt, created_at, author_id')
-            .order('created_at', { ascending: false })
-            .limit(50);
+        const { data: posts, error } = await Promise.race([
+            supabase
+                .from('giveme_posts')
+                .select('id, image_data, caption, prompt, created_at, author_id')
+                .order('created_at', { ascending: false })
+                .limit(50),
+            new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+        ]);
 
         loadingEl.style.display = 'none';
 
@@ -298,16 +311,22 @@ async function loadFeed() {
         emptyEl.style.display = 'none';
 
         const authorIds = [...new Set(posts.map(p => p.author_id))];
-        const { data: profilesData } = await supabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds);
+        const { data: profilesData } = await Promise.race([
+            supabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds),
+            new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+        ]).catch(() => ({ data: [] }));
         const profileMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
 
         // Načítaj lajky, komentáre, dary pre každý post
         const postIds = posts.map(p => p.id);
-        const [likesRes, commentsRes, donationsRes] = await Promise.all([
-            supabase.from('giveme_likes').select('post_id, user_id').in('post_id', postIds),
-            supabase.from('giveme_comments').select('post_id').in('post_id', postIds),
-            supabase.from('giveme_coin_donations').select('post_id, amount').in('post_id', postIds)
-        ]);
+        const [likesRes, commentsRes, donationsRes] = await Promise.race([
+            Promise.all([
+                supabase.from('giveme_likes').select('post_id, user_id').in('post_id', postIds),
+                supabase.from('giveme_comments').select('post_id').in('post_id', postIds),
+                supabase.from('giveme_coin_donations').select('post_id, amount').in('post_id', postIds)
+            ]),
+            new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+        ]).catch(() => [{ data: [] }, { data: [] }, { data: [] }]);
 
         const likesByPost = {};
         (likesRes.data || []).forEach(l => {
@@ -683,6 +702,38 @@ async function sendCoins(event, postId, recipientId, amount) {
         return;
     }
 
+    // Check balance BEFORE deducting
+    let hasViaParent = false;
+    try {
+        if (window.parent !== window && window.parent.App?.Coins?.getBalance) {
+            hasViaParent = window.parent.App.Coins.getBalance() >= amount;
+        }
+    } catch (e) {}
+    if (!hasViaParent && totalCoins < amount) {
+        alert('Nemáš dostatok coinov!');
+        return;
+    }
+
+    // Persist to Supabase FIRST — deduct only on success
+    if (me && supabase && recipientId) {
+        try {
+            await Promise.race([
+                supabase.from('giveme_coin_donations').insert({
+                    post_id: postId,
+                    donor_id: me.uid,
+                    recipient_id: recipientId,
+                    amount
+                }),
+                new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+            ]);
+        } catch (e) {
+            console.warn('[gIVEME] sendCoins insert:', e);
+            alert('Nepodarilo sa odoslať coiny. Skús znova.');
+            return;
+        }
+    }
+
+    // Deduct only after confirmed insert
     let deducted = false;
     try {
         if (window.parent !== window && window.parent.App?.Coins?.spendAmount) {
@@ -691,25 +742,10 @@ async function sendCoins(event, postId, recipientId, amount) {
         }
     } catch (e) {}
     if (!deducted) {
-        if (totalCoins < amount) {
-            alert('Nemáš dostatok coinov!');
-            return;
-        }
         totalCoins -= amount;
         try { localStorage.setItem(COINS_STORAGE_KEY, String(totalCoins)); } catch (e) {}
     }
     updateCoinDisplay();
-
-    if (me && supabase && recipientId) {
-        try {
-            await supabase.from('giveme_coin_donations').insert({
-                post_id: postId,
-                donor_id: me.uid,
-                recipient_id: recipientId,
-                amount
-            });
-        } catch (e) { console.warn('[gIVEME] sendCoins insert:', e); }
-    }
 
     const safeId = String(postId).replace(/-/g, '');
     const received = document.getElementById('coins-received-' + safeId);
@@ -1361,6 +1397,8 @@ function openMyProfile(ev) {
 
 window.addEventListener('message', (e) => {
     if (!e.data) return;
+    // Akceptuj správy len z rovnakej domény (bezpečnostná kontrola)
+    if (e.origin !== window.location.origin) return;
     if (e.data.type === 'giveme_syncCoins') syncCoinsFromParent();
     // Parent posiela user context (gIVEME účet prepojený s Google)
     if (e.data.type === 'giveme_syncUser') {

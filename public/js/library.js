@@ -129,7 +129,7 @@ const Library = (() => {
 		const headers = await getAuthHeader();
 		if (!headers) return;
 		try {
-			const resp = await fetch(`/api/games/${id}`, { headers });
+			const resp = await fetchApi(`/api/games/${id}`, { headers });
 			if (!resp.ok) throw new Error('Nepodarilo sa načítať hru');
 			const game = await resp.json();
 			currentGame = game;
@@ -152,7 +152,7 @@ const Library = (() => {
 		const headers = await getAuthHeader();
 		if (!headers) return;
 		try {
-			const resp = await fetch(`/api/games/${id}/favorite`, {
+			const resp = await fetchApi(`/api/games/${id}/favorite`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json', ...headers },
 				body: JSON.stringify({ favorite: newFav })
@@ -168,7 +168,7 @@ const Library = (() => {
 		const headers = await getAuthHeader();
 		if (!headers) return;
 		try {
-			const resp = await fetch(`/api/games/${id}`, { method: 'DELETE', headers });
+			const resp = await fetchApi(`/api/games/${id}`, { method: 'DELETE', headers });
 			if (!resp.ok) throw new Error('Chyba mazania');
 			_allGames = _allGames.filter(g => g.id !== id);
 			const item = btn.closest('.library-item');
@@ -194,7 +194,7 @@ const Library = (() => {
 		const headers = await getAuthHeader();
 		if (!headers) { GameUI.toast('Prihlás sa pre zdieľanie'); return; }
 		try {
-			const resp = await fetch(`/api/games/${id}/publish`, {
+			const resp = await fetchApi(`/api/games/${id}/publish`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json', ...headers },
 				body: JSON.stringify({ publish: true })
@@ -382,7 +382,7 @@ const Library = (() => {
 	async function _rate(id, rating, feedback) {
 		const headers = await getAuthHeader();
 		if (!headers) return;
-		return fetch(`/api/games/${id}/rate`, {
+		return fetchApi(`/api/games/${id}/rate`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json', ...headers },
 			body: JSON.stringify({ rating, feedback: feedback || null })
@@ -419,7 +419,7 @@ const Library = (() => {
 		const headers = await getAuthHeader();
 		if (!headers) return;
 		try {
-			const resp = await fetch(`/api/games/${id}`, { headers });
+			const resp = await fetchApi(`/api/games/${id}`, { headers });
 			if (!resp.ok) throw new Error('Nepodarilo sa načítať hru');
 			const game = await resp.json();
 			currentGame = game;
