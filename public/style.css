@@ -3191,3 +3191,153 @@ body.light-mode #levelup-feedback {
 
 	@page { margin: 15mm; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   RPG Avatar — Picker & Display
+   Pixel-art fantasy style. Future-ready for animation keyframes.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* --- Avatar section in profile modal --- */
+.rpg-avatar-section {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px;
+	margin-bottom: 16px;
+	background: rgba(99, 60, 255, 0.08);
+	border: 2px solid rgba(99, 60, 255, 0.25);
+	border-radius: 12px;
+}
+.rpg-avatar-display {
+	width: 72px;
+	height: 72px;
+	border-radius: 12px;
+	overflow: hidden;
+	border: 3px solid var(--accent, #633cff);
+	background: rgba(0, 0, 0, 0.3);
+	flex-shrink: 0;
+	image-rendering: pixelated;
+}
+.rpg-avatar-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	image-rendering: pixelated;
+}
+.rpg-avatar-placeholder {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(99, 60, 255, 0.15);
+}
+.rpg-avatar-placeholder-icon {
+	font-size: 28px;
+}
+.rpg-avatar-info {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.rpg-avatar-role-badge {
+	display: inline-block;
+	font-family: 'Press Start 2P', cursive;
+	font-size: 9px;
+	padding: 3px 8px;
+	border-radius: 4px;
+	text-transform: uppercase;
+	width: fit-content;
+}
+.rpg-role-admin    { background: #7c3aed; color: #fff; }
+.rpg-role-teacher  { background: #0891b2; color: #fff; }
+.rpg-role-student  { background: #059669; color: #fff; }
+.rpg-avatar-school {
+	font-size: 11px;
+	opacity: 0.7;
+}
+.rpg-avatar-change-btn {
+	font-size: 10px !important;
+	padding: 6px 10px !important;
+	white-space: nowrap;
+}
+
+/* --- Idle animation (subtle float) — future: per-avatar keyframes --- */
+@keyframes rpg-idle-float {
+	0%, 100% { transform: translateY(0); }
+	50%      { transform: translateY(-3px); }
+}
+.rpg-avatar-idle {
+	animation: rpg-idle-float 3s ease-in-out infinite;
+}
+
+/* --- Avatar Picker Modal --- */
+.rpg-picker-box {
+	max-width: 520px;
+	width: 95vw;
+}
+.rpg-picker-hint {
+	text-align: center;
+	font-size: 12px;
+	opacity: 0.6;
+	margin: 0 0 16px 0;
+}
+.rpg-avatar-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+	gap: 12px;
+	padding: 4px;
+	max-height: 55vh;
+	overflow-y: auto;
+}
+.rpg-avatar-option {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 6px;
+	border: 3px solid rgba(255, 255, 255, 0.1);
+	border-radius: 12px;
+	background: rgba(0, 0, 0, 0.2);
+	cursor: pointer;
+	transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.rpg-avatar-option:hover {
+	border-color: rgba(99, 60, 255, 0.5);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(99, 60, 255, 0.2);
+}
+.rpg-avatar-option.rpg-avatar-selected {
+	border-color: var(--accent, #633cff);
+	background: rgba(99, 60, 255, 0.15);
+	box-shadow: 0 0 16px rgba(99, 60, 255, 0.3);
+}
+.rpg-avatar-option img {
+	width: 80px;
+	height: 80px;
+	object-fit: cover;
+	border-radius: 8px;
+	image-rendering: pixelated;
+}
+.rpg-avatar-label {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 8px;
+	text-transform: uppercase;
+	opacity: 0.8;
+}
+.rpg-picker-actions {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	margin-top: 16px;
+}
+.rpg-picker-deselect {
+	opacity: 0.6;
+	font-size: 10px !important;
+}
+.rpg-picker-deselect:hover { opacity: 1; }
+
+@media (max-width: 480px) {
+	.rpg-avatar-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+	.rpg-avatar-option img { width: 60px; height: 60px; }
+	.rpg-avatar-section { flex-wrap: wrap; }
+}

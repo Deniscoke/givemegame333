@@ -2181,6 +2181,89 @@ app.patch('/api/user/preferences', async (req, res) => {
 	}
 });
 
+// ─── RPG Avatar API ───
+// Gated behind school membership — only users inside a school with a valid
+// Sprint 1 role (admin/teacher/student) can select an RPG avatar.
+const VALID_AVATAR_IDS = [2, 3, 4, 5, 6, 7, 8];
+const RPG_AVATAR_LABELS = {
+	2: 'Scholar',
+	3: 'Builder',
+	4: 'Healer',
+	5: 'Shadow',
+	6: 'Alchemist',
+	7: 'Sage',
+	8: 'Knight',
+};
+
+app.get('/api/rpg/avatar', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	try {
+		// Check school membership (same query pattern as edu-routes getUserSchool)
+		const { rows: memberRows } = await queryCoinsDb(
+			`SELECT sm.role, s.name AS school_name
+			 FROM public.edu_school_memberships sm
+			 JOIN public.edu_schools s ON s.id = sm.school_id
+			 WHERE sm.user_id = $1 AND sm.archived_at IS NULL
+			 LIMIT 1`,
+			[user.id]
+		);
+		const eligible = memberRows.length > 0 && ['admin', 'teacher', 'student'].includes(memberRows[0].role);
+		// Fetch current avatar
+		const { rows: profileRows } = await queryCoinsDb(
+			`SELECT rpg_avatar_id FROM public.profiles WHERE id = $1`,
+			[user.id]
+		);
+		const currentAvatarId = profileRows[0]?.rpg_avatar_id || null;
+		res.json({
+			eligible,
+			role: eligible ? memberRows[0].role : null,
+			school_name: eligible ? memberRows[0].school_name : null,
+			current_avatar_id: currentAvatarId,
+			available: VALID_AVATAR_IDS.map(id => ({ id, label: RPG_AVATAR_LABELS[id], src: `/avatars/${id}.png` })),
+		});
+	} catch (err) {
+		console.error('[RPG] GET /api/rpg/avatar error:', err.message);
+		res.status(500).json({ error: 'Internal error' });
+	}
+});
+
+app.patch('/api/rpg/avatar', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	try {
+		// Gate: must belong to a school with a valid role
+		const { rows: memberRows } = await queryCoinsDb(
+			`SELECT sm.role
+			 FROM public.edu_school_memberships sm
+			 WHERE sm.user_id = $1 AND sm.archived_at IS NULL
+			 LIMIT 1`,
+			[user.id]
+		);
+		if (memberRows.length === 0 || !['admin', 'teacher', 'student'].includes(memberRows[0].role)) {
+			return res.status(403).json({ error: 'Musíš byť členom školy pre výber avatara.' });
+		}
+		const { avatar_id } = req.body || {};
+		// Allow null (deselect) or a valid ID
+		if (avatar_id !== null && !VALID_AVATAR_IDS.includes(avatar_id)) {
+			return res.status(400).json({ error: `Neplatný avatar. Povolené: ${VALID_AVATAR_IDS.join(', ')}` });
+		}
+		const { rowCount } = await queryCoinsDb(
+			`UPDATE public.profiles SET rpg_avatar_id = $1, updated_at = now() WHERE id = $2`,
+			[avatar_id, user.id]
+		);
+		if (rowCount === 0) {
+			return res.status(404).json({ error: 'Profil nenájdený' });
+		}
+		res.json({ ok: true, avatar_id });
+	} catch (err) {
+		console.error('[RPG] PATCH /api/rpg/avatar error:', err.message);
+		res.status(500).json({ error: 'Internal error' });
+	}
+});
+
 // ─── Pripravené zaujímavosti pre vypraváča ───
 let narratorFacts = { sk: [], cs: [], de: [], en: [], es: [] };
 try {

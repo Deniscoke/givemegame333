@@ -240,6 +240,9 @@ const App = (() => {
 					} catch (err) {
 						GameUI.toast(`❌ ${err.message}`);
 					}
+				} catch (outerErr) {
+					GameUI.toast(`❌ ${outerErr.message}`);
+				}
 			});
 		});
 
@@ -1390,6 +1393,20 @@ const App = (() => {
 			} else if (billingSection) billingSection.style.display = 'none';
 			switchTab('profil'); // Profil tab — billing section visible hneď
 			GameUI.openModal('profile-modal');
+
+			// RPG Avatar — load async, render if eligible (school member)
+			if (user && window.RpgAvatar) {
+				RpgAvatar.load().then(data => {
+					if (data?.eligible) {
+						RpgAvatar.renderProfileAvatar('rpg-avatar-container');
+						// Override profile-avatar with RPG avatar if set
+						if (data.current_avatar_id) {
+							const el = document.getElementById('profile-avatar');
+							if (el) el.innerHTML = `<img src="/avatars/${data.current_avatar_id}.png" alt="RPG Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;image-rendering:pixelated;">`;
+						}
+					}
+				});
+			}
 		}
 
 		async function logout() {
