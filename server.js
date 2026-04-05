@@ -93,7 +93,9 @@ app.use(express.json());
 // files in Sprint 2 to enable a nonce-based CSP.
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  // SAMEORIGIN instead of DENY: the profile modal embeds gIVEME/index.html
+  // in an iframe from the same origin, so DENY would break it.
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   // HSTS: tell browsers to use HTTPS for 2 years. Vercel enforces HTTPS at the
@@ -103,10 +105,15 @@ app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net",
-    "style-src 'self' 'unsafe-inline'",
+    // Bootstrap Icons CSS (cdn.jsdelivr.net) + Google Fonts stylesheet
+    "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com",
     "img-src 'self' data: https://*.supabase.co https://lh3.googleusercontent.com",
     "connect-src 'self' https://*.supabase.co",
-    "frame-ancestors 'none'",
+    // Google Fonts files (gstatic) + Bootstrap Icons font files (jsdelivr)
+    "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net",
+    // 'self' allows same-origin iframes (gIVEME social network in profile modal)
+    "frame-src 'self'",
+    "frame-ancestors 'self'",
     "form-action 'self'",
     "base-uri 'self'",
   ].join('; '));

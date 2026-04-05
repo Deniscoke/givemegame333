@@ -66,6 +66,17 @@
         <div class="edu-modal">
           <h3 id="students-modal-title">Ziaci</h3>
           <div id="students-modal-body"></div>
+
+          <!-- Enroll student form — visible to admins only (toggled by JS) -->
+          <div id="enroll-student-form" style="display:none;margin-top:16px;border-top:1px solid var(--edu-border,#e5e7eb);padding-top:16px">
+            <p style="font-size:13px;font-weight:600;margin-bottom:8px">Zapísat žiaka do triedy</p>
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <input type="email" id="enroll-email" class="edu-input" placeholder="email@ziaka.sk" style="flex:1">
+              <button class="edu-btn edu-btn-primary" id="btn-enroll-student" onclick="EduClasses.enrollStudent()">Zapísat</button>
+            </div>
+            <div id="enroll-msg" style="font-size:12px;margin-top:6px;min-height:18px"></div>
+          </div>
+
           <div class="edu-modal-actions">
             <button class="edu-btn edu-btn-secondary" onclick="EduClasses.closeModal()">Zavriet</button>
           </div>
