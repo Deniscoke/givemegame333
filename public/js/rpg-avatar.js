@@ -101,24 +101,33 @@ const RpgAvatar = (() => {
   function getSchoolName()  { return _data?.school_name || null; }
 
   // ─── Render: Profile Avatar Section ─────────────────────────────
-  // Call this from Profile.open() to inject the RPG avatar into the
-  // profile header area. Shows a small pixel-art avatar next to the
-  // Google avatar, with a "Change" button that opens the picker.
+  // Always shows — school members see the picker, non-members see a CTA
+  // to join a school via gIVEMEEDU.
   function renderProfileAvatar(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
+    container.style.display = 'block';
 
+    // Not eligible: no school membership → show teaser / CTA
     if (!_data || !_data.eligible) {
-      container.style.display = 'none';
+      container.innerHTML = `
+        <div class="rpg-avatar-section rpg-avatar-empty">
+          <div class="rpg-avatar-display rpg-avatar-placeholder">
+            <span class="rpg-avatar-placeholder-icon">\u2694\ufe0f</span>
+          </div>
+          <div class="rpg-avatar-info" style="flex:1">
+            <span style="font-family:'Press Start 2P',cursive;font-size:9px;display:block;margin-bottom:4px">RPG Avatar</span>
+            <span style="font-size:11px;opacity:0.65">Zapoj sa do školy cez gIVEMEEDU a vyber si svojho hrdinu.</span>
+          </div>
+          <a href="/edu/index.html" class="btn btn-retro rpg-avatar-change-btn" style="text-decoration:none;font-size:10px !important">&#127982; gIVEMEEDU</a>
+        </div>`;
       return;
     }
 
-    container.style.display = 'block';
     const currentId = _data.current_avatar_id;
     const schoolName = _data.school_name || '';
     const role = _data.role || '';
-
-    const roleLabels = { admin: 'Admin', teacher: 'Ucitel', student: 'Ziak' };
+    const roleLabels = { admin: 'Admin', teacher: 'Učiteľ', student: 'Žiak' };
     const roleBadge = roleLabels[role] || role;
 
     if (currentId) {
@@ -131,7 +140,7 @@ const RpgAvatar = (() => {
             <span class="rpg-avatar-role-badge rpg-role-${role}">${_esc(roleBadge)}</span>
             <span class="rpg-avatar-school">${_esc(schoolName)}</span>
           </div>
-          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-avatar-picker">Zmenit avatara</button>
+          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-avatar-picker">Zmeniť avatara</button>
         </div>`;
     } else {
       container.innerHTML = `
@@ -143,11 +152,10 @@ const RpgAvatar = (() => {
             <span class="rpg-avatar-role-badge rpg-role-${role}">${_esc(roleBadge)}</span>
             <span class="rpg-avatar-school">${_esc(schoolName)}</span>
           </div>
-          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-avatar-picker">Vyber si avatara</button>
+          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-avatar-picker">Vyber si avatara &#9654;</button>
         </div>`;
     }
 
-    // Bind click
     container.querySelector('[data-action="open-avatar-picker"]')?.addEventListener('click', () => {
       openPicker();
     });
