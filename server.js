@@ -69,6 +69,28 @@ app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
+// ─── Security headers ──────────────────────────────────────────────────────
+// Applied to every response. CSP uses 'unsafe-inline' because the current
+// frontend uses inline <script> blocks — tighten by moving to external .js
+// files in Sprint 2 to enable a nonce-based CSP.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https://*.supabase.co https://lh3.googleusercontent.com",
+    "connect-src 'self' https://*.supabase.co",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "base-uri 'self'",
+  ].join('; '));
+  next();
+});
+
 // Favicon — predchádza 404
 app.get('/favicon.ico', (req, res) => {
 	const icon = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
@@ -2415,6 +2437,7 @@ app.get('/edu/index.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu
 app.get('/edu/classes.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'classes.html')));
 app.get('/edu/gradebook.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'gradebook.html')));
 app.get('/edu/attendance.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'attendance.html')));
+app.get('/edu/members.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'members.html')));
 
 // ─── Shareable game page — serves game.html for any valid UUID path ───
 app.get('/game/:id', (req, res) => {

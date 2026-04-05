@@ -33,12 +33,16 @@ const EduClasses = (function () {
         <td>${esc(c.school_year)}</td>
         <td>${c.student_count || '-'}</td>
         <td>
-          <button class="edu-btn edu-btn-sm edu-btn-secondary" onclick="EduClasses.showStudents('${c.id}', '${esc(c.name)}')">Ziaci</button>
+          <button class="edu-btn edu-btn-sm edu-btn-secondary"
+            data-action="show-students"
+            data-class-id="${esc(c.id)}"
+            data-class-name="${esc(c.name)}">Ziaci</button>
         </td>
       </tr>`;
     }
     html += '</tbody></table>';
     container.innerHTML = html;
+    attachClassListeners();
   }
 
   async function showStudents(classId, className) {
@@ -64,7 +68,7 @@ const EduClasses = (function () {
       html += '</tbody></table>';
       body.innerHTML = html;
     } catch (e) {
-      body.innerHTML = `<div class="edu-alert edu-alert-error">${e.message}</div>`;
+      body.innerHTML = `<div class="edu-alert edu-alert-error">${esc(e.message)}</div>`;
     }
   }
 
@@ -90,8 +94,20 @@ const EduClasses = (function () {
       document.getElementById('create-class-form').style.display = 'none';
       await load();
     } catch (e) {
-      EduApp.showAlert('alerts', 'Chyba: ' + e.message, 'error');
+      EduApp.showAlert('alerts', 'Chyba: ' + esc(e.message), 'error');
     }
+  }
+
+  // ─── Attach event listeners after rendering ──────────────────
+  // Uses data-* attributes instead of inline onclick to avoid XSS via class name.
+  function attachClassListeners() {
+    const container = document.getElementById('classes-list');
+    if (!container) return;
+    container.querySelectorAll('[data-action="show-students"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        showStudents(btn.dataset.classId, btn.dataset.className);
+      });
+    });
   }
 
   function esc(s) {

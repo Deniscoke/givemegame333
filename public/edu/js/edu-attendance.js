@@ -44,7 +44,7 @@ const EduAttendance = (function () {
       _records = attData.attendance || [];
       renderAttendance();
     } catch (e) {
-      container.innerHTML = `<div class="edu-alert edu-alert-error">${e.message}</div>`;
+      container.innerHTML = `<div class="edu-alert edu-alert-error">${esc(e.message)}</div>`;
     }
   }
 
@@ -122,7 +122,7 @@ const EduAttendance = (function () {
       });
       EduApp.showAlert('alerts', 'Dochadzka ulozena.', 'info');
     } catch (e) {
-      EduApp.showAlert('alerts', 'Chyba: ' + e.message, 'error');
+      EduApp.showAlert('alerts', 'Chyba: ' + esc(e.message), 'error');
     }
   }
 

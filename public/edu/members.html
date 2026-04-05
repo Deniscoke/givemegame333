@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gIVEMEEDU — Clenovia a role</title>
+  <link rel="stylesheet" href="/edu/css/edu.css">
+  <style>
+    .role-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .role-badge.admin    { background: #fef3c7; color: #92400e; }
+    .role-badge.teacher  { background: #dbeafe; color: #1e40af; }
+    .role-badge.student  { background: #d1fae5; color: #065f46; }
+    .role-badge.parent   { background: #ede9fe; color: #5b21b6; }
+
+    .members-filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .filter-btn {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 2px solid #e5e7eb;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-weight: 600;
+    }
+    .filter-btn.active, .filter-btn:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+    .filter-btn.all.active  { border-color: #374151; color: #374151; background: #f3f4f6; }
+
+    .member-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .member-row:last-child { border-bottom: none; }
+    .member-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #e5e7eb;
+      flex-shrink: 0;
+    }
+    .member-avatar-placeholder {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .member-info { flex: 1; min-width: 0; }
+    .member-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .member-uid  { font-size: 11px; color: #9ca3af; font-family: monospace; }
+    .member-actions { display: flex; gap: 6px; align-items: center; }
+
+    .role-select {
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .role-select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-remove {
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: #fee2e2;
+      color: #b91c1c;
+      border: none;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-remove:hover { background: #fca5a5; }
+
+    .add-member-form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      margin-top: 4px;
+    }
+    .add-member-form .edu-form-group { margin-bottom: 0; flex: 1; min-width: 180px; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+
+    .stat-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-number { font-size: 28px; font-weight: 700; }
+    .stat-label  { font-size: 12px; color: #6b7280; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card.admin-card    .stat-number { color: #92400e; }
+    .stat-card.teacher-card  .stat-number { color: #1e40af; }
+    .stat-card.student-card  .stat-number { color: #065f46; }
+
+    .empty-state { text-align: center; padding: 40px; color: #9ca3af; }
+    .empty-state-icon { font-size: 40px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <nav class="edu-sidebar">
+    <div class="edu-sidebar-brand"><h1>gIVEME</h1><span class="brand-badge">EDU</span></div>
+    <ul class="edu-sidebar-nav">
+      <li><a href="/edu/index.html"><span class="nav-icon">&#9632;</span> Dashboard</a></li>
+      <li><a href="/edu/classes.html"><span class="nav-icon">&#9733;</span> Triedy</a></li>
+      <li><a href="/edu/gradebook.html"><span class="nav-icon">&#9998;</span> Klasifikacia</a></li>
+      <li><a href="/edu/attendance.html"><span class="nav-icon">&#10003;</span> Dochadzka</a></li>
+      <li><a href="/edu/members.html" class="active"><span class="nav-icon">&#128100;</span> Clenovia</a></li>
+    </ul>
+    <div class="edu-sidebar-footer"><a href="/index.html">&larr; gIVEMEGAME</a></div>
+  </nav>
+
+  <div class="edu-main">
+    <header class="edu-topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="edu-menu-toggle" onclick="EduApp.toggleSidebar()">&#9776;</button>
+        <h2>Clenovia a role</h2>
+      </div>
+      <div id="edu-topbar-user" class="edu-topbar-user"></div>
+    </header>
+
+    <main class="edu-content">
+      <div id="alerts"></div>
+
+      <!-- Role stats -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card admin-card">
+          <div class="stat-number" id="count-admin">—</div>
+          <div class="stat-label">Administratori</div>
+        </div>
+        <div class="stat-card teacher-card">
+          <div class="stat-number" id="count-teacher">—</div>
+          <div class="stat-label">Ucitelia</div>
+        </div>
+        <div class="stat-card student-card">
+          <div class="stat-number" id="count-student">—</div>
+          <div class="stat-label">Ziaci</div>
+        </div>
+      </div>
+
+      <!-- Member list -->
+      <div class="edu-card">
+        <div class="edu-card-header">
+          <h3>Zoznam clenov</h3>
+          <button class="edu-btn edu-btn-primary" id="btn-show-add" style="display:none"
+            onclick="EduMembers.toggleAddForm()">+ Pridat clena</button>
+        </div>
+
+        <!-- Add member form (admin only) -->
+        <div id="add-member-form" style="display:none" class="edu-card" style="margin-bottom:16px">
+          <h4 style="margin-bottom:12px">Pridat clena do skoly</h4>
+          <div class="add-member-form">
+            <div class="edu-form-group">
+              <label>Email pouzivatela *</label>
+              <input type="email" id="add-email" class="edu-input" placeholder="ucitel@skola.sk">
+            </div>
+            <div class="edu-form-group">
+              <label>Rola *</label>
+              <!-- Sprint 1 roles only. Parent deferred to Sprint 2. -->
+              <select id="add-role" class="edu-input">
+                <option value="teacher">Ucitel</option>
+                <option value="student">Ziak</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;padding-bottom:4px">
+              <button class="edu-btn edu-btn-primary" onclick="EduMembers.addMember()">Pridat</button>
+              <button class="edu-btn edu-btn-secondary" onclick="EduMembers.toggleAddForm()">Zrusit</button>
+            </div>
+          </div>
+          <div id="add-alerts" style="margin-top:8px"></div>
+        </div>
+
+        <!-- Filters — Sprint 1 roles only. Parent deferred to Sprint 2. -->
+        <div class="members-filters">
+          <button class="filter-btn all active" onclick="EduMembers.filter('all', this)">Vsetci</button>
+          <button class="filter-btn" onclick="EduMembers.filter('admin', this)">&#128081; Administratori</button>
+          <button class="filter-btn" onclick="EduMembers.filter('teacher', this)">&#128203; Ucitelia</button>
+          <button class="filter-btn" onclick="EduMembers.filter('student', this)">&#128218; Ziaci</button>
+        </div>
+
+        <div id="members-list"><div class="edu-loading"><div class="edu-spinner"></div></div></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/edu/js/edu-auth.js"></script>
+  <script src="/edu/js/edu-app.js"></script>
+  <script src="/edu/js/edu-members.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      await EduApp.init();
+      await EduMembers.init();
+    });
+  </script>
+</body>
+</html>

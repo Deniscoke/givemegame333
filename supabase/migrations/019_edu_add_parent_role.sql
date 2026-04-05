@@ -1,0 +1,19 @@
+-- Migration 019: Add 'parent' role — DEFERRED TO SPRINT 2
+--
+-- REASON: A parent role requires an explicit parent-child relationship
+-- table (e.g. edu_parent_student_links) before parents can safely access
+-- any student records. Enabling the role without that table would leave
+-- no enforceable scope on what data a parent can see.
+--
+-- Sprint 1 active roles: admin, teacher, student
+-- Sprint 2 will add: parent (with edu_parent_student_links table)
+--
+-- DO NOT APPLY this migration until Sprint 2 is implemented.
+
+-- COMMENTED OUT — not safe for production without relationship model:
+-- ALTER TABLE public.edu_school_memberships
+--   DROP CONSTRAINT IF EXISTS edu_school_memberships_role_check;
+--
+-- ALTER TABLE public.edu_school_memberships
+--   ADD CONSTRAINT edu_school_memberships_role_check
+--     CHECK (role IN ('admin', 'teacher', 'student', 'parent'));

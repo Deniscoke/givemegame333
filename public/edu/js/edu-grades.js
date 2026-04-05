@@ -52,7 +52,7 @@ const EduGrades = (function () {
       _students = studentData.students || [];
       renderGradebook();
     } catch (e) {
-      container.innerHTML = `<div class="edu-alert edu-alert-error">${e.message}</div>`;
+      container.innerHTML = `<div class="edu-alert edu-alert-error">${esc(e.message)}</div>`;
     }
   }
 
@@ -117,7 +117,7 @@ const EduGrades = (function () {
       await EduAuth.apiFetch('/gradebook/entries', { method: 'POST', body: { entries } });
       EduApp.showAlert('alerts', 'Hodnotenia ulozene.', 'info');
     } catch (e) {
-      EduApp.showAlert('alerts', 'Chyba: ' + e.message, 'error');
+      EduApp.showAlert('alerts', 'Chyba: ' + esc(e.message), 'error');
     }
   }
 
@@ -149,7 +149,7 @@ const EduGrades = (function () {
       EduApp.clearAlert('alerts');
       await loadGradebook();
     } catch (e) {
-      EduApp.showAlert('alerts', 'Chyba: ' + e.message, 'error');
+      EduApp.showAlert('alerts', 'Chyba: ' + esc(e.message), 'error');
     }
   }
 
