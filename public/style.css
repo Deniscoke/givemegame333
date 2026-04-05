@@ -386,8 +386,7 @@ header {
    =================================================== */
 .profile-modal-wide { max-width: 520px; width: 95vw; transition: max-width 0.25s, width 0.25s; }
 .profile-modal-wide.profile-modal-giveme { max-width: min(95vw, 640px); width: min(95vw, 640px); }
-.profile-modal-wide.profile-modal-talent { max-width: min(98vw, 900px); width: min(98vw, 900px); }
-.profile-tab-talent-content { padding: 0 !important; max-height: none !important; overflow: visible !important; }
+/* .profile-modal-talent removed — talent tree is now a full-screen RPG layer */
 .profile-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 2px solid var(--border); }
 .profile-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text); padding: 4px 8px; }
 .profile-modal-close:hover { color: var(--accent); }
@@ -3563,4 +3562,323 @@ body.light-mode #levelup-feedback {
 	.rpg-talent-name { font-size: 6px; }
 	.rpg-talent-node { padding: 8px 8px; }
 	.rpg-talent-icon { font-size: 20px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RPG SCREEN — full-viewport RPG profile layer
+   z-index 15000 (above modals at 9999, below talent confirm at 20000)
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Pixel-art scanline texture (subtle) */
+@keyframes rpg-scanlines {
+	0%   { background-position: 0 0; }
+	100% { background-position: 0 4px; }
+}
+
+.rpg-screen-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 15000;
+	background: #09091a;
+	display: flex;
+	flex-direction: column;
+	font-family: var(--font-body, sans-serif);
+	color: #e2e8f0;
+	/* subtle scanlines */
+	background-image: repeating-linear-gradient(
+		0deg,
+		transparent,
+		transparent 3px,
+		rgba(0,0,0,0.08) 3px,
+		rgba(0,0,0,0.08) 4px
+	);
+}
+
+.rpg-screen-inner {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+}
+
+/* ─── Header bar ─────────────────────────────────────────────────── */
+.rpg-screen-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 20px;
+	background: #0f0f24;
+	border-bottom: 2px solid #2d2d6b;
+	flex-shrink: 0;
+	height: 48px;
+}
+.rpg-screen-logo {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 10px;
+	color: #a855f7;
+	letter-spacing: 2px;
+	text-shadow: 0 0 12px rgba(168,85,247,0.6);
+}
+.rpg-screen-close {
+	background: none;
+	border: 2px solid #2d2d6b;
+	color: #94a3b8;
+	width: 32px;
+	height: 32px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 14px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.15s;
+	flex-shrink: 0;
+}
+.rpg-screen-close:hover { border-color: #a855f7; color: #a855f7; background: rgba(168,85,247,0.1); }
+
+/* ─── Body layout ────────────────────────────────────────────────── */
+.rpg-screen-body {
+	display: flex;
+	flex: 1;
+	overflow: hidden;
+	min-height: 0;
+}
+
+/* ─── Sidebar ────────────────────────────────────────────────────── */
+.rpg-screen-sidebar {
+	width: 210px;
+	min-width: 210px;
+	background: #0c0c20;
+	border-right: 2px solid #2d2d6b;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 16px 12px 12px;
+	gap: 10px;
+	overflow-y: auto;
+	flex-shrink: 0;
+}
+
+/* Avatar frame */
+.rpg-sidebar-avatar-wrap {
+	width: 120px;
+	height: 120px;
+	border: 3px solid #7c3aed;
+	border-radius: 12px;
+	overflow: hidden;
+	background: rgba(124,58,237,0.15);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	image-rendering: pixelated;
+	box-shadow: 0 0 20px rgba(124,58,237,0.35);
+	flex-shrink: 0;
+}
+.rpg-sidebar-avatar-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	image-rendering: pixelated;
+}
+.rpg-sidebar-avatar-placeholder { font-size: 44px; line-height: 1; }
+
+/* Class label */
+.rpg-sidebar-class-label {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 8px;
+	text-align: center;
+	color: #a855f7;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	line-height: 1.6;
+}
+
+/* Role + school */
+.rpg-sidebar-meta {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 5px;
+	width: 100%;
+	text-align: center;
+}
+.rpg-sidebar-school {
+	font-size: 10px;
+	opacity: 0.6;
+	text-align: center;
+	line-height: 1.4;
+}
+.rpg-sidebar-no-school {
+	font-size: 10px;
+	opacity: 0.4;
+	font-style: italic;
+}
+
+/* Coin display */
+.rpg-sidebar-coins {
+	font-size: 15px;
+	font-weight: 700;
+	color: #fcd34d;
+	padding: 8px 12px;
+	background: rgba(252,211,77,0.08);
+	border: 1px solid rgba(252,211,77,0.2);
+	border-radius: 8px;
+	width: 100%;
+	text-align: center;
+	text-shadow: 0 0 8px rgba(252,211,77,0.4);
+}
+
+/* Nav */
+.rpg-sidebar-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	width: 100%;
+	flex: 1;
+}
+.rpg-nav-btn {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 9px 12px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	color: #64748b;
+	cursor: pointer;
+	font-size: 11px;
+	text-align: left;
+	transition: all 0.15s;
+	width: 100%;
+}
+.rpg-nav-btn:hover:not([disabled]) {
+	background: rgba(168,85,247,0.12);
+	color: #e2e8f0;
+	border-color: rgba(168,85,247,0.4);
+}
+.rpg-nav-btn.active {
+	background: rgba(168,85,247,0.18);
+	color: #e2e8f0;
+	border-color: #7c3aed;
+	font-weight: 600;
+}
+.rpg-nav-btn[disabled] { opacity: 0.3; cursor: not-allowed; }
+.rpg-nav-btn-soon {
+	font-size: 7px;
+	opacity: 0.45;
+	margin-left: auto;
+	font-family: 'Press Start 2P', cursive;
+}
+
+/* Change-avatar button at bottom of sidebar */
+.rpg-sidebar-picker-btn {
+	width: 100%;
+	font-size: 9px !important;
+	padding: 7px 10px !important;
+	margin-top: auto;
+	opacity: 0.75;
+}
+.rpg-sidebar-picker-btn:hover { opacity: 1; }
+
+/* ─── Main panel area ────────────────────────────────────────────── */
+.rpg-screen-main {
+	flex: 1;
+	overflow-y: auto;
+	background: #0d0d1e;
+	min-width: 0;
+}
+.rpg-panel {
+	min-height: 100%;
+}
+
+/* Placeholder panels (future sections) */
+.rpg-coming-soon {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 60vh;
+	font-family: 'Press Start 2P', cursive;
+	font-size: 16px;
+	opacity: 0.2;
+	gap: 16px;
+	text-align: center;
+	line-height: 2;
+}
+.rpg-coming-soon small {
+	font-size: 8px;
+	opacity: 0.7;
+}
+
+/* Talent panel: hint text adjustments inside full-screen */
+#rpg-panel-talents .rpg-talent-hint {
+	color: #94a3b8;
+	border-bottom-color: #2d2d6b;
+	background: rgba(0,0,0,0.2);
+}
+#rpg-panel-talents .rpg-talent-tree {
+	background: transparent;
+}
+#rpg-panel-talents .rpg-talent-node {
+	background: rgba(255,255,255,0.04);
+	border-color: #2d2d6b;
+}
+#rpg-panel-talents .rpg-talent-node.affordable {
+	border-color: #7c3aed;
+	background: rgba(124,58,237,0.12);
+}
+#rpg-panel-talents .rpg-talent-node.affordable:hover {
+	box-shadow: 0 0 16px rgba(124,58,237,0.35);
+}
+#rpg-panel-talents .rpg-talent-node.unlocked {
+	border-color: #16a34a;
+	background: rgba(22,163,74,0.1);
+}
+#rpg-panel-talents .rpg-talent-divider {
+	background: #2d2d6b;
+	opacity: 0.6;
+}
+#rpg-panel-talents .rpg-talent-branch-label { color: #a855f7; }
+
+/* ─── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+	.rpg-screen-sidebar {
+		width: 160px;
+		min-width: 160px;
+		padding: 12px 8px;
+	}
+	.rpg-sidebar-avatar-wrap { width: 90px; height: 90px; }
+	.rpg-sidebar-class-label { font-size: 7px; }
+}
+
+@media (max-width: 500px) {
+	.rpg-screen-body { flex-direction: column; }
+	.rpg-screen-sidebar {
+		width: 100%;
+		min-width: 100%;
+		flex-direction: row;
+		flex-wrap: nowrap;
+		height: auto;
+		padding: 10px;
+		border-right: none;
+		border-bottom: 2px solid #2d2d6b;
+		gap: 10px;
+		overflow-x: auto;
+		align-items: flex-start;
+	}
+	.rpg-sidebar-avatar-wrap { width: 64px; height: 64px; flex-shrink: 0; }
+	.rpg-sidebar-class-label { display: none; }
+	.rpg-sidebar-meta { align-items: flex-start; }
+	.rpg-sidebar-coins { width: auto; white-space: nowrap; padding: 6px 10px; }
+	.rpg-sidebar-nav {
+		flex-direction: row;
+		flex: 1;
+		overflow-x: auto;
+		gap: 4px;
+	}
+	.rpg-nav-btn { white-space: nowrap; padding: 7px 10px; font-size: 10px; }
+	.rpg-nav-btn-soon { display: none; }
+	.rpg-sidebar-picker-btn { display: none !important; } /* use picker from avatar section instead */
+	.rpg-screen-main { flex: 1; min-height: 50vh; }
 }

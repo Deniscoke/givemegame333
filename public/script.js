@@ -1421,14 +1421,10 @@ const App = (() => {
 			document.querySelectorAll('.profile-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
 			document.getElementById('profile-tab-profil').style.display    = tab === 'profil'    ? 'block' : 'none';
 			document.getElementById('profile-tab-analytics').style.display = tab === 'analytics' ? 'block' : 'none';
-			document.getElementById('profile-tab-talent').style.display    = tab === 'talent'    ? 'block' : 'none';
 			document.getElementById('profile-tab-giveme').style.display    = tab === 'giveme'    ? 'block' : 'none';
 
 			const modalBox = document.querySelector('#profile-modal .modal-box');
-			if (modalBox) {
-				modalBox.classList.toggle('profile-modal-giveme', tab === 'giveme');
-				modalBox.classList.toggle('profile-modal-talent', tab === 'talent');
-			}
+			if (modalBox) modalBox.classList.toggle('profile-modal-giveme', tab === 'giveme');
 
 			if (tab === 'profil') {
 				const coinsEl = document.getElementById('profile-coins');
@@ -1437,23 +1433,10 @@ const App = (() => {
 				if (App?.Billing?.refreshState) App.Billing.refreshState();
 			}
 			if (tab === 'analytics') _loadAnalytics();
-			if (tab === 'talent') _loadTalentTree();
 			if (tab === 'giveme') {
 				const iframe = document.getElementById('giveme-iframe');
 				if (iframe) syncGivemeIframe(iframe);
 			}
-		}
-
-		async function _loadTalentTree() {
-			const user = getCurrentUser();
-			if (!user || user.uid === 'guest') {
-				const el = document.getElementById('rpg-talent-container');
-				if (el) el.innerHTML = '<p style="padding:16px;opacity:0.6;font-size:12px">Prihlás sa pre prístup k talent tree.</p>';
-				return;
-			}
-			if (!window.RpgTalents) return;
-			await RpgTalents.load(); // idempotent — returns cached data on subsequent calls
-			RpgTalents.render('rpg-talent-container');
 		}
 
 		async function _loadProfileCompetencies() {

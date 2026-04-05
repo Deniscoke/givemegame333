@@ -140,7 +140,7 @@ const RpgAvatar = (() => {
             <span class="rpg-avatar-role-badge rpg-role-${role}">${_esc(roleBadge)}</span>
             <span class="rpg-avatar-school">${_esc(schoolName)}</span>
           </div>
-          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-avatar-picker">Zmeniť avatara</button>
+          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-rpg-screen">\u2694\ufe0f RPG Profil</button>
         </div>`;
     } else {
       container.innerHTML = `
@@ -152,12 +152,12 @@ const RpgAvatar = (() => {
             <span class="rpg-avatar-role-badge rpg-role-${role}">${_esc(roleBadge)}</span>
             <span class="rpg-avatar-school">${_esc(schoolName)}</span>
           </div>
-          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-avatar-picker">Vyber si avatara &#9654;</button>
+          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-rpg-screen">\u2694\ufe0f RPG Profil &#9654;</button>
         </div>`;
     }
 
-    container.querySelector('[data-action="open-avatar-picker"]')?.addEventListener('click', () => {
-      openPicker();
+    container.querySelector('[data-action="open-rpg-screen"]')?.addEventListener('click', () => {
+      if (window.RpgScreen) RpgScreen.open();
     });
   }
 

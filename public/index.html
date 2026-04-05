@@ -648,7 +648,6 @@
 			<div class="profile-tabs">
 				<button class="profile-tab active" data-tab="profil" onclick="App.Profile.switchTab('profil')">Profil</button>
 				<button class="profile-tab" data-tab="analytics" onclick="App.Profile.switchTab('analytics')" data-i18n="tab_analytics">Analytika</button>
-				<button class="profile-tab" data-tab="talent" onclick="App.Profile.switchTab('talent')">⚔️ Talenты</button>
 				<button class="profile-tab" data-tab="giveme" onclick="App.Profile.switchTab('giveme')">gIVEME</button>
 			</div>
 			<div class="profile-tab-content" id="profile-tab-profil">
@@ -700,11 +699,58 @@
 					<button class="btn btn-retro" onclick="App.UI.closeModal('profile-modal')">Zavrieť</button>
 				</div>
 			</div>
-			<div class="profile-tab-content profile-tab-talent-content" id="profile-tab-talent" style="display:none;">
-				<div id="rpg-talent-container"></div>
-			</div>
 			<div class="profile-tab-content" id="profile-tab-giveme" style="display:none;">
 				<iframe id="giveme-iframe" src="gIVEME/index.html" title="gIVEME sociálna sieť" onload="App.Profile.onGivemeLoad(this)"></iframe>
+			</div>
+		</div>
+	</div>
+
+	<!-- ═══════════════════════════════════════════════════════════════
+	     RPG Screen — full-viewport RPG profile layer
+	     Opened via ⚔️ RPG Profil button in profile modal.
+	     Gated: eligible users only (school membership + role).
+	     ═══════════════════════════════════════════════════════════════ -->
+	<div id="rpg-screen" class="rpg-screen-overlay" style="display:none;" role="dialog" aria-label="RPG Profil" tabindex="-1">
+		<div class="rpg-screen-inner">
+
+			<!-- Top bar -->
+			<header class="rpg-screen-header">
+				<span class="rpg-screen-logo">⚔️ RPG PROFIL</span>
+				<button class="rpg-screen-close" id="rpg-screen-close" aria-label="Zavrieť">✕</button>
+			</header>
+
+			<div class="rpg-screen-body">
+
+				<!-- Left sidebar: avatar + nav -->
+				<aside class="rpg-screen-sidebar">
+					<div class="rpg-sidebar-avatar-wrap" id="rpg-sidebar-avatar">
+						<span class="rpg-sidebar-avatar-placeholder">⚔️</span>
+					</div>
+					<div class="rpg-sidebar-class-label" id="rpg-sidebar-class">—</div>
+					<div class="rpg-sidebar-meta" id="rpg-sidebar-meta"></div>
+					<div class="rpg-sidebar-coins" id="rpg-sidebar-coins">🪙 0</div>
+
+					<!-- Navigation -->
+					<nav class="rpg-sidebar-nav" aria-label="RPG sekcie">
+						<button class="rpg-nav-btn active" data-panel="talents">⚔️ Talenты</button>
+						<button class="rpg-nav-btn" data-panel="stats"        disabled title="Čoskoro">📊 Štatistiky <span class="rpg-nav-btn-soon">soon</span></button>
+						<button class="rpg-nav-btn" data-panel="attributes"   disabled title="Čoskoro">✨ Atribúty <span class="rpg-nav-btn-soon">soon</span></button>
+						<button class="rpg-nav-btn" data-panel="quests"       disabled title="Čoskoro">📜 Úlohy <span class="rpg-nav-btn-soon">soon</span></button>
+						<button class="rpg-nav-btn" data-panel="achievements" disabled title="Čoskoro">🏆 Úspechy <span class="rpg-nav-btn-soon">soon</span></button>
+					</nav>
+
+					<button class="btn btn-retro rpg-sidebar-picker-btn" id="rpg-sidebar-picker-btn" style="display:none">🎨 Zmeniť avatara</button>
+				</aside>
+
+				<!-- Main panel area -->
+				<main class="rpg-screen-main">
+					<div id="rpg-panel-talents"      class="rpg-panel"></div>
+					<div id="rpg-panel-stats"        class="rpg-panel" style="display:none"><div class="rpg-coming-soon">📊<br>Štatistiky<br><small>Čoskoro</small></div></div>
+					<div id="rpg-panel-attributes"   class="rpg-panel" style="display:none"><div class="rpg-coming-soon">✨<br>Atribúty<br><small>Čoskoro</small></div></div>
+					<div id="rpg-panel-quests"       class="rpg-panel" style="display:none"><div class="rpg-coming-soon">📜<br>Úlohy<br><small>Čoskoro</small></div></div>
+					<div id="rpg-panel-achievements" class="rpg-panel" style="display:none"><div class="rpg-coming-soon">🏆<br>Úspechy<br><small>Čoskoro</small></div></div>
+				</main>
+
 			</div>
 		</div>
 	</div>
@@ -868,9 +914,10 @@
 	<script src="js/game-api.js?v=2"></script>
 	<script src="js/library.js?v=4"></script>
 	<script src="js/game-edit.js?v=1"></script>
-	<script src="js/rpg-avatar.js?v=1"></script>
-	<script src="js/rpg-talents.js?v=1"></script>
-	<script src="script.js?v=25"></script>
+	<script src="js/rpg-avatar.js?v=2"></script>
+	<script src="js/rpg-talents.js?v=2"></script>
+	<script src="js/rpg-screen.js?v=1"></script>
+	<script src="script.js?v=26"></script>
 	<script src="cursor-effect.js?v=2"></script>
 
 

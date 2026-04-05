@@ -84,10 +84,12 @@ const RpgTalents = (() => {
         if (!_data.unlocked.includes(talentId)) _data.unlocked.push(talentId);
         _data.coins = json.coins_remaining;
       }
-      // Sync coin bar
+      // Sync coin displays
       if (window.Coins?.setBalance) Coins.setBalance(json.coins_remaining);
       const coinsEl = document.getElementById('profile-coins');
       if (coinsEl) coinsEl.textContent = json.coins_remaining;
+      // Sync RPG screen sidebar
+      if (window.RpgScreen?.updateCoinsDisplay) RpgScreen.updateCoinsDisplay(json.coins_remaining);
 
       if (window.GameUI?.toast) GameUI.toast('⚡ Talent odomknutý!');
       if (onSuccess) onSuccess(json);
@@ -181,11 +183,7 @@ const RpgTalents = (() => {
     }
 
     el.innerHTML = `
-      <div class="rpg-talent-header">
-        <span class="rpg-talent-class-badge">${classLabel}</span>
-        <span class="rpg-talent-coins-display">🪙 ${coins.toLocaleString()} coinov</span>
-      </div>
-      <p class="rpg-talent-hint">Odomkni talenty za coiny. Každá větva má 3 stupne — odomkni postupne.</p>
+      <p class="rpg-talent-hint">Odomkni talenty za coiny. Každá vetva má 3 stupne — odomkni postupne od Tier 1.</p>
       <div class="rpg-talent-tree" id="rpg-talent-tree-grid">
         ${branchHTML(branchA, branchLabels[0])}
         <div class="rpg-talent-divider"></div>

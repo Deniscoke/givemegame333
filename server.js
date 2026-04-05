@@ -2303,10 +2303,12 @@ app.get('/api/rpg/talents', async (req, res) => {
     const unlocked = unlockedRows.map(r => r.talent_id);
 
     res.json({
-      eligible: membership !== null,
+      eligible:    membership !== null,
       class_id,
-      coins: profile.coins || 0,
-      talents: getTalentManifest(),
+      role:        membership?.role        || null,
+      school_name: membership?.school_name || null,
+      coins:       profile.coins || 0,
+      talents:     getTalentManifest(),
       unlocked,
     });
   } catch (err) {
