@@ -16,6 +16,7 @@ const { Pool } = require('pg');
 const { validateDurationGate, validateParticipantGate, validateHostCooldownGate } = require('./lib/reward-validation');
 const { createEduRouter } = require('./lib/edu-routes');
 const { VALID_AVATAR_IDS, RPG_ELIGIBLE_ROLES, isValidAvatarId, getAvatarManifest } = require('./lib/rpg-avatars');
+const { getTalentManifest, getTalentById, validatePrerequisite } = require('./lib/rpg-talents');
 const {
 	getUserBillingState,
 	hasPaidAccess,
@@ -2274,6 +2275,153 @@ app.patch('/api/rpg/avatar', async (req, res) => {
 });
 
 // _rpgAvatarBuckets is module-scoped. Rate limit tested via HTTP 429 response.
+
+// ─── RPG Talent Tree API ────────────────────────────────────────────────────
+
+// GET /api/rpg/talents
+// Returns the full talent manifest for the user's current avatar class
+// plus their already-unlocked talent IDs and current coin balance.
+app.get('/api/rpg/talents', async (req, res) => {
+  if (!coinApiReady()) return respondCoinApiDisabled(res);
+  const user = await requireSupabaseUser(req, res);
+  if (!user) return;
+  try {
+    const membership = await _rpgGetMembership(user.id);
+    // Return manifest even for non-members so CTA renders; class_id = null signals no avatar
+    const { rows: profileRows } = await queryCoinsDb(
+      `SELECT COALESCE(coins, 0) AS coins, rpg_avatar_id FROM public.profiles WHERE id = $1`,
+      [user.id]
+    );
+    const profile = profileRows[0] || {};
+    const class_id = membership ? (profile.rpg_avatar_id || null) : null;
+
+    // Fetch unlocked talent IDs for this user
+    const { rows: unlockedRows } = await queryCoinsDb(
+      `SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1`,
+      [user.id]
+    );
+    const unlocked = unlockedRows.map(r => r.talent_id);
+
+    res.json({
+      eligible: membership !== null,
+      class_id,
+      coins: profile.coins || 0,
+      talents: getTalentManifest(),
+      unlocked,
+    });
+  } catch (err) {
+    console.error('[RPG] GET /api/rpg/talents error:', err.message);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// POST /api/rpg/talents/unlock
+// Atomically deducts coins and records the talent unlock.
+app.post('/api/rpg/talents/unlock', async (req, res) => {
+  if (!coinApiReady()) return respondCoinApiDisabled(res);
+  const user = await requireSupabaseUser(req, res);
+  if (!user) return;
+  try {
+    const membership = await _rpgGetMembership(user.id);
+    if (!membership) {
+      return res.status(403).json({ error: 'Musíš byť členom školy.' });
+    }
+
+    const { talent_id } = req.body || {};
+    const talentId = parseInt(talent_id, 10);
+    const talent = getTalentById(talentId);
+    if (!talent) {
+      return res.status(400).json({ error: 'Neplatný talent_id' });
+    }
+
+    // Open a dedicated client for the transaction
+    const client = await coinsDbPool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Lock the profile row to serialize concurrent unlock requests
+      const { rows: profileRows } = await client.query(
+        `SELECT COALESCE(coins, 0) AS coins, rpg_avatar_id FROM public.profiles WHERE id = $1 FOR UPDATE`,
+        [user.id]
+      );
+      const profile = profileRows[0];
+      if (!profile) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Profil nenájdený' });
+      }
+
+      // Must have the correct avatar class
+      if (profile.rpg_avatar_id !== talent.class_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Tento talent patrí inej triede avatara.' });
+      }
+
+      // Already unlocked?
+      const { rows: existingRows } = await client.query(
+        `SELECT 1 FROM public.rpg_user_talents WHERE user_id = $1 AND talent_id = $2`,
+        [user.id, talentId]
+      );
+      if (existingRows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Talent je už odomknutý.' });
+      }
+
+      // Prerequisite check (read unlocked list inside transaction)
+      const { rows: unlockedRows } = await client.query(
+        `SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1`,
+        [user.id]
+      );
+      const unlockedIds = unlockedRows.map(r => r.talent_id);
+      const prereq = validatePrerequisite(talentId, unlockedIds);
+      if (!prereq.ok) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: prereq.reason });
+      }
+
+      // Affordable?
+      if (profile.coins < talent.coin_cost) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Nedostatok coinov. Potrebuješ ${talent.coin_cost}, máš ${profile.coins}.` });
+      }
+
+      // 1) Deduct coins
+      const { rows: updatedProfile } = await client.query(
+        `UPDATE public.profiles SET coins = coins - $1, updated_at = now()
+         WHERE id = $2 RETURNING COALESCE(coins, 0) AS coins`,
+        [talent.coin_cost, user.id]
+      );
+
+      // 2) Log coin transaction
+      await client.query(
+        `INSERT INTO public.coin_transactions (user_id, amount, action, metadata)
+         VALUES ($1, $2, 'talent_unlock', $3)`,
+        [user.id, -talent.coin_cost, JSON.stringify({ talent_id: talentId, talent_name: talent.name })]
+      );
+
+      // 3) Record unlock
+      await client.query(
+        `INSERT INTO public.rpg_user_talents (user_id, talent_id) VALUES ($1, $2)`,
+        [user.id, talentId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({
+        ok: true,
+        talent_id: talentId,
+        coins_remaining: updatedProfile[0]?.coins ?? (profile.coins - talent.coin_cost),
+      });
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[RPG] POST /api/rpg/talents/unlock error:', err.message);
+    res.status(500).json({ error: 'Internal error' });
+  }
+});
 
 // ─── Pripravené zaujímavosti pre vypraváča ───
 let narratorFacts = { sk: [], cs: [], de: [], en: [], es: [] };

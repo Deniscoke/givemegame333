@@ -648,6 +648,7 @@
 			<div class="profile-tabs">
 				<button class="profile-tab active" data-tab="profil" onclick="App.Profile.switchTab('profil')">Profil</button>
 				<button class="profile-tab" data-tab="analytics" onclick="App.Profile.switchTab('analytics')" data-i18n="tab_analytics">Analytika</button>
+				<button class="profile-tab" data-tab="talent" onclick="App.Profile.switchTab('talent')">⚔️ Talenты</button>
 				<button class="profile-tab" data-tab="giveme" onclick="App.Profile.switchTab('giveme')">gIVEME</button>
 			</div>
 			<div class="profile-tab-content" id="profile-tab-profil">
@@ -698,6 +699,9 @@
 				<div class="profile-actions">
 					<button class="btn btn-retro" onclick="App.UI.closeModal('profile-modal')">Zavrieť</button>
 				</div>
+			</div>
+			<div class="profile-tab-content profile-tab-talent-content" id="profile-tab-talent" style="display:none;">
+				<div id="rpg-talent-container"></div>
 			</div>
 			<div class="profile-tab-content" id="profile-tab-giveme" style="display:none;">
 				<iframe id="giveme-iframe" src="gIVEME/index.html" title="gIVEME sociálna sieť" onload="App.Profile.onGivemeLoad(this)"></iframe>
@@ -865,7 +869,8 @@
 	<script src="js/library.js?v=4"></script>
 	<script src="js/game-edit.js?v=1"></script>
 	<script src="js/rpg-avatar.js?v=1"></script>
-	<script src="script.js?v=24"></script>
+	<script src="js/rpg-talents.js?v=1"></script>
+	<script src="script.js?v=25"></script>
 	<script src="cursor-effect.js?v=2"></script>
 
 

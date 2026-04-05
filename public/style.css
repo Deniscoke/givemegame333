@@ -384,8 +384,10 @@ header {
 /* ===================================================
    PROFILE MODAL (gIVEME)
    =================================================== */
-.profile-modal-wide { max-width: 520px; width: 95vw; transition: max-width 0.25s ease; }
+.profile-modal-wide { max-width: 520px; width: 95vw; transition: max-width 0.25s, width 0.25s; }
 .profile-modal-wide.profile-modal-giveme { max-width: min(95vw, 640px); width: min(95vw, 640px); }
+.profile-modal-wide.profile-modal-talent { max-width: min(98vw, 900px); width: min(98vw, 900px); }
+.profile-tab-talent-content { padding: 0 !important; max-height: none !important; overflow: visible !important; }
 .profile-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 2px solid var(--border); }
 .profile-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text); padding: 4px 8px; }
 .profile-modal-close:hover { color: var(--accent); }
@@ -3340,4 +3342,225 @@ body.light-mode #levelup-feedback {
 	.rpg-avatar-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
 	.rpg-avatar-option img { width: 60px; height: 60px; }
 	.rpg-avatar-section { flex-wrap: wrap; }
+}
+
+/* ─── RPG Talent Tree ────────────────────────────────────────────── */
+.talent-empty {
+	text-align: center;
+	padding: 40px 24px;
+}
+.talent-empty-icon { font-size: 48px; margin-bottom: 12px; display: block; }
+.talent-empty-title {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 10px;
+	margin-bottom: 8px;
+}
+.talent-empty-hint {
+	font-size: 12px;
+	opacity: 0.65;
+	margin-bottom: 16px;
+	line-height: 1.6;
+}
+
+.rpg-talent-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 16px;
+	border-bottom: 2px solid var(--border);
+	background: rgba(0,0,0,0.08);
+}
+.rpg-talent-class-badge {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 9px;
+	color: var(--accent, #633cff);
+	text-transform: uppercase;
+}
+.rpg-talent-coins-display {
+	font-size: 12px;
+	opacity: 0.8;
+}
+.rpg-talent-hint {
+	text-align: center;
+	font-size: 11px;
+	opacity: 0.55;
+	padding: 8px 16px;
+	margin: 0;
+	border-bottom: 1px solid var(--border);
+}
+
+/* Two-column tree layout */
+.rpg-talent-tree {
+	display: flex;
+	gap: 0;
+	padding: 16px;
+	min-height: 400px;
+}
+.rpg-talent-branch {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0;
+}
+.rpg-talent-branch-label {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 7px;
+	text-transform: uppercase;
+	opacity: 0.6;
+	margin-bottom: 12px;
+	letter-spacing: 1px;
+}
+.rpg-talent-divider {
+	width: 2px;
+	background: var(--border);
+	opacity: 0.3;
+	margin: 0 12px;
+	border-radius: 2px;
+}
+.rpg-talent-connector {
+	font-size: 14px;
+	opacity: 0.35;
+	line-height: 1.6;
+	display: block;
+	text-align: center;
+}
+
+/* Individual talent node */
+.rpg-talent-node {
+	width: 100%;
+	padding: 10px 12px;
+	border: 2px solid var(--border);
+	border-radius: 8px;
+	cursor: pointer;
+	text-align: center;
+	transition: all 0.15s ease;
+	background: rgba(0,0,0,0.06);
+	position: relative;
+}
+.rpg-talent-node:hover:not(.locked) {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.rpg-talent-node.unlocked {
+	border-color: #059669;
+	background: rgba(5,150,105,0.12);
+}
+.rpg-talent-node.affordable {
+	border-color: var(--accent, #633cff);
+	background: rgba(99,60,255,0.08);
+	cursor: pointer;
+}
+.rpg-talent-node.affordable:hover {
+	background: rgba(99,60,255,0.15);
+	box-shadow: 0 0 12px rgba(99,60,255,0.25);
+}
+.rpg-talent-node.available {
+	border-color: var(--border);
+	opacity: 0.75;
+	cursor: pointer;
+}
+.rpg-talent-node.locked {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.rpg-talent-icon {
+	font-size: 24px;
+	display: block;
+	margin-bottom: 4px;
+	line-height: 1;
+}
+.rpg-talent-name {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 7px;
+	display: block;
+	margin-bottom: 4px;
+	line-height: 1.4;
+	text-transform: uppercase;
+}
+.rpg-talent-desc {
+	font-size: 10px;
+	display: block;
+	opacity: 0.75;
+	margin-bottom: 4px;
+	line-height: 1.4;
+}
+.rpg-talent-comp {
+	font-size: 9px;
+	display: block;
+	opacity: 0.5;
+	margin-bottom: 6px;
+	font-style: italic;
+}
+.rpg-talent-cost {
+	font-size: 11px;
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 12px;
+	background: rgba(99,60,255,0.15);
+	color: var(--accent, #633cff);
+	font-weight: 600;
+}
+.rpg-talent-cost.unaffordable {
+	background: rgba(239,68,68,0.1);
+	color: #ef4444;
+}
+.unlocked-badge {
+	font-size: 10px;
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 12px;
+	background: rgba(5,150,105,0.2);
+	color: #059669;
+	font-weight: 600;
+}
+
+/* Unlock confirmation overlay */
+.rpg-talent-confirm-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.6);
+	z-index: 20000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+}
+.rpg-talent-confirm-box {
+	background: var(--panel-bg, #1e1e2e);
+	border: 2px solid var(--accent, #633cff);
+	border-radius: 12px;
+	padding: 24px;
+	max-width: 320px;
+	width: 100%;
+	text-align: center;
+	box-shadow: 0 0 40px rgba(99,60,255,0.3);
+}
+.rpg-talent-confirm-icon { font-size: 40px; margin-bottom: 12px; display: block; }
+.rpg-talent-confirm-name {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 9px;
+	margin-bottom: 8px;
+	color: var(--accent, #633cff);
+}
+.rpg-talent-confirm-desc { font-size: 12px; opacity: 0.8; margin-bottom: 12px; line-height: 1.5; }
+.rpg-talent-confirm-cost {
+	font-size: 13px;
+	font-weight: 700;
+	margin-bottom: 16px;
+	color: var(--accent, #633cff);
+}
+.rpg-talent-confirm-actions {
+	display: flex;
+	gap: 10px;
+	justify-content: center;
+}
+
+@media (max-width: 600px) {
+	.rpg-talent-tree { padding: 10px; gap: 4px; }
+	.rpg-talent-divider { margin: 0 6px; }
+	.rpg-talent-name { font-size: 6px; }
+	.rpg-talent-node { padding: 8px 8px; }
+	.rpg-talent-icon { font-size: 20px; }
 }
