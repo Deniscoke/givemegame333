@@ -767,3 +767,102 @@ describe('Tenant isolation — school_id in SQL', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// CROSS-TENANT HTTP ISOLATION
+// These tests verify the actual HTTP response when a user authenticated
+// as School A requests resources that belong to School B. The mock pool
+// returns no rows for the cross-school class_id (classOwnedBySchool
+// returns false) — the route must respond 404/403, never 200.
+//
+// This is a regression contract: if a future SQL refactor accidentally
+// removes the school_id constraint, these tests will fail.
+// ═══════════════════════════════════════════════════════════════════
+describe('Cross-tenant HTTP isolation — School A cannot read School B data', () => {
+  // A class_id that belongs to School B (not in SCHOOL_ID fixture)
+  const SCHOOL_B_CLASS = 'bbbb0000-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  // A grade_item_id that belongs to School B
+  const SCHOOL_B_ITEM  = 'bbbb1111-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
+  // Pool for School A user — classOwnedBySchool returns false for SCHOOL_B_CLASS
+  // because the mock only matches CLASS_ID + SCHOOL_ID (the School A fixtures).
+  // For any other combination it returns empty rows → route denies access.
+  let ctx;
+
+  before(async () => {
+    ctx = await buildServer({ pool: makePool({ role: 'admin' }) });
+  });
+
+  after(() => ctx.close());
+
+  it('GET /gradebook with School B class_id → 404 (not 200)', async () => {
+    const { status } = await req(ctx.baseUrl, `/gradebook?class_id=${SCHOOL_B_CLASS}`, { method: 'GET' });
+    // classOwnedBySchool returns false → 404 "Trieda nenájdená"
+    assert.strictEqual(status, 404);
+  });
+
+  it('GET /students with School B class_id → 404 (not 200)', async () => {
+    const { status } = await req(ctx.baseUrl, `/students?class_id=${SCHOOL_B_CLASS}`, { method: 'GET' });
+    assert.strictEqual(status, 404);
+  });
+
+  it('GET /attendance with School B class_id → 404 (not 200)', async () => {
+    const { status } = await req(ctx.baseUrl, `/attendance?class_id=${SCHOOL_B_CLASS}&date=2024-09-01`, { method: 'GET' });
+    assert.strictEqual(status, 404);
+  });
+
+  it('POST /gradebook/items with School B class_id → 404 (not 201)', async () => {
+    const { status } = await req(ctx.baseUrl, '/gradebook/items', {
+      method: 'POST',
+      body: JSON.stringify({
+        class_id:   SCHOOL_B_CLASS,
+        subject_id: SUBJECT_ID,
+        title:      'Cross-school attempt',
+        type:       'test',
+        weight:     1,
+      }),
+    });
+    // CTE INSERT returns no rows → 404
+    assert.strictEqual(status, 404);
+  });
+
+  it('POST /gradebook/entries with School B grade_item_id → 403 (not 201)', async () => {
+    // All grade items are fetched with school_id constraint; SCHOOL_B_ITEM won't be
+    // found in the result → route denies "does not belong to this school"
+    const { status } = await req(ctx.baseUrl, '/gradebook/entries', {
+      method: 'POST',
+      body: JSON.stringify({
+        entries: [{ grade_item_id: SCHOOL_B_ITEM, student_id: USER_ID2, value: '5' }],
+      }),
+    });
+    assert.strictEqual(status, 403);
+  });
+
+  it('POST /attendance with School B class_id → not 201 (denied before write)', async () => {
+    // Route validates records.length > 0 before the tenancy check, so an empty
+    // records array returns 400. With a valid record the tenancy check fires → 404.
+    // Either way the write never reaches the DB. We assert it is never 201.
+    const { status } = await req(ctx.baseUrl, '/attendance', {
+      method: 'POST',
+      body: JSON.stringify({
+        class_id: SCHOOL_B_CLASS,
+        date: '2024-09-01',
+        records: [{ student_id: USER_ID2, status: 'present' }],
+      }),
+    });
+    // classOwnedBySchool returns false for SCHOOL_B_CLASS → 404
+    assert.strictEqual(status, 404);
+  });
+
+  it('POST /students (enroll) with School B class_id → 404 (not 201)', async () => {
+    const { status } = await req(ctx.baseUrl, '/students', {
+      method: 'POST',
+      body: JSON.stringify({
+        class_id:   SCHOOL_B_CLASS,
+        student_id: USER_ID2,
+      }),
+    });
+    // classOwnedBySchool → false → 404
+    assert.strictEqual(status, 404);
+  });
+});

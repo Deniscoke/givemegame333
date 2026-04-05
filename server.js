@@ -66,7 +66,25 @@ function enrichCompetencies(raw) {
 const app = express();
 // Trust proxy for correct req.ip behind Vercel/nginx
 app.set('trust proxy', 1);
-app.use(cors());
+
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+// Restrict to explicit origin allowlist. Set ALLOWED_ORIGINS in Vercel env vars
+// as a comma-separated list, e.g. "https://givemegame.io,https://www.givemegame.io"
+// Falls back to wildcard only when the env var is absent (local dev only).
+const _allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+  : null;
+app.use(cors({
+  origin: _allowedOrigins
+    ? (origin, cb) => {
+        // Allow server-to-server requests (no Origin header) and listed origins
+        if (!origin || _allowedOrigins.includes(origin)) return cb(null, true);
+        cb(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    : '*',
+  credentials: false,
+}));
+
 app.use(express.json());
 
 // ─── Security headers ──────────────────────────────────────────────────────
@@ -78,6 +96,10 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // HSTS: tell browsers to use HTTPS for 2 years. Vercel enforces HTTPS at the
+  // CDN edge, but setting this header ensures the browser won't downgrade on
+  // subsequent requests even if a redirect chain breaks.
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net",
@@ -294,6 +316,9 @@ if (coinsDbPool) {
 		pool: coinsDbPool,
 		requireSupabaseUser
 	});
+	// Tighter body-size limit for EDU routes (student notes, grade values, names).
+	// 20kb is generous for any valid EDU payload. Does not affect game routes above.
+	app.use('/api/edu', express.json({ limit: '20kb' }));
 	app.use('/api/edu', eduRouter);
 	console.log('[EDU] gIVEMEEDU API mounted at /api/edu/*');
 } else {
