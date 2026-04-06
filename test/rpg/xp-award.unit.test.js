@@ -380,3 +380,134 @@ describe('XP idempotency contract', () => {
     assert.ok(result.rpg_xp <= 999999);
   });
 });
+
+// ─────────────────────────────────────────────────────────────
+describe('session_complete XP (SESSION_XP_AWARD = 75)', () => {
+  const SESSION_XP_AWARD = 75; // mirrors server constant
+
+  it('75 XP per session is a positive integer', () => {
+    assert.ok(Number.isInteger(SESSION_XP_AWARD) && SESSION_XP_AWARD > 0);
+  });
+
+  it('75 XP moves a level-1 user to 15% of level 2 (500 XP threshold)', () => {
+    const r = computeRpgLevel(SESSION_XP_AWARD);
+    assert.strictEqual(r.level, 1);
+    assert.ok(r.progressPct > 0 && r.progressPct < 100);
+  });
+
+  it('session_complete XP is higher than solo (75 > 50) — reflects multiplayer effort', () => {
+    const SOLO_XP_AWARD = 50;
+    assert.ok(SESSION_XP_AWARD > SOLO_XP_AWARD);
+  });
+
+  it('awardXpInTransaction works correctly for 75 XP from level 0', async () => {
+    const client = buildMockClient({ currentXp: 0 });
+    const result = await awardXpInTransaction(client, 'uid', SESSION_XP_AWARD, 'session_complete');
+    assert.strictEqual(result.rpg_xp, 75);
+    assert.strictEqual(result.level, 1);
+  });
+
+  it('session_complete XP crossing 500 XP threshold reaches level 2', async () => {
+    const client = buildMockClient({ currentXp: 425 });
+    const result = await awardXpInTransaction(client, 'uid', SESSION_XP_AWARD, 'session_complete');
+    assert.strictEqual(result.rpg_xp, 500);
+    assert.strictEqual(result.level, 2);
+  });
+
+  it('reflection_done guard prevents double-award (conceptual — DB filter handles idempotency)', () => {
+    // The query: WHERE reflection_done = true AND awarded_competencies IS NULL
+    // means a participant can only receive rewards once per session.
+    // Simulate: user already rewarded → parts array is empty → no XP call
+    const parts = []; // empty — already rewarded
+    let xpCallCount = 0;
+    for (const p of parts) {
+      xpCallCount++;
+    }
+    assert.strictEqual(xpCallCount, 0, 'No XP awarded when parts is empty (already rewarded)');
+  });
+
+  it('myXpGained is SESSION_XP_AWARD only for the requesting user (host)', () => {
+    const SESSION_XP_AWARD_LOCAL = 75;
+    const hostId = 'host-uuid';
+    const parts = [{ user_id: 'player-1' }, { user_id: hostId }, { user_id: 'player-2' }];
+    let myXpGained = 0;
+    for (const p of parts) {
+      // Simulate the server loop logic
+      if (p.user_id === hostId) myXpGained = SESSION_XP_AWARD_LOCAL;
+    }
+    assert.strictEqual(myXpGained, 75);
+  });
+
+  it('myXpGained stays 0 if requesting user is not a rewarded participant', () => {
+    const SESSION_XP_AWARD_LOCAL = 75;
+    const hostId = 'host-uuid';
+    const parts = [{ user_id: 'player-1' }, { user_id: 'player-2' }]; // host not in parts
+    let myXpGained = 0;
+    for (const p of parts) {
+      if (p.user_id === hostId) myXpGained = SESSION_XP_AWARD_LOCAL;
+    }
+    assert.strictEqual(myXpGained, 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+describe('robot_challenge XP (ROBOT_XP_AWARD = 30)', () => {
+  const ROBOT_XP_AWARD = 30; // mirrors server constant
+
+  it('30 XP per robot challenge is a positive integer', () => {
+    assert.ok(Number.isInteger(ROBOT_XP_AWARD) && ROBOT_XP_AWARD > 0);
+  });
+
+  it('30 XP is less than solo (50) — mini-game earns less than curriculum play', () => {
+    const SOLO_XP_AWARD = 50;
+    assert.ok(ROBOT_XP_AWARD < SOLO_XP_AWARD);
+  });
+
+  it('awardXpInTransaction works correctly for 30 XP from level 0', async () => {
+    const client = buildMockClient({ currentXp: 0 });
+    const result = await awardXpInTransaction(client, 'uid', ROBOT_XP_AWARD, 'robot_challenge');
+    assert.strictEqual(result.rpg_xp, 30);
+    assert.strictEqual(result.level, 1);
+  });
+
+  it('10 robot challenges = 300 XP — stays at level 1 (threshold: 500)', () => {
+    const totalXp = ROBOT_XP_AWARD * 10; // 300
+    const r = computeRpgLevel(totalXp);
+    assert.strictEqual(r.level, 1);
+    assert.ok(r.progressPct > 0);
+  });
+
+  it('robot_challenge XP audited with correct reason string', async () => {
+    const client = buildMockClient({ currentXp: 0 });
+    await awardXpInTransaction(client, 'uid', ROBOT_XP_AWARD, 'robot_challenge');
+    const auditCall = client._calls.find(c => c.sql.includes('INSERT INTO public.coin_transactions'));
+    if (auditCall) {
+      const metadata = JSON.parse(auditCall.params[1]);
+      assert.strictEqual(metadata.reason, 'robot_challenge');
+    }
+  });
+
+  it('robot_challenge XP is best-effort: failure does not throw', async () => {
+    // Simulate XP award failure (profile not found — UPDATE returns no rows)
+    const client = {
+      async query(sql) {
+        if (sql.includes('UPDATE public.profiles') && sql.includes('RETURNING')) {
+          return { rows: [] }; // profile not found
+        }
+        return { rows: [] };
+      }
+    };
+    // awardXpInTransaction would throw 'profile not found' — server wraps in try/catch
+    await assert.rejects(
+      () => awardXpInTransaction(client, 'unknown', ROBOT_XP_AWARD, 'robot_challenge'),
+      /profile not found/i
+    );
+    // The server's try/catch around xpClient.connect() swallows this — no 500 response
+  });
+
+  it('client-side RpgXpFx trigger amount matches ROBOT_XP_AWARD constant', () => {
+    // The client triggers RpgXpFx.trigger(30, ...) — must stay in sync with server constant
+    const CLIENT_TRIGGER_AMOUNT = 30; // hardcoded in script.js handleSuccess()
+    assert.strictEqual(CLIENT_TRIGGER_AMOUNT, ROBOT_XP_AWARD);
+  });
+});

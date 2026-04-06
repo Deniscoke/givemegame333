@@ -153,6 +153,7 @@ const Session = (() => {
 			if (window.Coins?.load) window.Coins.load();
 			_loadAndRenderCompetencies();
 			if (GameUI.showLevelUpFeedback && data.my_level_changes) GameUI.showLevelUpFeedback(data.my_level_changes);
+			if (data.rpg_xp_gained > 0 && window.RpgXpFx) RpgXpFx.trigger(data.rpg_xp_gained, '⚔️ Session dokončená');
 		} catch (err) {
 			GameUI.toast(`❌ ${err.message}`);
 		}

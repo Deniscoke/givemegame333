@@ -17,7 +17,7 @@ const { validateDurationGate, validateParticipantGate, validateHostCooldownGate 
 const { createEduRouter } = require('./lib/edu-routes');
 const { VALID_AVATAR_IDS, RPG_ELIGIBLE_ROLES, isValidAvatarId, getAvatarManifest } = require('./lib/rpg-avatars');
 const { getTalentManifest, getTalentById, validatePrerequisite } = require('./lib/rpg-talents');
-const { computeRpgLevel, getEffectiveStats } = require('./lib/rpg-progression');
+const { computeRpgLevel, getEffectiveStats, awardXpInTransaction } = require('./lib/rpg-progression');
 const {
 	getUserBillingState,
 	hasPaidAccess,
@@ -34,8 +34,10 @@ const JOIN_CODE_LENGTH  = 6;
 // ─── RPG XP award amounts ───────────────────────────────────────────────────
 // XP is awarded server-side only. No public endpoint.
 // Rate limiting is inherited from the parent event's existing guards.
-const SOLO_XP_AWARD   = 50;  // per solo completion (SOLO_DAILY_LIMIT cap → max 500 XP/day)
-const TALENT_XP_AWARD = 25;  // per talent unlock (idempotent via UNIQUE constraint)
+const SOLO_XP_AWARD    = 50;  // per solo completion (SOLO_DAILY_LIMIT cap → max 500 XP/day)
+const TALENT_XP_AWARD  = 25;  // per talent unlock (idempotent via UNIQUE constraint)
+const SESSION_XP_AWARD = 75;  // per multiplayer session completion (reflection_done guard)
+const ROBOT_XP_AWARD   = 30;  // per robot challenge completion (no daily cap — mini-game)
 
 // ─── Reward validation constants ───
 const VALID_COMPETENCY_KEYS = [
@@ -1137,6 +1139,19 @@ app.post('/api/coins/log', async (req, res) => {
 			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
 			[user.id, amount, action.trim(), metadata || null]
 		);
+
+		// Award RPG XP for robot_challenge completions (best-effort, non-blocking)
+		if (action.trim() === 'robot_challenge') {
+			const xpClient = await coinsDbPool.connect();
+			try {
+				await awardXpInTransaction(xpClient, user.id, ROBOT_XP_AWARD, 'robot_challenge');
+			} catch (xpErr) {
+				console.error('[Coins] robot_challenge XP award failed:', xpErr.message);
+			} finally {
+				xpClient.release();
+			}
+		}
+
 		res.json({ ok: true });
 	} catch (err) {
 		console.error('[Coins] log insert failed:', err.message);
@@ -1754,6 +1769,7 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 		const client = await coinsDbPool.connect();
 		let participantsRewarded = 0;
 		let myLevelChanges = null;
+		let myXpGained = 0;
 		try {
 			await client.query('BEGIN');
 
@@ -1812,6 +1828,10 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 					'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
 					[p.user_id, COMPLETION_BONUS, 'session_complete', JSON.stringify({ session_code: code, kompetence: awarded })]
 				);
+
+				// Award RPG XP — piggybacks on the reflection_done + awarded_competencies IS NULL guard
+				await awardXpInTransaction(client, p.user_id, SESSION_XP_AWARD, 'session_complete');
+				if (p.user_id === user.id) myXpGained = SESSION_XP_AWARD;
 			}
 			participantsRewarded = parts.length;
 
@@ -1834,7 +1854,7 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 
 			await client.query('COMMIT');
 
-			res.json({ ok: true, awarded, participants_rewarded: participantsRewarded, validation, my_level_changes: myLevelChanges });
+			res.json({ ok: true, awarded, participants_rewarded: participantsRewarded, validation, my_level_changes: myLevelChanges, rpg_xp_gained: myXpGained });
 		} catch (txErr) {
 			await client.query('ROLLBACK');
 			// Revert status lock so host can retry

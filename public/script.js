@@ -1136,6 +1136,7 @@ const App = (() => {
 			if (currentIdx >= TOTAL_CHALLENGES) {
 				stage = 'success';
 				Coins.award('robot_challenge');
+				if (window.RpgXpFx) RpgXpFx.trigger(30, '🤖 Robot challenge!');
 				render();
 			} else {
 				nextChallenge(currentIdx);
