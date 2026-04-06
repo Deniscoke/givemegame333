@@ -31,6 +31,12 @@ const COMPLETION_BONUS  = 100;
 const JOIN_CODE_CHARS   = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const JOIN_CODE_LENGTH  = 6;
 
+// ─── RPG XP award amounts ───────────────────────────────────────────────────
+// XP is awarded server-side only. No public endpoint.
+// Rate limiting is inherited from the parent event's existing guards.
+const SOLO_XP_AWARD   = 50;  // per solo completion (SOLO_DAILY_LIMIT cap → max 500 XP/day)
+const TALENT_XP_AWARD = 25;  // per talent unlock (idempotent via UNIQUE constraint)
+
 // ─── Reward validation constants ───
 const VALID_COMPETENCY_KEYS = [
 	'k-uceni', 'k-reseni-problemu', 'komunikativni',
@@ -1261,9 +1267,14 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		return res.status(500).json({ error: 'Kontrola limitu zlyhala', code: 'COOLDOWN_CHECK_ERROR' });
 	}
 
+	// Atomically: update competency points + award coins + award RPG XP
+	let soloClient;
 	try {
-		// Fetch current competency points
-		const { rows: profileRows } = await queryCoinsDb(
+		soloClient = await coinsDbPool.connect();
+		await soloClient.query('BEGIN');
+
+		// Fetch current competency points (inside transaction for consistency)
+		const { rows: profileRows } = await soloClient.query(
 			'SELECT competency_points FROM public.profiles WHERE id = $1',
 			[user.id]
 		);
@@ -1295,25 +1306,44 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		});
 
 		// Write updated competency points
-		await queryCoinsDb(
+		await soloClient.query(
 			'UPDATE public.profiles SET competency_points = $1 WHERE id = $2',
 			[JSON.stringify(updated), user.id]
 		);
 
 		// Award completion bonus coins
-		await queryCoinsDb(
+		await soloClient.query(
 			'UPDATE public.profiles SET coins = COALESCE(coins, 0) + $1 WHERE id = $2',
 			[COMPLETION_BONUS, user.id]
 		);
-		await queryCoinsDb(
+		await soloClient.query(
 			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
 			[user.id, COMPLETION_BONUS, 'solo_complete', JSON.stringify({ kompetence: awarded })]
 		);
 
-		res.json({ ok: true, awarded, competency_points: updated, competencies: enrichCompetencies(updated), level_changes });
+		// Award RPG XP (piggybacks on the existing SOLO_DAILY_LIMIT rate guard)
+		const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
+			soloClient, user.id, SOLO_XP_AWARD, 'solo_complete'
+		);
+
+		await soloClient.query('COMMIT');
+
+		res.json({
+			ok: true,
+			awarded,
+			competency_points: updated,
+			competencies: enrichCompetencies(updated),
+			level_changes,
+			rpg_xp_gained: SOLO_XP_AWARD,
+			rpg_xp,
+			rpg_level,
+		});
 	} catch (err) {
+		if (soloClient) { try { await soloClient.query('ROLLBACK'); } catch (_) {} }
 		console.error('[Completion] solo complete failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa udeliť body', code: 'AWARD_ERROR' });
+	} finally {
+		if (soloClient) soloClient.release();
 	}
 });
 
@@ -2412,10 +2442,15 @@ app.post('/api/rpg/talents/unlock', async (req, res) => {
         [user.id, -talent.coin_cost, JSON.stringify({ talent_id: talentId, talent_name: talent.name })]
       );
 
-      // 3) Record unlock
+      // 3) Record unlock (UNIQUE constraint provides idempotency)
       await client.query(
         `INSERT INTO public.rpg_user_talents (user_id, talent_id) VALUES ($1, $2)`,
         [user.id, talentId]
+      );
+
+      // 4) Award RPG XP (idempotent: rpg_user_talents UNIQUE prevents double unlock)
+      const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
+        client, user.id, TALENT_XP_AWARD, `talent_unlock:${talentId}`
       );
 
       await client.query('COMMIT');
@@ -2424,6 +2459,9 @@ app.post('/api/rpg/talents/unlock', async (req, res) => {
         ok: true,
         talent_id: talentId,
         coins_remaining: updatedProfile[0]?.coins ?? (profile.coins - talent.coin_cost),
+        rpg_xp_gained: TALENT_XP_AWARD,
+        rpg_xp,
+        rpg_level,
       });
     } catch (txErr) {
       await client.query('ROLLBACK');

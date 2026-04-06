@@ -4038,3 +4038,144 @@ body.light-mode #levelup-feedback {
   .rpg-level-badge { font-size: 10px; }
   .rpg-sidebar-level { display: none; } /* already shown in stat panel */
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   RPG PIXEL-ART UI FOUNDATIONS
+   CSS custom properties for the pixel-art fantasy direction.
+   Available globally — use these for all new RPG/EDU UI code.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Core palette */
+  --px-bg-deep:     #09091a;
+  --px-bg-panel:    #0c0c20;
+  --px-bg-surface:  #11112e;
+  --px-border:      rgba(167, 139, 250, 0.25);
+  --px-border-glow: rgba(167, 139, 250, 0.55);
+
+  /* Accent colors */
+  --px-cyan:        #00ffff;
+  --px-cyan-dim:    #7dd3fc;
+  --px-cyan-pale:   #e0f2fe;
+  --px-purple:      #a78bfa;
+  --px-purple-dark: #7c3aed;
+  --px-gold:        #fde68a;
+  --px-green:       #4ade80;
+  --px-red:         #f87171;
+
+  /* Typography */
+  --px-font-pixel:  'Press Start 2P', monospace;
+  --px-font-mono:   'VT323', monospace;
+
+  /* Pixel border (hard-edge, no radius) */
+  --px-radius:      0px;
+  --px-radius-soft: 4px; /* for non-pixel UI elements like modals */
+}
+
+/* Reusable pixel-art hard border */
+.px-border {
+  border: 2px solid var(--px-border);
+  border-radius: var(--px-radius);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+/* Scanline overlay (apply ::before to a container) */
+.px-scanlines::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Glow text — cyan */
+.px-glow-cyan {
+  text-shadow: 0 0 8px var(--px-cyan), 0 0 20px rgba(0,255,255,0.4);
+}
+
+/* Glow text — purple */
+.px-glow-purple {
+  text-shadow: 0 0 8px var(--px-purple), 0 0 20px rgba(167,139,250,0.4);
+}
+
+/* Pixel button foundation */
+.px-btn {
+  font-family: var(--px-font-pixel);
+  font-size: 9px;
+  background: var(--px-bg-surface);
+  color: var(--px-cyan-dim);
+  border: 2px solid var(--px-border);
+  border-radius: var(--px-radius);
+  padding: 8px 14px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.px-btn:hover {
+  border-color: var(--px-purple);
+  background: rgba(124, 58, 237, 0.15);
+  color: #fff;
+}
+.px-btn:active { transform: translateY(1px); }
+
+/* ═══════════════════════════════════════════════════════════════
+   RPG XP CELEBRATION EFFECT
+   Styles for the +N XP banner shown by rpg-xp-fx.js
+   ═══════════════════════════════════════════════════════════════ */
+
+#rpg-xp-banner {
+  font-family: var(--px-font-pixel, 'Press Start 2P', monospace);
+  user-select: none;
+}
+
+.rpg-xp-gained {
+  font-size: clamp(24px, 5vw, 52px);
+  color: #00ffff;
+  text-shadow:
+    0 0 12px #00ffff,
+    0 0 28px #0080ff,
+    0 0 50px rgba(0,128,255,0.6),
+    3px 3px 0 #003366;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.rpg-xp-label {
+  font-family: var(--px-font-mono, 'VT323', monospace);
+  font-size: clamp(14px, 2vw, 20px);
+  color: #7dd3fc;
+  margin-top: 10px;
+  letter-spacing: 1px;
+  text-shadow: 0 0 8px rgba(125, 211, 252, 0.6);
+}
+
+/* Enter animation */
+.rpg-xp-in {
+  animation: rpg-xp-float-in 3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Exit animation */
+.rpg-xp-out {
+  animation: rpg-xp-fade-out 0.6s ease forwards;
+}
+
+@keyframes rpg-xp-float-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4) translateY(30px); }
+  12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.15) translateY(0); }
+  22%  { transform: translate(-50%, -50%) scale(0.97) translateY(-4px); }
+  35%  { transform: translate(-50%, -50%) scale(1.0)  translateY(0); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0)  translateY(-12px); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95) translateY(-30px); }
+}
+
+@keyframes rpg-xp-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}

@@ -83,6 +83,10 @@ const RpgTalents = (() => {
       if (_data) {
         if (!_data.unlocked.includes(talentId)) _data.unlocked.push(talentId);
         _data.coins = json.coins_remaining;
+        // Invalidate cached progression so stats panel refreshes on next open
+        if (json.rpg_xp !== undefined && _data.progression) {
+          _data.progression.xp = json.rpg_xp;
+        }
       }
       // Sync coin displays
       if (window.Coins?.setBalance) Coins.setBalance(json.coins_remaining);
@@ -90,6 +94,11 @@ const RpgTalents = (() => {
       if (coinsEl) coinsEl.textContent = json.coins_remaining;
       // Sync RPG screen sidebar
       if (window.RpgScreen?.updateCoinsDisplay) RpgScreen.updateCoinsDisplay(json.coins_remaining);
+
+      // XP celebration effect
+      if (json.rpg_xp_gained && window.RpgXpFx) {
+        RpgXpFx.trigger(json.rpg_xp_gained, '⚔️ Talent odomknutý');
+      }
 
       if (window.GameUI?.toast) GameUI.toast('⚡ Talent odomknutý!');
       if (onSuccess) onSuccess(json);
