@@ -17,6 +17,7 @@ const { validateDurationGate, validateParticipantGate, validateHostCooldownGate 
 const { createEduRouter } = require('./lib/edu-routes');
 const { VALID_AVATAR_IDS, RPG_ELIGIBLE_ROLES, isValidAvatarId, getAvatarManifest } = require('./lib/rpg-avatars');
 const { getTalentManifest, getTalentById, validatePrerequisite } = require('./lib/rpg-talents');
+const { computeRpgLevel, getEffectiveStats } = require('./lib/rpg-progression');
 const {
 	getUserBillingState,
 	hasPaidAccess,
@@ -2289,7 +2290,8 @@ app.get('/api/rpg/talents', async (req, res) => {
     const membership = await _rpgGetMembership(user.id);
     // Return manifest even for non-members so CTA renders; class_id = null signals no avatar
     const { rows: profileRows } = await queryCoinsDb(
-      `SELECT COALESCE(coins, 0) AS coins, rpg_avatar_id FROM public.profiles WHERE id = $1`,
+      `SELECT COALESCE(coins, 0) AS coins, rpg_avatar_id, COALESCE(rpg_xp, 0) AS rpg_xp
+         FROM public.profiles WHERE id = $1`,
       [user.id]
     );
     const profile = profileRows[0] || {};
@@ -2302,14 +2304,24 @@ app.get('/api/rpg/talents', async (req, res) => {
     );
     const unlocked = unlockedRows.map(r => r.talent_id);
 
+    // Compute RPG progression and effective stats from unlocked talents
+    const progression = computeRpgLevel(profile.rpg_xp || 0);
+    const talentManifest = getTalentManifest();
+    const unlockedTalents = unlocked
+      .map(id => talentManifest.find(t => t.id === id))
+      .filter(Boolean);
+    const stats = getEffectiveStats(class_id, unlockedTalents);
+
     res.json({
       eligible:    membership !== null,
       class_id,
       role:        membership?.role        || null,
       school_name: membership?.school_name || null,
       coins:       profile.coins || 0,
-      talents:     getTalentManifest(),
+      talents:     talentManifest,
       unlocked,
+      progression,
+      stats,
     });
   } catch (err) {
     console.error('[RPG] GET /api/rpg/talents error:', err.message);

@@ -3882,3 +3882,159 @@ body.light-mode #levelup-feedback {
 	.rpg-sidebar-picker-btn { display: none !important; } /* use picker from avatar section instead */
 	.rpg-screen-main { flex: 1; min-height: 50vh; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   RPG PROGRESSION — Stats Panel & Sidebar Level Badge
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Sidebar level badge ─────────────────────────────────────── */
+.rpg-sidebar-level {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #fde68a;
+  background: rgba(253,230,138,0.12);
+  border: 1px solid rgba(253,230,138,0.3);
+  border-radius: 4px;
+  padding: 4px 8px;
+  text-align: center;
+  letter-spacing: 0.5px;
+  width: 100%;
+}
+
+/* ─── Stats panel wrapper ─────────────────────────────────────── */
+.rpg-stats-panel {
+  padding: 20px 24px;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.rpg-stats-section { display: flex; flex-direction: column; gap: 10px; }
+
+.rpg-stats-heading {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #a78bfa;
+  letter-spacing: 1px;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(167,139,250,0.25);
+  padding-bottom: 6px;
+}
+
+/* ─── Level / XP bar ─────────────────────────────────────────── */
+.rpg-level-display {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.rpg-level-badge {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 13px;
+  color: #fde68a;
+  white-space: nowrap;
+}
+
+.rpg-level-xp {
+  font-family: 'VT323', monospace;
+  font-size: 17px;
+  color: #94a3b8;
+}
+
+.rpg-xp-bar-wrap {
+  height: 12px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(167,139,250,0.25);
+}
+
+.rpg-xp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  border-radius: 6px;
+  transition: width 0.6s ease;
+  min-width: 2px;
+}
+
+.rpg-xp-hint {
+  font-family: 'VT323', monospace;
+  font-size: 15px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ─── Stat list ──────────────────────────────────────────────── */
+.rpg-stat-list { display: flex; flex-direction: column; gap: 8px; }
+
+.rpg-stat-row {
+  display: grid;
+  grid-template-columns: 22px 110px 1fr 48px;
+  align-items: center;
+  gap: 8px;
+}
+
+.rpg-stat-icon { font-size: 14px; text-align: center; }
+
+.rpg-stat-label {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: #cbd5e1;
+  text-align: left;
+}
+
+.rpg-stat-bar-wrap {
+  height: 8px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rpg-stat-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  opacity: 0.85;
+  min-width: 2px;
+}
+
+.rpg-stat-value {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #e2e8f0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rpg-stat-bonus {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #4ade80;
+  margin-left: 3px;
+}
+
+.rpg-stats-bonus-note {
+  font-family: 'VT323', monospace;
+  font-size: 14px;
+  color: #64748b;
+  margin: 4px 0 0;
+}
+
+.rpg-stats-no-class {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: #64748b;
+  font-style: italic;
+  margin: 0;
+}
+
+/* ─── Responsive tweaks for stats panel ──────────────────────── */
+@media (max-width: 500px) {
+  .rpg-stats-panel { padding: 14px 12px; gap: 20px; }
+  .rpg-stat-row { grid-template-columns: 20px 90px 1fr 40px; gap: 6px; }
+  .rpg-stat-label { font-size: 14px; }
+  .rpg-level-badge { font-size: 10px; }
+  .rpg-sidebar-level { display: none; } /* already shown in stat panel */
+}
