@@ -125,21 +125,52 @@ const RpgXpFx = (() => {
     }
   }
 
+  // ─── Reduced-motion check ────────────────────────────────────────
+  function _prefersReducedMotion() {
+    return typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  }
+
   // ─── Public: trigger the effect ──────────────────────────────────
   /**
    * Show the XP gain celebration.
    * @param {number} xpAmount   — number displayed in "+N XP" banner
    * @param {string} [label]    — optional sub-label (event description)
+   *
+   * Reduced-motion: when prefers-reduced-motion is set, skips the canvas
+   * particle system entirely and shows only a brief static banner (no keyframes).
    */
   function trigger(xpAmount, label) {
     _setup();
-    _resize();
+
+    const reducedMotion = _prefersReducedMotion();
 
     // Cancel any in-progress effect
     if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
     clearTimeout(_hideTimer);
     clearTimeout(_cleanTimer);
     _particles = [];
+
+    // Banner (always shown)
+    _banner.innerHTML = `
+      <div class="rpg-xp-gained">+${Number(xpAmount).toLocaleString()} XP</div>
+      ${label ? `<div class="rpg-xp-label">${label}</div>` : ''}`;
+    _banner.style.display = 'block';
+    _banner.classList.remove('rpg-xp-out', 'rpg-xp-in', 'rpg-xp-static');
+
+    if (reducedMotion) {
+      // Static fallback: no animation, just visible text for 2.5 s then fade
+      _banner.classList.add('rpg-xp-static');
+      _hideTimer  = setTimeout(() => { _banner.classList.add('rpg-xp-out'); }, 2500);
+      _cleanTimer = setTimeout(() => {
+        _banner.style.display = 'none';
+        _banner.classList.remove('rpg-xp-out', 'rpg-xp-static');
+      }, 3000);
+      return; // skip canvas entirely
+    }
+
+    // Full-motion path
+    _resize();
 
     const cx = Math.round(window.innerWidth  / 2);
     const cy = Math.round(window.innerHeight * 0.38);
@@ -148,16 +179,8 @@ const RpgXpFx = (() => {
     _spawn(cx, cy, 50);
     setTimeout(() => _spawn(cx, cy, 30), 180);
 
-    // Banner
-    _banner.innerHTML = `
-      <div class="rpg-xp-gained">+${Number(xpAmount).toLocaleString()} XP</div>
-      ${label ? `<div class="rpg-xp-label">${label}</div>` : ''}`;
-    _banner.style.display = 'block';
-    _banner.style.animation = 'none';
-    // Force reflow so re-animation triggers
+    // Force reflow so re-animation triggers if called twice quickly
     void _banner.offsetWidth;
-    _banner.style.animation = '';
-    _banner.classList.remove('rpg-xp-out');
     _banner.classList.add('rpg-xp-in');
 
     _rafId = requestAnimationFrame(_tick);

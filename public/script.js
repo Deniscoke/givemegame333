@@ -237,6 +237,10 @@ const App = (() => {
 						if (window.Coins?.load) window.Coins.load();
 						if (GameUI.renderCompetencies) GameUI.renderCompetencies(data.competencies || data.competency_points || {});
 						if (GameUI.showLevelUpFeedback && data.level_changes) GameUI.showLevelUpFeedback(data.level_changes);
+						// XP celebration — only when server confirmed a real award
+						if (data.rpg_xp_gained > 0 && window.RpgXpFx) {
+							RpgXpFx.trigger(data.rpg_xp_gained, '📚 Solo hra dokončená');
+						}
 					} catch (err) {
 						GameUI.toast(`❌ ${err.message}`);
 					}

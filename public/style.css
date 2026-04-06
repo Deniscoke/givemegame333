@@ -4179,3 +4179,26 @@ body.light-mode #levelup-feedback {
   from { opacity: 1; }
   to   { opacity: 0; }
 }
+
+/* Static fallback when JS detects prefers-reduced-motion (no keyframes) */
+.rpg-xp-static {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+.rpg-xp-static .rpg-xp-gained,
+.rpg-xp-static .rpg-xp-label {
+  animation: none !important;
+}
+
+/* CSS-level reduced-motion override (belt-and-suspenders alongside the JS check) */
+@media (prefers-reduced-motion: reduce) {
+  .rpg-xp-in  { animation: rpg-xp-appear 0.2s ease forwards !important; }
+  .rpg-xp-out { animation: rpg-xp-fade-out 0.3s ease forwards !important; }
+  .rpg-xp-gained { animation: none !important; }
+  #rpg-xp-fx-canvas { display: none !important; }
+}
+
+@keyframes rpg-xp-appear {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+}
