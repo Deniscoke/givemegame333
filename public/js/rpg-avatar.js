@@ -4,14 +4,12 @@
    Manages avatar selection, persistence, and display.
    Gated behind school membership (checked server-side).
 
+   Avatar switch / first pick costs gIVEMECOIN (see GET /api/rpg/avatar
+   avatar_switch_cost). Deselect (null) is free.
+
    Dependencies (resolved at call-time):
      • supabaseClient — var in script.js
      • GameUI          — global (game-ui.js)
-
-   Future hooks (not implemented yet):
-     • RpgAvatar.onSelect(cb)  — subscribe to avatar changes
-     • RpgAvatar.getAnimClass() — CSS class for idle animation
-     • RpgAvatar.playSfx(event) — avatar-specific sound effects
 
    Exposes: window.RpgAvatar
    ═══════════════════════════════════════════════════════════════════ */
@@ -23,6 +21,8 @@ const RpgAvatar = (() => {
   let _data = null;       // cached GET /api/rpg/avatar response
   let _loading = false;
   let _listeners = [];    // future: onSelect callbacks
+
+  const DEFAULT_SWITCH_COST = 5000;
 
   // ─── Helpers ────────────────────────────────────────────────────
   async function _token() {
@@ -44,7 +44,6 @@ const RpgAvatar = (() => {
   }
 
   // ─── Load ───────────────────────────────────────────────────────
-  // Fetches eligibility + current avatar + available list from server.
   async function load() {
     if (_loading) return _data;
     _loading = true;
@@ -66,9 +65,10 @@ const RpgAvatar = (() => {
   }
 
   // ─── Select ─────────────────────────────────────────────────────
+  /** @returns {Promise<{ ok: boolean, cost_paid?: number, coins_remaining?: number }>} */
   async function select(avatarId) {
     const token = await _token();
-    if (!token) return false;
+    if (!token) return { ok: false };
     try {
       const res = await _fetch('/api/rpg/avatar', {
         method: 'PATCH',
@@ -78,17 +78,37 @@ const RpgAvatar = (() => {
         },
         body: JSON.stringify({ avatar_id: avatarId })
       });
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (window.GameUI?.toast) GameUI.toast(`\u274c ${err.error || 'Chyba'}`);
-        return false;
+        if (res.status === 402 && json.code === 'INSUFFICIENT_COINS') {
+          if (window.GameUI?.toast) GameUI.toast(`\u274c ${json.error || 'Nedostatok coinov'}`);
+        } else if (window.GameUI?.toast) {
+          GameUI.toast(`\u274c ${json.error || 'Chyba'}`);
+        }
+        return { ok: false };
       }
-      // Update local state
-      if (_data) _data.current_avatar_id = avatarId;
+
+      if (_data) {
+        _data.current_avatar_id = json.avatar_id;
+        if (typeof json.coins_remaining === 'number') _data.coins = json.coins_remaining;
+      }
+      if (typeof json.coins_remaining === 'number') {
+        if (window.RpgScreen?.updateCoinsDisplay) RpgScreen.updateCoinsDisplay(json.coins_remaining);
+        const coinsEl = document.getElementById('profile-coins');
+        if (coinsEl) coinsEl.textContent = json.coins_remaining;
+        if (window.Coins?.load) await Coins.load();
+      }
+      if (window.RpgTalents?.clearCache) RpgTalents.clearCache();
+      if (window.RpgScreen?.refresh) await RpgScreen.refresh();
+
       _listeners.forEach(cb => { try { cb(avatarId); } catch {} });
-      return true;
+      return {
+        ok: true,
+        cost_paid: typeof json.cost_paid === 'number' ? json.cost_paid : 0,
+        coins_remaining: json.coins_remaining,
+      };
     } catch {
-      return false;
+      return { ok: false };
     }
   }
 
@@ -101,14 +121,11 @@ const RpgAvatar = (() => {
   function getSchoolName()  { return _data?.school_name || null; }
 
   // ─── Render: Profile Avatar Section ─────────────────────────────
-  // Always shows — school members see the picker, non-members see a CTA
-  // to join a school via gIVEMEEDU.
   function renderProfileAvatar(containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
     container.style.display = 'block';
 
-    // Not eligible: no school membership → show teaser / CTA
     if (!_data || !_data.eligible) {
       container.innerHTML = `
         <div class="rpg-avatar-section rpg-avatar-empty">
@@ -162,8 +179,12 @@ const RpgAvatar = (() => {
   }
 
   // ─── Render: Full Picker Modal ──────────────────────────────────
-  function openPicker() {
+  async function openPicker() {
+    await load();
     if (!_data || !_data.eligible) return;
+
+    const cost = _data.avatar_switch_cost ?? DEFAULT_SWITCH_COST;
+    const coins = typeof _data.coins === 'number' ? _data.coins : 0;
 
     let modal = document.getElementById('rpg-avatar-picker-modal');
     if (!modal) {
@@ -184,15 +205,23 @@ const RpgAvatar = (() => {
           <button class="modal-close" data-action="close-picker">\u2715</button>
         </div>
         <p class="rpg-picker-hint">Tvoj pixel-art avatar pre RPG svet gIVEMEGAME</p>
+        <p class="rpg-picker-cost-line">Prvý výber alebo zmena inej postavy: <strong>🪙 ${cost.toLocaleString()}</strong> &middot; máš <strong>${coins.toLocaleString()}</strong></p>
         <div class="rpg-avatar-grid">
-          ${avatars.map(a => `
-            <button class="rpg-avatar-option ${a.id === currentId ? 'rpg-avatar-selected' : ''}"
+          ${avatars.map(a => {
+            const isCurrent = a.id === currentId;
+            const priceNote = isCurrent
+              ? '<span class="rpg-avatar-price rpg-avatar-price--free">aktuálny</span>'
+              : `<span class="rpg-avatar-price">${cost.toLocaleString()} 🪙</span>`;
+            return `
+            <button class="rpg-avatar-option ${isCurrent ? 'rpg-avatar-selected' : ''}"
               data-avatar-id="${a.id}" title="${_esc(a.label)}">
               <img src="${_esc(a.src)}" alt="${_esc(a.label)}" loading="lazy">
               <span class="rpg-avatar-label">${_esc(a.label)}</span>
-            </button>
-          `).join('')}
+              ${priceNote}
+            </button>`;
+          }).join('')}
         </div>
+        <p class="rpg-picker-free-note">Zrušenie výberu (bez avatara) je zadarmo.</p>
         <div class="rpg-picker-actions">
           <button class="btn btn-retro rpg-picker-deselect" data-action="deselect-avatar"
             style="${currentId ? '' : 'display:none'}">Zrusit vyber</button>
@@ -200,7 +229,6 @@ const RpgAvatar = (() => {
         </div>
       </div>`;
 
-    // Bind events
     modal.querySelectorAll('[data-action="close-picker"]').forEach(btn => {
       btn.addEventListener('click', () => { modal.style.display = 'none'; });
     });
@@ -210,24 +238,28 @@ const RpgAvatar = (() => {
 
     modal.querySelectorAll('.rpg-avatar-option').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const id = parseInt(btn.dataset.avatarId);
+        const id = parseInt(btn.dataset.avatarId, 10);
         if (isNaN(id)) return;
-        // Optimistic UI
         modal.querySelectorAll('.rpg-avatar-option').forEach(b => b.classList.remove('rpg-avatar-selected'));
         btn.classList.add('rpg-avatar-selected');
-        const ok = await select(id);
-        if (ok) {
-          // Refresh profile display
+        const result = await select(id);
+        if (result.ok) {
           renderProfileAvatar('rpg-avatar-container');
           _updateProfileHeaderAvatar(id);
-          if (window.GameUI?.toast) GameUI.toast('\u2694\ufe0f Avatar zmeneny!');
+          if (window.GameUI?.toast) {
+            if (result.cost_paid > 0) {
+              GameUI.toast(`\u2694\ufe0f Avatar zmenený! (\u2212${result.cost_paid.toLocaleString()} gIVEMECOIN)`);
+            } else {
+              GameUI.toast('\u2694\ufe0f Avatar aktualizovaný!');
+            }
+          }
         }
       });
     });
 
     modal.querySelector('[data-action="deselect-avatar"]')?.addEventListener('click', async () => {
-      const ok = await select(null);
-      if (ok) {
+      const result = await select(null);
+      if (result.ok) {
         renderProfileAvatar('rpg-avatar-container');
         _updateProfileHeaderAvatar(null);
         modal.style.display = 'none';
@@ -236,14 +268,12 @@ const RpgAvatar = (() => {
     });
   }
 
-  // ─── Update the main profile-avatar element ─────────────────────
   function _updateProfileHeaderAvatar(avatarId) {
     const el = document.getElementById('profile-avatar');
     if (!el) return;
     if (avatarId) {
       el.innerHTML = `<img src="/avatars/${avatarId}.png" alt="RPG Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;image-rendering:pixelated;">`;
     } else {
-      // Fall back to Google photo or default emoji
       const user = window.getCurrentUser ? window.getCurrentUser() : null;
       if (user?.photo) {
         el.innerHTML = `<img src="${user.photo}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
@@ -253,11 +283,9 @@ const RpgAvatar = (() => {
     }
   }
 
-  // ─── Future hooks (no-op for now) ───────────────────────────────
   function onSelect(cb) { _listeners.push(cb); }
   function getAnimClass() { return getCurrentId() ? 'rpg-avatar-idle' : ''; }
 
-  // ─── Escape ─────────────────────────────────────────────────────
   function _esc(s) {
     const d = document.createElement('div');
     d.textContent = s || '';

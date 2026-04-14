@@ -32,6 +32,18 @@ const RpgScreen = (() => {
   const ROLE_LABELS  = { admin: 'Admin', teacher: 'Učiteľ', student: 'Žiak' };
   const ROLE_CLASSES = { admin: 'rpg-role-admin', teacher: 'rpg-role-teacher', student: 'rpg-role-student' };
 
+  const THEME_KEYS = ['scholar', 'builder', 'healer', 'shadow', 'alchemist', 'sage', 'knight', 'neutral'];
+  const LOGO_BY_THEME = {
+    scholar: '📚 RPG PROFIL',
+    builder: '🔧 RPG PROFIL',
+    healer: '💚 RPG PROFIL',
+    shadow: '🌑 RPG PROFIL',
+    alchemist: '⚗️ RPG PROFIL',
+    sage: '✨ RPG PROFIL',
+    knight: '⚔️ RPG PROFIL',
+    neutral: '⚔️ RPG PROFIL',
+  };
+
   // Panel registry — add ready:true as panels are built
   const PANELS = [
     { id: 'talents',      label: '⚔️  Talenты',    ready: true  },
@@ -66,7 +78,23 @@ const RpgScreen = (() => {
 
   function close() {
     const screen = document.getElementById('rpg-screen');
-    if (screen) screen.style.display = 'none';
+    if (screen) {
+      screen.style.display = 'none';
+      THEME_KEYS.forEach(t => screen.classList.remove(`rpg-theme--${t}`));
+      screen.classList.add('rpg-theme--neutral');
+      const flavorEl = document.getElementById('rpg-screen-flavor');
+      if (flavorEl) {
+        flavorEl.textContent = '';
+        flavorEl.hidden = true;
+      }
+      const sideFlavor = document.getElementById('rpg-sidebar-flavor');
+      if (sideFlavor) {
+        sideFlavor.textContent = '';
+        sideFlavor.hidden = true;
+      }
+      const logoEl = document.getElementById('rpg-screen-logo');
+      if (logoEl) logoEl.textContent = LOGO_BY_THEME.neutral;
+    }
     document.body.style.overflow = '';
   }
 
@@ -76,6 +104,7 @@ const RpgScreen = (() => {
     const data = await RpgTalents.load();
     _lastData = data;
     _updateSidebar(data);
+    _applyAvatarTheme(data);
     _switchPanel(_currentPanel);
   }
 
@@ -94,12 +123,25 @@ const RpgScreen = (() => {
       }
     }
 
-    // Class name
+    // Class name (prefer server avatar_meta.label when present)
     const classEl = document.getElementById('rpg-sidebar-class');
     if (classEl) {
-      classEl.textContent = data?.class_id
-        ? (CLASS_LABELS[data.class_id] || `Trieda ${data.class_id}`)
-        : '— Bez triedy —';
+      const fromMeta = data?.avatar_meta?.label;
+      classEl.textContent = fromMeta
+        || (data?.class_id ? (CLASS_LABELS[data.class_id] || `Trieda ${data.class_id}`) : null)
+        || '— Bez triedy —';
+    }
+
+    const sideFlavor = document.getElementById('rpg-sidebar-flavor');
+    if (sideFlavor) {
+      const f = data?.avatar_meta?.flavor;
+      if (f) {
+        sideFlavor.textContent = f;
+        sideFlavor.hidden = false;
+      } else {
+        sideFlavor.textContent = '';
+        sideFlavor.hidden = true;
+      }
     }
 
     // Role badge + school name
@@ -131,6 +173,31 @@ const RpgScreen = (() => {
     // Change-avatar button — only for eligible users
     const pickerBtn = document.getElementById('rpg-sidebar-picker-btn');
     if (pickerBtn) pickerBtn.style.display = data?.eligible ? 'block' : 'none';
+  }
+
+  /** Per-avatar visual theme on #rpg-screen (colors + header copy). */
+  function _applyAvatarTheme(data) {
+    const screen = document.getElementById('rpg-screen');
+    if (!screen) return;
+    THEME_KEYS.forEach(t => screen.classList.remove(`rpg-theme--${t}`));
+    const meta = data?.avatar_meta;
+    const raw = meta?.theme;
+    const theme = raw && THEME_KEYS.includes(raw) && raw !== 'neutral' ? raw : 'neutral';
+    screen.classList.add(`rpg-theme--${theme}`);
+
+    const logoEl = document.getElementById('rpg-screen-logo');
+    if (logoEl) logoEl.textContent = LOGO_BY_THEME[theme] || LOGO_BY_THEME.neutral;
+
+    const flavorEl = document.getElementById('rpg-screen-flavor');
+    if (flavorEl) {
+      if (meta?.flavor) {
+        flavorEl.textContent = meta.flavor;
+        flavorEl.hidden = false;
+      } else {
+        flavorEl.textContent = '';
+        flavorEl.hidden = true;
+      }
+    }
   }
 
   function _refreshCoins(amount) {

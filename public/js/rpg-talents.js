@@ -262,7 +262,12 @@ const RpgTalents = (() => {
     });
   }
 
-  return { load, unlock, render };
+  /** Drop cached GET /api/rpg/talents payload (e.g. after avatar change). */
+  function clearCache() {
+    _data = null;
+  }
+
+  return { load, unlock, render, clearCache };
 })();
 
 window.RpgTalents = RpgTalents;

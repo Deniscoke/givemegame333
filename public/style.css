@@ -3936,6 +3936,353 @@ body.light-mode #levelup-feedback {
 }
 #rpg-panel-talents .rpg-talent-branch-label { color: #a855f7; }
 
+/* ─── RPG header + flavor + picker cost ─────────────────────────── */
+.rpg-screen-header-left {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+	flex: 1;
+	align-items: flex-start;
+}
+.rpg-screen-header {
+	align-items: flex-start;
+	min-height: 48px;
+	height: auto;
+}
+.rpg-screen-flavor {
+	font-family: 'VT323', monospace;
+	font-size: 15px;
+	line-height: 1.25;
+	margin: 0;
+	max-width: min(520px, 72vw);
+	color: #94a3b8;
+	opacity: 0.92;
+	font-weight: 400;
+}
+.rpg-sidebar-flavor {
+	font-family: 'VT323', monospace;
+	font-size: 12px;
+	line-height: 1.35;
+	margin: 0;
+	text-align: center;
+	color: #94a3b8;
+	opacity: 0.85;
+	max-width: 100%;
+}
+.rpg-picker-cost-line {
+	font-size: 13px;
+	color: #cbd5e1;
+	margin: 0 0 10px;
+	line-height: 1.4;
+}
+.rpg-picker-free-note {
+	font-size: 11px;
+	opacity: 0.55;
+	margin: 8px 0 0;
+}
+.rpg-avatar-option {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+}
+.rpg-avatar-price {
+	font-size: 10px;
+	font-family: 'VT323', monospace;
+	color: #fcd34d;
+	opacity: 0.9;
+}
+.rpg-avatar-price--free {
+	color: #86efac;
+}
+
+/* ─── Per-avatar themes (accent + atmosphere) ───────────────────── */
+.rpg-screen-overlay.rpg-theme--neutral .rpg-screen-flavor { color: #94a3b8; }
+
+/* Scholar — modrá / knižnica */
+.rpg-screen-overlay.rpg-theme--scholar {
+	background: #070f1a;
+}
+.rpg-screen-overlay.rpg-theme--scholar::before {
+	opacity: 0.1;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%2338bdf8' stroke-width='0.55'%3E%3Ccircle cx='60' cy='60' r='28'/%3E%3Ccircle cx='60' cy='32' r='28'/%3E%3Ccircle cx='60' cy='88' r='28'/%3E%3Ccircle cx='36' cy='46' r='28'/%3E%3Ccircle cx='84' cy='46' r='28'/%3E%3Ccircle cx='36' cy='74' r='28'/%3E%3Ccircle cx='84' cy='74' r='28'/%3E%3C/g%3E%3C/svg%3E");
+}
+.rpg-screen-overlay.rpg-theme--scholar::after {
+	background-image:
+		repeating-linear-gradient(60deg, transparent 0, transparent 35px, rgba(56,189,248,0.1) 35px, rgba(56,189,248,0.1) 36px),
+		repeating-linear-gradient(-60deg, transparent 0, transparent 35px, rgba(14,165,233,0.06) 35px, rgba(14,165,233,0.06) 36px);
+}
+.rpg-screen-overlay.rpg-theme--scholar .rpg-screen-header {
+	background: #0a1522;
+	border-bottom-color: #1e3a5f;
+}
+.rpg-screen-overlay.rpg-theme--scholar .rpg-screen-logo { color: #38bdf8; text-shadow: 0 0 12px rgba(56,189,248,0.55); }
+.rpg-screen-overlay.rpg-theme--scholar .rpg-screen-flavor { color: #7dd3fc; }
+.rpg-screen-overlay.rpg-theme--scholar .rpg-screen-sidebar {
+	background: #060d18;
+	border-right-color: #1e3a5f;
+}
+.rpg-screen-overlay.rpg-theme--scholar .rpg-sidebar-avatar-wrap {
+	outline-color: #0ea5e9;
+	box-shadow: 0 0 0 1px rgba(14,165,233,0.45), 0 0 22px rgba(14,165,233,0.35), inset 0 0 18px rgba(0,0,0,0.4);
+	background: rgba(14,165,233,0.12);
+}
+.rpg-screen-overlay.rpg-theme--scholar .rpg-sidebar-class-label { color: #38bdf8; }
+.rpg-screen-overlay.rpg-theme--scholar .rpg-sidebar-flavor { color: #bae6fd; }
+.rpg-screen-overlay.rpg-theme--scholar .rpg-nav-btn.active {
+	border-color: #0ea5e9;
+	background: rgba(14,165,233,0.15);
+}
+.rpg-screen-overlay.rpg-theme--scholar .rpg-screen-main {
+	background: linear-gradient(180deg, rgba(10,21,34,0.98) 0%, rgba(7,15,26,1) 100%),
+		radial-gradient(ellipse 80% 50% at 50% 0%, rgba(14,165,233,0.14), transparent 55%);
+}
+.rpg-screen-overlay.rpg-theme--scholar #rpg-panel-talents .rpg-talent-branch-label { color: #38bdf8; }
+
+/* Builder — oranž / dielňa */
+.rpg-screen-overlay.rpg-theme--builder {
+	background: #120a06;
+}
+.rpg-screen-overlay.rpg-theme--builder::before {
+	opacity: 0.11;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23fb923c' stroke-width='0.55'%3E%3Ccircle cx='60' cy='60' r='28'/%3E%3Ccircle cx='60' cy='32' r='28'/%3E%3Ccircle cx='60' cy='88' r='28'/%3E%3Ccircle cx='36' cy='46' r='28'/%3E%3Ccircle cx='84' cy='46' r='28'/%3E%3Ccircle cx='36' cy='74' r='28'/%3E%3Ccircle cx='84' cy='74' r='28'/%3E%3C/g%3E%3C/svg%3E");
+}
+.rpg-screen-overlay.rpg-theme--builder::after {
+	background-image:
+		repeating-linear-gradient(60deg, transparent 0, transparent 35px, rgba(251,146,60,0.1) 35px, rgba(251,146,60,0.1) 36px),
+		repeating-linear-gradient(-60deg, transparent 0, transparent 35px, rgba(234,88,12,0.07) 35px, rgba(234,88,12,0.07) 36px);
+}
+.rpg-screen-overlay.rpg-theme--builder .rpg-screen-header {
+	background: #1a0f0a;
+	border-bottom-color: #7c2d12;
+}
+.rpg-screen-overlay.rpg-theme--builder .rpg-screen-logo { color: #fb923c; text-shadow: 0 0 12px rgba(251,146,60,0.5); }
+.rpg-screen-overlay.rpg-theme--builder .rpg-screen-flavor { color: #fdba74; }
+.rpg-screen-overlay.rpg-theme--builder .rpg-screen-sidebar {
+	background: #0f0805;
+	border-right-color: #7c2d12;
+}
+.rpg-screen-overlay.rpg-theme--builder .rpg-sidebar-avatar-wrap {
+	outline-color: #ea580c;
+	box-shadow: 0 0 0 1px rgba(234,88,12,0.45), 0 0 22px rgba(251,146,60,0.3), inset 0 0 18px rgba(0,0,0,0.45);
+	background: rgba(251,146,60,0.1);
+}
+.rpg-screen-overlay.rpg-theme--builder .rpg-sidebar-class-label { color: #fb923c; }
+.rpg-screen-overlay.rpg-theme--builder .rpg-sidebar-flavor { color: #fed7aa; }
+.rpg-screen-overlay.rpg-theme--builder .rpg-nav-btn.active {
+	border-color: #ea580c;
+	background: rgba(251,146,60,0.14);
+}
+.rpg-screen-overlay.rpg-theme--builder .rpg-screen-main {
+	background: linear-gradient(180deg, rgba(26,15,10,0.98) 0%, rgba(18,10,6,1) 100%),
+		radial-gradient(ellipse 80% 50% at 50% 0%, rgba(251,146,60,0.12), transparent 55%);
+}
+.rpg-screen-overlay.rpg-theme--builder #rpg-panel-talents .rpg-talent-branch-label { color: #fb923c; }
+
+/* Healer — zelená / starostlivosť */
+.rpg-screen-overlay.rpg-theme--healer {
+	background: #06120c;
+}
+.rpg-screen-overlay.rpg-theme--healer::before {
+	opacity: 0.1;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%234ade80' stroke-width='0.55'%3E%3Ccircle cx='60' cy='60' r='28'/%3E%3Ccircle cx='60' cy='32' r='28'/%3E%3Ccircle cx='60' cy='88' r='28'/%3E%3Ccircle cx='36' cy='46' r='28'/%3E%3Ccircle cx='84' cy='46' r='28'/%3E%3Ccircle cx='36' cy='74' r='28'/%3E%3Ccircle cx='84' cy='74' r='28'/%3E%3C/g%3E%3C/svg%3E");
+}
+.rpg-screen-overlay.rpg-theme--healer::after {
+	background-image:
+		repeating-linear-gradient(60deg, transparent 0, transparent 35px, rgba(74,222,128,0.09) 35px, rgba(74,222,128,0.09) 36px),
+		repeating-linear-gradient(-60deg, transparent 0, transparent 35px, rgba(34,197,94,0.06) 35px, rgba(34,197,94,0.06) 36px);
+}
+.rpg-screen-overlay.rpg-theme--healer .rpg-screen-header {
+	background: #0a1810;
+	border-bottom-color: #166534;
+}
+.rpg-screen-overlay.rpg-theme--healer .rpg-screen-logo { color: #4ade80; text-shadow: 0 0 12px rgba(74,222,128,0.45); }
+.rpg-screen-overlay.rpg-theme--healer .rpg-screen-flavor { color: #bbf7d0; }
+.rpg-screen-overlay.rpg-theme--healer .rpg-screen-sidebar {
+	background: #07120c;
+	border-right-color: #166534;
+}
+.rpg-screen-overlay.rpg-theme--healer .rpg-sidebar-avatar-wrap {
+	outline-color: #22c55e;
+	box-shadow: 0 0 0 1px rgba(34,197,94,0.4), 0 0 22px rgba(74,222,128,0.28), inset 0 0 18px rgba(0,0,0,0.4);
+	background: rgba(34,197,94,0.1);
+}
+.rpg-screen-overlay.rpg-theme--healer .rpg-sidebar-class-label { color: #4ade80; }
+.rpg-screen-overlay.rpg-theme--healer .rpg-sidebar-flavor { color: #d9f99d; }
+.rpg-screen-overlay.rpg-theme--healer .rpg-nav-btn.active {
+	border-color: #22c55e;
+	background: rgba(74,222,128,0.12);
+}
+.rpg-screen-overlay.rpg-theme--healer .rpg-screen-main {
+	background: linear-gradient(180deg, rgba(10,24,16,0.98) 0%, rgba(6,18,12,1) 100%),
+		radial-gradient(ellipse 80% 50% at 50% 0%, rgba(74,222,128,0.1), transparent 55%);
+}
+.rpg-screen-overlay.rpg-theme--healer #rpg-panel-talents .rpg-talent-branch-label { color: #4ade80; }
+
+/* Shadow — fialová tma / rogue */
+.rpg-screen-overlay.rpg-theme--shadow {
+	background: #0a0614;
+}
+.rpg-screen-overlay.rpg-theme--shadow::before {
+	opacity: 0.12;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23c084fc' stroke-width='0.55'%3E%3Ccircle cx='60' cy='60' r='28'/%3E%3Ccircle cx='60' cy='32' r='28'/%3E%3Ccircle cx='60' cy='88' r='28'/%3E%3Ccircle cx='36' cy='46' r='28'/%3E%3Ccircle cx='84' cy='46' r='28'/%3E%3Ccircle cx='36' cy='74' r='28'/%3E%3Ccircle cx='84' cy='74' r='28'/%3E%3C/g%3E%3C/svg%3E");
+}
+.rpg-screen-overlay.rpg-theme--shadow::after {
+	background-image:
+		repeating-linear-gradient(60deg, transparent 0, transparent 35px, rgba(192,132,252,0.11) 35px, rgba(192,132,252,0.11) 36px),
+		repeating-linear-gradient(-60deg, transparent 0, transparent 35px, rgba(126,34,206,0.08) 35px, rgba(126,34,206,0.08) 36px);
+}
+.rpg-screen-overlay.rpg-theme--shadow .rpg-screen-header {
+	background: #120a1c;
+	border-bottom-color: #581c87;
+}
+.rpg-screen-overlay.rpg-theme--shadow .rpg-screen-logo { color: #c084fc; text-shadow: 0 0 14px rgba(192,132,252,0.55); }
+.rpg-screen-overlay.rpg-theme--shadow .rpg-screen-flavor { color: #e9d5ff; }
+.rpg-screen-overlay.rpg-theme--shadow .rpg-screen-sidebar {
+	background: #0c0614;
+	border-right-color: #581c87;
+}
+.rpg-screen-overlay.rpg-theme--shadow .rpg-sidebar-avatar-wrap {
+	outline-color: #9333ea;
+	box-shadow: 0 0 0 1px rgba(147,51,234,0.45), 0 0 26px rgba(192,132,252,0.35), inset 0 0 20px rgba(0,0,0,0.5);
+	background: rgba(147,51,234,0.12);
+}
+.rpg-screen-overlay.rpg-theme--shadow .rpg-sidebar-class-label { color: #d8b4fe; }
+.rpg-screen-overlay.rpg-theme--shadow .rpg-sidebar-flavor { color: #ddd6fe; }
+.rpg-screen-overlay.rpg-theme--shadow .rpg-nav-btn.active {
+	border-color: #9333ea;
+	background: rgba(147,51,234,0.16);
+}
+.rpg-screen-overlay.rpg-theme--shadow .rpg-screen-main {
+	background: linear-gradient(180deg, rgba(18,10,28,0.98) 0%, rgba(10,6,20,1) 100%),
+		radial-gradient(ellipse 80% 50% at 50% 0%, rgba(147,51,234,0.14), transparent 55%);
+}
+.rpg-screen-overlay.rpg-theme--shadow #rpg-panel-talents .rpg-talent-branch-label { color: #c084fc; }
+
+/* Alchemist — tyrkysová / laboratórium */
+.rpg-screen-overlay.rpg-theme--alchemist {
+	background: #061210;
+}
+.rpg-screen-overlay.rpg-theme--alchemist::before {
+	opacity: 0.11;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%232dd4bf' stroke-width='0.55'%3E%3Ccircle cx='60' cy='60' r='28'/%3E%3Ccircle cx='60' cy='32' r='28'/%3E%3Ccircle cx='60' cy='88' r='28'/%3E%3Ccircle cx='36' cy='46' r='28'/%3E%3Ccircle cx='84' cy='46' r='28'/%3E%3Ccircle cx='36' cy='74' r='28'/%3E%3Ccircle cx='84' cy='74' r='28'/%3E%3C/g%3E%3C/svg%3E");
+}
+.rpg-screen-overlay.rpg-theme--alchemist::after {
+	background-image:
+		repeating-linear-gradient(60deg, transparent 0, transparent 35px, rgba(45,212,191,0.1) 35px, rgba(45,212,191,0.1) 36px),
+		repeating-linear-gradient(-60deg, transparent 0, transparent 35px, rgba(13,148,136,0.07) 35px, rgba(13,148,136,0.07) 36px);
+}
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-screen-header {
+	background: #0a1816;
+	border-bottom-color: #0f766e;
+}
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-screen-logo { color: #2dd4bf; text-shadow: 0 0 12px rgba(45,212,191,0.45); }
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-screen-flavor { color: #99f6e4; }
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-screen-sidebar {
+	background: #071210;
+	border-right-color: #0f766e;
+}
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-sidebar-avatar-wrap {
+	outline-color: #14b8a6;
+	box-shadow: 0 0 0 1px rgba(20,184,166,0.45), 0 0 22px rgba(45,212,191,0.28), inset 0 0 18px rgba(0,0,0,0.45);
+	background: rgba(20,184,166,0.1);
+}
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-sidebar-class-label { color: #2dd4bf; }
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-sidebar-flavor { color: #ccfbf1; }
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-nav-btn.active {
+	border-color: #14b8a6;
+	background: rgba(45,212,191,0.12);
+}
+.rpg-screen-overlay.rpg-theme--alchemist .rpg-screen-main {
+	background: linear-gradient(180deg, rgba(10,24,22,0.98) 0%, rgba(6,18,16,1) 100%),
+		radial-gradient(ellipse 80% 50% at 50% 0%, rgba(45,212,191,0.12), transparent 55%);
+}
+.rpg-screen-overlay.rpg-theme--alchemist #rpg-panel-talents .rpg-talent-branch-label { color: #2dd4bf; }
+
+/* Sage — zlato / múdrosť */
+.rpg-screen-overlay.rpg-theme--sage {
+	background: #0f0c08;
+}
+.rpg-screen-overlay.rpg-theme--sage::before {
+	opacity: 0.11;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23fbbf24' stroke-width='0.55'%3E%3Ccircle cx='60' cy='60' r='28'/%3E%3Ccircle cx='60' cy='32' r='28'/%3E%3Ccircle cx='60' cy='88' r='28'/%3E%3Ccircle cx='36' cy='46' r='28'/%3E%3Ccircle cx='84' cy='46' r='28'/%3E%3Ccircle cx='36' cy='74' r='28'/%3E%3Ccircle cx='84' cy='74' r='28'/%3E%3C/g%3E%3C/svg%3E");
+}
+.rpg-screen-overlay.rpg-theme--sage::after {
+	background-image:
+		repeating-linear-gradient(60deg, transparent 0, transparent 35px, rgba(251,191,36,0.1) 35px, rgba(251,191,36,0.1) 36px),
+		repeating-linear-gradient(-60deg, transparent 0, transparent 35px, rgba(217,119,6,0.07) 35px, rgba(217,119,6,0.07) 36px);
+}
+.rpg-screen-overlay.rpg-theme--sage .rpg-screen-header {
+	background: #18120a;
+	border-bottom-color: #92400e;
+}
+.rpg-screen-overlay.rpg-theme--sage .rpg-screen-logo { color: #fbbf24; text-shadow: 0 0 14px rgba(251,191,36,0.5); }
+.rpg-screen-overlay.rpg-theme--sage .rpg-screen-flavor { color: #fde68a; }
+.rpg-screen-overlay.rpg-theme--sage .rpg-screen-sidebar {
+	background: #120e08;
+	border-right-color: #92400e;
+}
+.rpg-screen-overlay.rpg-theme--sage .rpg-sidebar-avatar-wrap {
+	outline-color: #d97706;
+	box-shadow: 0 0 0 1px rgba(217,119,6,0.45), 0 0 24px rgba(251,191,36,0.28), inset 0 0 18px rgba(0,0,0,0.45);
+	background: rgba(251,191,36,0.08);
+}
+.rpg-screen-overlay.rpg-theme--sage .rpg-sidebar-class-label { color: #fcd34d; }
+.rpg-screen-overlay.rpg-theme--sage .rpg-sidebar-flavor { color: #fef3c7; }
+.rpg-screen-overlay.rpg-theme--sage .rpg-nav-btn.active {
+	border-color: #d97706;
+	background: rgba(251,191,36,0.12);
+}
+.rpg-screen-overlay.rpg-theme--sage .rpg-screen-main {
+	background: linear-gradient(180deg, rgba(24,18,10,0.98) 0%, rgba(15,12,8,1) 100%),
+		radial-gradient(ellipse 80% 50% at 50% 0%, rgba(251,191,36,0.1), transparent 55%);
+}
+.rpg-screen-overlay.rpg-theme--sage #rpg-panel-talents .rpg-talent-branch-label { color: #fbbf24; }
+
+/* Knight — oceľ / česť */
+.rpg-screen-overlay.rpg-theme--knight {
+	background: #080a12;
+}
+.rpg-screen-overlay.rpg-theme--knight::before {
+	opacity: 0.1;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%2394a3b8' stroke-width='0.55'%3E%3Ccircle cx='60' cy='60' r='28'/%3E%3Ccircle cx='60' cy='32' r='28'/%3E%3Ccircle cx='60' cy='88' r='28'/%3E%3Ccircle cx='36' cy='46' r='28'/%3E%3Ccircle cx='84' cy='46' r='28'/%3E%3Ccircle cx='36' cy='74' r='28'/%3E%3Ccircle cx='84' cy='74' r='28'/%3E%3C/g%3E%3C/svg%3E");
+}
+.rpg-screen-overlay.rpg-theme--knight::after {
+	background-image:
+		repeating-linear-gradient(60deg, transparent 0, transparent 35px, rgba(148,163,184,0.1) 35px, rgba(148,163,184,0.1) 36px),
+		repeating-linear-gradient(-60deg, transparent 0, transparent 35px, rgba(71,85,105,0.07) 35px, rgba(71,85,105,0.07) 36px);
+}
+.rpg-screen-overlay.rpg-theme--knight .rpg-screen-header {
+	background: #0c1018;
+	border-bottom-color: #334155;
+}
+.rpg-screen-overlay.rpg-theme--knight .rpg-screen-logo { color: #e2e8f0; text-shadow: 0 0 12px rgba(148,163,184,0.45); }
+.rpg-screen-overlay.rpg-theme--knight .rpg-screen-flavor { color: #cbd5e1; }
+.rpg-screen-overlay.rpg-theme--knight .rpg-screen-sidebar {
+	background: #080a10;
+	border-right-color: #334155;
+}
+.rpg-screen-overlay.rpg-theme--knight .rpg-sidebar-avatar-wrap {
+	outline-color: #64748b;
+	box-shadow: 0 0 0 1px rgba(100,116,139,0.45), 0 0 22px rgba(148,163,184,0.22), inset 0 0 18px rgba(0,0,0,0.45);
+	background: rgba(148,163,184,0.08);
+}
+.rpg-screen-overlay.rpg-theme--knight .rpg-sidebar-class-label { color: #cbd5e1; }
+.rpg-screen-overlay.rpg-theme--knight .rpg-sidebar-flavor { color: #e2e8f0; }
+.rpg-screen-overlay.rpg-theme--knight .rpg-nav-btn.active {
+	border-color: #64748b;
+	background: rgba(148,163,184,0.12);
+}
+.rpg-screen-overlay.rpg-theme--knight .rpg-screen-main {
+	background: linear-gradient(180deg, rgba(12,16,24,0.98) 0%, rgba(8,10,18,1) 100%),
+		radial-gradient(ellipse 80% 50% at 50% 0%, rgba(148,163,184,0.1), transparent 55%);
+}
+.rpg-screen-overlay.rpg-theme--knight #rpg-panel-talents .rpg-talent-branch-label { color: #94a3b8; }
+
+/* Neutral — bez avatara (default fialová ako pôvod) */
+.rpg-screen-overlay.rpg-theme--neutral .rpg-screen-logo { color: #a855f7; text-shadow: 0 0 12px rgba(168,85,247,0.6); }
+
 /* ─── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 700px) {
 	.rpg-screen-sidebar {

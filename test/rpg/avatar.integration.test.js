@@ -14,7 +14,14 @@ const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const express = require('express');
-const { VALID_AVATAR_IDS, RPG_ELIGIBLE_ROLES, isValidAvatarId, getAvatarManifest } = require('../../lib/rpg-avatars');
+const {
+  VALID_AVATAR_IDS,
+  RPG_ELIGIBLE_ROLES,
+  isValidAvatarId,
+  getAvatarManifest,
+  getAvatarById,
+  RPG_AVATAR_SWITCH_COST,
+} = require('../../lib/rpg-avatars');
 
 // ─────────────────────────────────────────────────────────────
 // Test fixtures
@@ -71,12 +78,25 @@ describe('rpg-avatars manifest', () => {
     assert.strictEqual(manifest[6].id, 8);
   });
 
-  it('each manifest entry has id, label, src', () => {
+  it('each manifest entry has id, label, src, theme, flavor', () => {
     for (const a of getAvatarManifest()) {
       assert.ok(typeof a.id === 'number');
       assert.ok(typeof a.label === 'string' && a.label.length > 0);
       assert.ok(typeof a.src === 'string' && a.src.startsWith('/avatars/'));
+      assert.ok(typeof a.theme === 'string' && a.theme.length > 0);
+      assert.ok(typeof a.flavor === 'string' && a.flavor.length > 0);
     }
+  });
+
+  it('getAvatarById returns Sage for id 7', () => {
+    const a = getAvatarById(7);
+    assert.ok(a);
+    assert.strictEqual(a.label, 'Sage');
+    assert.strictEqual(a.theme, 'sage');
+  });
+
+  it('RPG_AVATAR_SWITCH_COST is 5000', () => {
+    assert.strictEqual(RPG_AVATAR_SWITCH_COST, 5000);
   });
 
   it('RPG_ELIGIBLE_ROLES matches Sprint 1 roles (no parent)', () => {
@@ -90,9 +110,11 @@ describe('rpg-avatars manifest', () => {
 // ─────────────────────────────────────────────────────────────
 
 // Build a minimal Express server that mirrors the RPG avatar endpoints
-// from server.js, but with injectable mocks.
-function buildRpgServer({ authUser, membershipRole, currentAvatarId, updateRowCount }) {
+// from server.js, but with injectable mocks (coin + avatar state).
+function buildRpgServer({ authUser, membershipRole, currentAvatarId, initialCoins = 100000, updateRowCount }) {
   const _rateBuckets = new Map();
+  let avatarId = currentAvatarId == null ? null : currentAvatarId;
+  let coins = initialCoins;
 
   function rpgRateLimit(userId, maxReqs, windowMs) {
     const key = `rpg-avatar:${userId}`;
@@ -133,7 +155,9 @@ function buildRpgServer({ authUser, membershipRole, currentAvatarId, updateRowCo
       eligible,
       role: eligible ? membership.role : null,
       school_name: eligible ? membership.school_name : null,
-      current_avatar_id: currentAvatarId || null,
+      current_avatar_id: avatarId,
+      coins,
+      avatar_switch_cost: RPG_AVATAR_SWITCH_COST,
       available: getAvatarManifest(),
     });
   });
@@ -150,13 +174,36 @@ function buildRpgServer({ authUser, membershipRole, currentAvatarId, updateRowCo
     }
     const { avatar_id } = req.body || {};
     if (!isValidAvatarId(avatar_id)) {
-      return res.status(400).json({ error: `Neplatný avatar. Povolené: ${VALID_AVATAR_IDS.join(', ')}` });
+      return res.status(400).json({ error: `Neplatný avatar. Povolené: ${VALID_AVATAR_IDS.join(', ')} alebo null` });
     }
     const rowCount = updateRowCount !== undefined ? updateRowCount : 1;
     if (rowCount === 0) {
       return res.status(404).json({ error: 'Profil nenájdený' });
     }
-    res.json({ ok: true, avatar_id });
+
+    if (avatar_id === null) {
+      avatarId = null;
+      return res.json({ ok: true, avatar_id: null, coins_remaining: coins, cost_paid: 0 });
+    }
+    if (avatar_id === avatarId) {
+      return res.json({ ok: true, avatar_id, coins_remaining: coins, cost_paid: 0 });
+    }
+    if (coins < RPG_AVATAR_SWITCH_COST) {
+      return res.status(402).json({
+        error: `Nedostatok coinov. Zmena avatara stojí ${RPG_AVATAR_SWITCH_COST} gIVEMECOIN.`,
+        code: 'INSUFFICIENT_COINS',
+        required: RPG_AVATAR_SWITCH_COST,
+        coins,
+      });
+    }
+    coins -= RPG_AVATAR_SWITCH_COST;
+    avatarId = avatar_id;
+    return res.json({
+      ok: true,
+      avatar_id,
+      coins_remaining: coins,
+      cost_paid: RPG_AVATAR_SWITCH_COST,
+    });
   });
 
   return new Promise((resolve) => {
@@ -249,6 +296,16 @@ describe('GET /api/rpg/avatar', () => {
     } finally { await ctx.close(); }
   });
 
+  it('returns avatar_switch_cost and coins', async () => {
+    const ctx = await buildRpgServer({ authUser: { id: USER_ID, email: 'a@b.c' }, membershipRole: 'student', initialCoins: 12345 });
+    try {
+      const r = await req(ctx.baseUrl, '/api/rpg/avatar');
+      assert.strictEqual(r.status, 200);
+      assert.strictEqual(r.body.avatar_switch_cost, RPG_AVATAR_SWITCH_COST);
+      assert.strictEqual(r.body.coins, 12345);
+    } finally { await ctx.close(); }
+  });
+
   it('returns current_avatar_id when set', async () => {
     const ctx = await buildRpgServer({ authUser: { id: USER_ID, email: 'a@b.c' }, membershipRole: 'admin', currentAvatarId: 5 });
     try {
@@ -307,6 +364,8 @@ describe('PATCH /api/rpg/avatar', () => {
       assert.strictEqual(r.status, 200);
       assert.strictEqual(r.body.ok, true);
       assert.strictEqual(r.body.avatar_id, 2);
+      assert.strictEqual(r.body.cost_paid, RPG_AVATAR_SWITCH_COST);
+      assert.strictEqual(r.body.coins_remaining, 100000 - RPG_AVATAR_SWITCH_COST);
     } finally { await ctx.close(); }
   });
 
@@ -318,6 +377,7 @@ describe('PATCH /api/rpg/avatar', () => {
       });
       assert.strictEqual(r.status, 200);
       assert.strictEqual(r.body.avatar_id, 8);
+      assert.strictEqual(r.body.cost_paid, RPG_AVATAR_SWITCH_COST);
     } finally { await ctx.close(); }
   });
 
@@ -330,6 +390,24 @@ describe('PATCH /api/rpg/avatar', () => {
       assert.strictEqual(r.status, 200);
       assert.strictEqual(r.body.ok, true);
       assert.strictEqual(r.body.avatar_id, null);
+      assert.strictEqual(r.body.cost_paid, 0);
+    } finally { await ctx.close(); }
+  });
+
+  it('returns 402 when coins are below avatar switch cost', async () => {
+    const ctx = await buildRpgServer({
+      authUser: { id: USER_ID, email: 'a@b.c' },
+      membershipRole: 'student',
+      initialCoins: 100,
+    });
+    try {
+      const r = await req(ctx.baseUrl, '/api/rpg/avatar', {
+        method: 'PATCH',
+        body: JSON.stringify({ avatar_id: 2 }),
+      });
+      assert.strictEqual(r.status, 402);
+      assert.strictEqual(r.body.code, 'INSUFFICIENT_COINS');
+      assert.strictEqual(r.body.required, RPG_AVATAR_SWITCH_COST);
     } finally { await ctx.close(); }
   });
 

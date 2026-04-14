@@ -15,7 +15,14 @@ const fs = require('fs');
 const { Pool } = require('pg');
 const { validateDurationGate, validateParticipantGate, validateHostCooldownGate } = require('./lib/reward-validation');
 const { createEduRouter } = require('./lib/edu-routes');
-const { VALID_AVATAR_IDS, RPG_ELIGIBLE_ROLES, isValidAvatarId, getAvatarManifest } = require('./lib/rpg-avatars');
+const {
+	VALID_AVATAR_IDS,
+	RPG_ELIGIBLE_ROLES,
+	isValidAvatarId,
+	getAvatarManifest,
+	getAvatarById,
+	RPG_AVATAR_SWITCH_COST,
+} = require('./lib/rpg-avatars');
 const { getTalentManifest, getTalentById, validatePrerequisite } = require('./lib/rpg-talents');
 const { computeRpgLevel, getEffectiveStats, awardXpInTransaction, computeSoloXpFromDurationMax } = require('./lib/rpg-progression');
 const {
@@ -2231,15 +2238,18 @@ app.get('/api/rpg/avatar', async (req, res) => {
     const membership = await _rpgGetMembership(user.id);
     const eligible = membership !== null;
     const { rows: profileRows } = await queryCoinsDb(
-      `SELECT rpg_avatar_id FROM public.profiles WHERE id = $1`,
+      `SELECT rpg_avatar_id, COALESCE(coins, 0)::int AS coins FROM public.profiles WHERE id = $1`,
       [user.id]
     );
     const currentAvatarId = profileRows[0]?.rpg_avatar_id || null;
+    const coins = profileRows[0]?.coins ?? 0;
     res.json({
       eligible,
       role: eligible ? membership.role : null,
       school_name: eligible ? membership.school_name : null,
       current_avatar_id: currentAvatarId,
+      coins,
+      avatar_switch_cost: RPG_AVATAR_SWITCH_COST,
       available: getAvatarManifest(),
     });
   } catch (err) {
@@ -2263,16 +2273,87 @@ app.patch('/api/rpg/avatar', async (req, res) => {
     }
     const { avatar_id } = req.body || {};
     if (!isValidAvatarId(avatar_id)) {
-      return res.status(400).json({ error: `Neplatný avatar. Povolené: ${VALID_AVATAR_IDS.join(', ')}` });
+      return res.status(400).json({ error: `Neplatný avatar. Povolené: ${VALID_AVATAR_IDS.join(', ')} alebo null` });
     }
-    const { rowCount } = await queryCoinsDb(
-      `UPDATE public.profiles SET rpg_avatar_id = $1, updated_at = now() WHERE id = $2`,
-      [avatar_id, user.id]
-    );
-    if (rowCount === 0) {
-      return res.status(404).json({ error: 'Profil nenájdený' });
+
+    const client = await coinsDbPool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: profileRows } = await client.query(
+        `SELECT COALESCE(coins, 0)::int AS coins, rpg_avatar_id FROM public.profiles WHERE id = $1 FOR UPDATE`,
+        [user.id]
+      );
+      const profile = profileRows[0];
+      if (!profile) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Profil nenájdený' });
+      }
+
+      let coins = profile.coins;
+      const cur = profile.rpg_avatar_id;
+
+      // Deselect (null) — free
+      if (avatar_id === null) {
+        await client.query(
+          `UPDATE public.profiles SET rpg_avatar_id = NULL, updated_at = now() WHERE id = $1`,
+          [user.id]
+        );
+        await client.query('COMMIT');
+        return res.json({
+          ok: true,
+          avatar_id: null,
+          coins_remaining: coins,
+          cost_paid: 0,
+        });
+      }
+
+      // Same avatar — no charge
+      if (avatar_id === cur) {
+        await client.query('COMMIT');
+        return res.json({
+          ok: true,
+          avatar_id,
+          coins_remaining: coins,
+          cost_paid: 0,
+        });
+      }
+
+      // Switch / first pick — charge RPG_AVATAR_SWITCH_COST
+      if (coins < RPG_AVATAR_SWITCH_COST) {
+        await client.query('ROLLBACK');
+        return res.status(402).json({
+          error: `Nedostatok coinov. Zmena avatara stojí ${RPG_AVATAR_SWITCH_COST} gIVEMECOIN.`,
+          code: 'INSUFFICIENT_COINS',
+          required: RPG_AVATAR_SWITCH_COST,
+          coins,
+        });
+      }
+
+      const newBal = coins - RPG_AVATAR_SWITCH_COST;
+      await client.query(
+        `UPDATE public.profiles SET rpg_avatar_id = $1, coins = $2, updated_at = now() WHERE id = $3`,
+        [avatar_id, newBal, user.id]
+      );
+      await client.query(
+        `INSERT INTO public.coin_transactions (user_id, amount, action, metadata)
+         VALUES ($1, $2, 'rpg_avatar_change', $3)`,
+        [user.id, -RPG_AVATAR_SWITCH_COST, JSON.stringify({ to: avatar_id, from: cur })]
+      );
+
+      await client.query('COMMIT');
+      res.json({
+        ok: true,
+        avatar_id,
+        coins_remaining: newBal,
+        cost_paid: RPG_AVATAR_SWITCH_COST,
+      });
+    } catch (txErr) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      throw txErr;
+    } finally {
+      client.release();
     }
-    res.json({ ok: true, avatar_id });
   } catch (err) {
     console.error('[RPG] PATCH /api/rpg/avatar error:', err.message);
     res.status(500).json({ error: 'Internal error' });
@@ -2300,6 +2381,14 @@ app.get('/api/rpg/talents', async (req, res) => {
     );
     const profile = profileRows[0] || {};
     const class_id = membership ? (profile.rpg_avatar_id || null) : null;
+    const avatarEntry = class_id ? getAvatarById(class_id) : null;
+    const avatar_meta = avatarEntry
+      ? {
+          theme: avatarEntry.theme,
+          flavor: avatarEntry.flavor,
+          label: avatarEntry.label,
+        }
+      : null;
 
     // Fetch unlocked talent IDs for this user
     const { rows: unlockedRows } = await queryCoinsDb(
@@ -2322,6 +2411,8 @@ app.get('/api/rpg/talents', async (req, res) => {
       role:        membership?.role        || null,
       school_name: membership?.school_name || null,
       coins:       profile.coins || 0,
+      avatar_meta,
+      avatar_switch_cost: RPG_AVATAR_SWITCH_COST,
       talents:     talentManifest,
       unlocked,
       progression,
