@@ -27,6 +27,7 @@ const {
   TIER_BONUS,
   STAT_KEYS,
   computeRpgLevel,
+  computeSoloXpFromDurationMax,
   getBaseStats,
   getTalentBonuses,
   getEffectiveStats,
@@ -358,6 +359,33 @@ describe('awardXpInTransaction input validation', () => {
 
   it('rejects null amount', async () => {
     await assert.rejects(() => award(null), /invalid amount/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+describe('computeSoloXpFromDurationMax', () => {
+  it('returns 30 XP for short sessions (5 min)', () => {
+    assert.strictEqual(computeSoloXpFromDurationMax(5), 30);
+  });
+
+  it('scales up for longer durations', () => {
+    const xp15 = computeSoloXpFromDurationMax(15);
+    const xp30 = computeSoloXpFromDurationMax(30);
+    assert.ok(xp30 > xp15, '30m should beat 15m');
+    assert.ok(xp15 >= 30 && xp15 <= 120);
+    assert.ok(xp30 >= 30 && xp30 <= 120);
+  });
+
+  it('caps at 120 XP', () => {
+    assert.strictEqual(computeSoloXpFromDurationMax(180), 120);
+    assert.strictEqual(computeSoloXpFromDurationMax(999), 120);
+  });
+
+  it('defaults to 15 min when duration missing or invalid', () => {
+    const expected = computeSoloXpFromDurationMax(15);
+    assert.strictEqual(computeSoloXpFromDurationMax(undefined), expected);
+    assert.strictEqual(computeSoloXpFromDurationMax(NaN), expected);
+    assert.strictEqual(computeSoloXpFromDurationMax(''), expected);
   });
 });
 

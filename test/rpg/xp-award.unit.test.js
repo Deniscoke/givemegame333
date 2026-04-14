@@ -20,6 +20,7 @@ const {
   XP_THRESHOLDS,
   MAX_LEVEL,
   computeRpgLevel,
+  computeSoloXpFromDurationMax,
   awardXpInTransaction,
 } = require('../../lib/rpg-progression');
 
@@ -362,14 +363,13 @@ describe('XP idempotency contract', () => {
     assert.strictEqual(uniqueConstraintError.code, '23505'); // PostgreSQL unique violation
   });
 
-  it('solo_complete daily cap prevents more than SOLO_DAILY_LIMIT awards per 24h', () => {
+  it('solo_complete daily cap is count-based; worst-case XP scales with long durations', () => {
     const SOLO_DAILY_LIMIT = 10;
-    const SOLO_XP_AWARD = 50;
-    const maxDailyXp = SOLO_DAILY_LIMIT * SOLO_XP_AWARD;
-    assert.strictEqual(maxDailyXp, 500);
-    // 500 XP max per day: enough to reach level 2, not enough to skip to level 3
-    const r = computeRpgLevel(maxDailyXp);
-    assert.strictEqual(r.level, 2);
+    const maxXpPerRun = 120; // computeSoloXpFromDurationMax upper bound
+    const worstCaseDailyXp = SOLO_DAILY_LIMIT * maxXpPerRun;
+    assert.strictEqual(worstCaseDailyXp, 1200);
+    const r = computeRpgLevel(worstCaseDailyXp);
+    assert.strictEqual(r.level, 3);
     assert.ok(r.xpToNext !== null, 'Should still have next level to go');
   });
 
@@ -395,9 +395,8 @@ describe('session_complete XP (SESSION_XP_AWARD = 75)', () => {
     assert.ok(r.progressPct > 0 && r.progressPct < 100);
   });
 
-  it('session_complete XP is higher than solo (75 > 50) — reflects multiplayer effort', () => {
-    const SOLO_XP_AWARD = 50;
-    assert.ok(SESSION_XP_AWARD > SOLO_XP_AWARD);
+  it('session_complete XP is higher than typical solo — reflects multiplayer effort', () => {
+    assert.ok(SESSION_XP_AWARD > computeSoloXpFromDurationMax(15));
   });
 
   it('awardXpInTransaction works correctly for 75 XP from level 0', async () => {
@@ -458,9 +457,8 @@ describe('robot_challenge XP (ROBOT_XP_AWARD = 30)', () => {
     assert.ok(Number.isInteger(ROBOT_XP_AWARD) && ROBOT_XP_AWARD > 0);
   });
 
-  it('30 XP is less than solo (50) — mini-game earns less than curriculum play', () => {
-    const SOLO_XP_AWARD = 50;
-    assert.ok(ROBOT_XP_AWARD < SOLO_XP_AWARD);
+  it('30 XP is less than a typical timed solo activity — mini-game earns less than curriculum play', () => {
+    assert.ok(ROBOT_XP_AWARD < computeSoloXpFromDurationMax(15));
   });
 
   it('awardXpInTransaction works correctly for 30 XP from level 0', async () => {

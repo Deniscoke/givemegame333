@@ -241,6 +241,7 @@ const App = (() => {
 						if (data.rpg_xp_gained > 0 && window.RpgXpFx) {
 							RpgXpFx.trigger(data.rpg_xp_gained, '📚 Solo hra dokončená');
 						}
+						if (window.RpgScreen?.refresh) await RpgScreen.refresh();
 					} catch (err) {
 						GameUI.toast(`❌ ${err.message}`);
 					}

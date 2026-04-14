@@ -17,7 +17,7 @@ const { validateDurationGate, validateParticipantGate, validateHostCooldownGate 
 const { createEduRouter } = require('./lib/edu-routes');
 const { VALID_AVATAR_IDS, RPG_ELIGIBLE_ROLES, isValidAvatarId, getAvatarManifest } = require('./lib/rpg-avatars');
 const { getTalentManifest, getTalentById, validatePrerequisite } = require('./lib/rpg-talents');
-const { computeRpgLevel, getEffectiveStats, awardXpInTransaction } = require('./lib/rpg-progression');
+const { computeRpgLevel, getEffectiveStats, awardXpInTransaction, computeSoloXpFromDurationMax } = require('./lib/rpg-progression');
 const {
 	getUserBillingState,
 	hasPaidAccess,
@@ -33,8 +33,8 @@ const JOIN_CODE_LENGTH  = 6;
 
 // ─── RPG XP award amounts ───────────────────────────────────────────────────
 // XP is awarded server-side only. No public endpoint.
-// Rate limiting is inherited from the parent event's existing guards.
-const SOLO_XP_AWARD    = 50;  // per solo completion (SOLO_DAILY_LIMIT cap → max 500 XP/day)
+// Solo completion XP scales with game duration (see computeSoloXpFromDurationMax).
+// Rate limiting: SOLO_DAILY_LIMIT completions per 24h.
 const TALENT_XP_AWARD  = 25;  // per talent unlock (idempotent via UNIQUE constraint)
 const SESSION_XP_AWARD = 75;  // per multiplayer session completion (reflection_done guard)
 const ROBOT_XP_AWARD   = 30;  // per robot challenge completion (no daily cap — mini-game)
@@ -1347,9 +1347,10 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			[user.id, COMPLETION_BONUS, 'solo_complete', JSON.stringify({ kompetence: awarded })]
 		);
 
-		// Award RPG XP (piggybacks on the existing SOLO_DAILY_LIMIT rate guard)
+		// Award RPG XP — amount depends on activity length (game_json.duration.max)
+		const soloXpAward = computeSoloXpFromDurationMax(game_json?.duration?.max);
 		const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
-			soloClient, user.id, SOLO_XP_AWARD, 'solo_complete'
+			soloClient, user.id, soloXpAward, 'solo_complete'
 		);
 
 		await soloClient.query('COMMIT');
@@ -1360,7 +1361,7 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			competency_points: updated,
 			competencies: enrichCompetencies(updated),
 			level_changes,
-			rpg_xp_gained: SOLO_XP_AWARD,
+			rpg_xp_gained: soloXpAward,
 			rpg_xp,
 			rpg_level,
 		});

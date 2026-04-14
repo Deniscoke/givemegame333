@@ -278,9 +278,16 @@ const RpgScreen = (() => {
   // Exposed for rpg-talents.js to refresh coins display after unlock
   function updateCoinsDisplay(amount) { _refreshCoins(amount); }
 
+  /** Reload talents/progression from API when RPG screen is open (e.g. after solo XP award). */
+  async function refresh() {
+    const screen = document.getElementById('rpg-screen');
+    if (!screen || screen.style.display === 'none') return;
+    await _loadAndRender();
+  }
+
   document.addEventListener('DOMContentLoaded', _init);
 
-  return { open, close, updateCoinsDisplay };
+  return { open, close, updateCoinsDisplay, refresh };
 })();
 
 window.RpgScreen = RpgScreen;
