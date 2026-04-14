@@ -149,10 +149,12 @@ const Session = (() => {
 				return;
 			}
 
-			GameUI.toast(_t('sess_end_success', '🏆 Session ukončená! {count} hráčov dostalo body.').replace('{count}', data.participants_rewarded ?? '?'));
+			GameUI.toast(_t('sess_end_success', '🏆 Session ukončená! {count} hráčov dostalo odmeny.').replace('{count}', data.participants_rewarded ?? '?'));
 			if (window.Coins?.load) window.Coins.load();
-			_loadAndRenderCompetencies();
-			if (GameUI.showLevelUpFeedback && data.my_level_changes) GameUI.showLevelUpFeedback(data.my_level_changes);
+			_loadAndRenderRpgHud();
+			if (data.my_rpg_level_up && GameUI.toast) {
+				GameUI.toast(_t('rpg_level_up_toast', '⭐ Nový RPG level!'));
+			}
 			if (data.rpg_xp_gained > 0 && window.RpgXpFx) RpgXpFx.trigger(data.rpg_xp_gained, '⚔️ Session dokončená');
 		} catch (err) {
 			GameUI.toast(`❌ ${err.message}`);
@@ -467,16 +469,11 @@ const Session = (() => {
 		finally { clearTimeout(t); }
 	}
 
-	async function _loadAndRenderCompetencies() {
+	async function _loadAndRenderRpgHud() {
 		try {
-			const token = await _token();
-			if (!token) return;
-			const res = await fetchApi('/api/profile/competencies', {
-				headers: { 'Authorization': `Bearer ${token}` }
-			});
-			if (!res.ok) return;
-			const json = await res.json();
-			GameUI.renderCompetencies(json.competencies || json.competency_points || {});
+			if (!window.RpgTalents?.load || !GameUI.renderRpgHudFromTalents) return;
+			const data = await RpgTalents.load();
+			if (data) GameUI.renderRpgHudFromTalents(data);
 		} catch (e) { /* silent */ }
 	}
 
@@ -485,14 +482,8 @@ const Session = (() => {
 	async function _fetchAndShowMyReward() {
 		if (_isHost || !_code) return;
 		try {
-			const token = await _token();
-			if (!token) return;
-			const res = await fetchApi(`/api/sessions/${_code}/my-reward`, {
-				headers: { 'Authorization': `Bearer ${token}` }
-			});
-			if (!res.ok) return;
-			const data = await res.json();
-			if (GameUI.showLevelUpFeedback && data.level_changes) GameUI.showLevelUpFeedback(data.level_changes);
+			await _loadAndRenderRpgHud();
+			if (window.RpgScreen?.refresh) await RpgScreen.refresh();
 		} catch (e) { /* silent */ }
 	}
 

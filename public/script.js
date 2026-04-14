@@ -182,24 +182,16 @@ const App = (() => {
 		await GameData.load();
 		await Coins.load();
 
-		// Load competency points on startup
+		// RPG postup (GET /api/rpg/talents) — pravý panel namiesto kompetenčných bodov
 		(async () => {
 			try {
-				const { data: { session } } = await Promise.race([
-					supabaseClient.auth.getSession(),
-					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
-				]);
-				if (!session?.access_token) return;
-				const res = await fetch('/api/profile/competencies', {
-					headers: { 'Authorization': `Bearer ${session.access_token}` }
-				});
-				if (!res.ok) return;
-				const data = await res.json();
-				GameUI.renderCompetencies(data.competencies || data.competency_points || {});
+				if (!window.RpgTalents?.load) return;
+				const data = await RpgTalents.load();
+				if (data && GameUI.renderRpgHudFromTalents) GameUI.renderRpgHudFromTalents(data);
 			} catch (e) { /* silent — not critical on startup */ }
 		})();
 
-		// Wire timer completion → reflection → solo competency award
+		// Wire timer completion → reflection → solo completion (RPG XP + coiny)
 		Timer.setOnComplete(() => {
 			if (window.SFX) SFX.play('complete');
 			if (!window.currentGame) return;
@@ -231,13 +223,16 @@ const App = (() => {
 							}
 							throw new Error(data.error || 'Chyba servera');
 						}
-						const kompCount = Object.keys(data.awarded || {}).length;
-						GameUI.toast(t('solo_comp_awarded', '🧠 +{pts} bodov! 🪙 +{coins} coinov')
-							.replace('{pts}', kompCount * 50).replace('{coins}', 100));
+						GameUI.toast(t('solo_comp_awarded', '🪙 +{coins} coinov · +{xp} RPG XP')
+							.replace('{coins}', '100').replace('{xp}', String(data.rpg_xp_gained || 0)));
 						if (window.Coins?.load) window.Coins.load();
-						if (GameUI.renderCompetencies) GameUI.renderCompetencies(data.competencies || data.competency_points || {});
-						if (GameUI.showLevelUpFeedback && data.level_changes) GameUI.showLevelUpFeedback(data.level_changes);
-						// XP celebration — only when server confirmed a real award
+						if (window.RpgTalents?.load) {
+							const td = await RpgTalents.load();
+							if (td && GameUI.renderRpgHudFromTalents) GameUI.renderRpgHudFromTalents(td);
+						}
+						if (data.rpg_level_up && data.rpg_level) {
+							GameUI.toast(t('rpg_level_up_toast', '⭐ Nový RPG level: {lv}!').replace('{lv}', String(data.rpg_level)));
+						}
 						if (data.rpg_xp_gained > 0 && window.RpgXpFx) {
 							RpgXpFx.trigger(data.rpg_xp_gained, '📚 Solo hra dokončená');
 						}
@@ -1447,7 +1442,7 @@ const App = (() => {
 
 		async function _loadProfileCompetencies() {
 			const compSection = document.getElementById('profile-competencies');
-			const compBars    = document.getElementById('profile-comp-bars');
+			const compBars = document.getElementById('profile-comp-bars');
 			if (!compSection || !compBars) return;
 			const user = getCurrentUser();
 			if (!user || user.uid === 'guest' || !supabaseClient) {
@@ -1455,41 +1450,17 @@ const App = (() => {
 				return;
 			}
 			try {
-				const { data: { session } } = await Promise.race([
-					supabaseClient.auth.getSession(),
-					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
-				]);
-				const token = session?.access_token;
-				if (!token) { compSection.style.display = 'none'; return; }
-				const ctrl = new AbortController();
-				const _cft = setTimeout(() => ctrl.abort(), 10000);
-				let res;
-				try {
-					res = await fetch('/api/profile/competencies', {
-						headers: { 'Authorization': `Bearer ${token}` },
-						signal: ctrl.signal
-					});
-				} finally { clearTimeout(_cft); }
-				if (!res.ok) { compSection.style.display = 'none'; return; }
-				const data = await res.json();
-				GameUI.renderProfileCompetencies(compBars, data.competencies || data.competency_points || {});
+				if (!window.RpgTalents?.load || !GameUI.renderProfileRpgBlock) {
+					compSection.style.display = 'none';
+					return;
+				}
+				const data = await RpgTalents.load();
+				GameUI.renderProfileRpgBlock(compBars, data);
 				compSection.style.display = 'block';
 			} catch (e) {
 				compSection.style.display = 'none';
 			}
 		}
-
-		// Small lookup so the analytics renderer can translate competency keys
-		// without needing access to the private COMP_META inside game-ui.js.
-		const _COMP_LABEL = {
-			'k-uceni':             ['comp_learning',  'K učeniu'],
-			'k-reseni-problemu':   ['comp_problem',   'K riešeniu'],
-			'komunikativni':       ['comp_comm',      'Komunikatívna'],
-			'socialni-personalni': ['comp_social',    'Sociálna'],
-			'obcanske':            ['comp_civic',     'Občianska'],
-			'pracovni':            ['comp_work',      'Pracovná'],
-			'digitalni':           ['comp_digital',   'Digitálna'],
-		};
 
 		async function _loadAnalytics() {
 			const el = document.getElementById('analytics-content');
@@ -1533,24 +1504,20 @@ const App = (() => {
 				session:  `👥 ${t('ana_style_group',    'Tímový hráč')}`,
 				balanced: `⚖️ ${t('ana_style_balanced', 'Vyvážený')}`,
 			};
-			const compLabel = key => {
-				if (!key) return '—';
-				const [lkey, lfb] = _COMP_LABEL[key] || ['', key];
-				return t(lkey, lfb);
-			};
 			const stat = (value, label, sub) => `
 				<div class="analytics-stat">
 					<div class="analytics-stat-value">${value}</div>
 					<div class="analytics-stat-label">${label}</div>
 					${sub ? `<div class="analytics-stat-sub">${sub}</div>` : ''}
 				</div>`;
+			const rpgLv = d.rpg_level != null ? d.rpg_level : '—';
+			const rpgXp = d.rpg_xp != null ? Number(d.rpg_xp).toLocaleString() : '—';
 			return `<div class="analytics-grid">
 				${stat(d.games_generated,     t('ana_games_gen',   'Hier'))}
 				${stat(d.solo_completions,    t('ana_solo',        'Solo hry'))}
 				${stat(d.session_completions, t('ana_sessions',    'Sessie'))}
-				${stat(d.total_xp,            t('ana_total_xp',   'Celkové XP'))}
-				${stat(d.strongest ? compLabel(d.strongest) : '—', t('ana_strongest', 'Najsilnejšia'))}
-				${stat(d.weakest   ? compLabel(d.weakest)   : '—', t('ana_weakest',   'Najslabšia'))}
+				${stat(rpgXp,                 t('ana_rpg_xp',      'RPG XP (celkom)'))}
+				${stat(`Lv. ${rpgLv}`,        t('ana_rpg_level',   'RPG level'))}
 				${stat(`🪙 ${d.coins_earned}`, t('ana_coins_earned', 'Coinov zarobených'))}
 				${stat(`🪙 ${d.coins_spent}`,  t('ana_coins_spent',  'Coinov minutých'))}
 				${stat(d.dominant_mode ? modeLabels[d.dominant_mode] : '—', t('ana_play_style', 'Herný štýl'))}

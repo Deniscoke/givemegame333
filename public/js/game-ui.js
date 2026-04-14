@@ -363,107 +363,127 @@ const GameUI = (() => {
 	// Labels resolved at render-time via _t() so language changes are respected.
 	const _t = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
 
-	const COMP_META = {
-		'k-uceni':             { labelKey: 'comp_learning',  labelFb: 'K učeniu',        color: '#4A90D9', icon: 'bi-book' },
-		'k-reseni-problemu':   { labelKey: 'comp_problem',   labelFb: 'K riešeniu prob.', color: '#E8A838', icon: 'bi-puzzle' },
-		'komunikativni':       { labelKey: 'comp_comm',      labelFb: 'Komunikatívna',    color: '#50C878', icon: 'bi-chat-dots' },
-		'socialni-personalni': { labelKey: 'comp_social',    labelFb: 'Sociálna',         color: '#E84C8B', icon: 'bi-people' },
-		'obcanske':            { labelKey: 'comp_civic',     labelFb: 'Občianska',        color: '#8B5CF6', icon: 'bi-flag' },
-		'pracovni':            { labelKey: 'comp_work',      labelFb: 'Pracovná',         color: '#F97316', icon: 'bi-tools' },
-		'digitalni':           { labelKey: 'comp_digital',   labelFb: 'Digitálna',        color: '#06B6D4', icon: 'bi-laptop' }
+	// ─── RPG stats (aligned with rpg-screen.js / GET /api/rpg/talents) ───
+	const RPG_STAT_META = {
+		insight:       { labelKey: 'rpg_stat_insight',       labelFb: 'Insight',       icon: '🔍', color: '#7dd3fc' },
+		focus:         { labelKey: 'rpg_stat_focus',         labelFb: 'Focus',         icon: '🎯', color: '#a5f3fc' },
+		creativity:    { labelKey: 'rpg_stat_creativity',    labelFb: 'Creativity',    icon: '🎨', color: '#f9a8d4' },
+		resilience:    { labelKey: 'rpg_stat_resilience',    labelFb: 'Resilience',    icon: '🛡️', color: '#86efac' },
+		communication: { labelKey: 'rpg_stat_communication', labelFb: 'Communication', icon: '💬', color: '#fde68a' },
+		strategy:      { labelKey: 'rpg_stat_strategy',      labelFb: 'Strategy',      icon: '♟️', color: '#c4b5fd' },
 	};
 
-	function renderCompetencies(pointsOrEnriched) {
+	/** Pravý panel / SMARTA — kompaktný RPG postup (namiesto kompetenčných barov). */
+	function renderRpgHudFromTalents(data) {
 		const panel = document.getElementById('competency-panel');
-		const bars  = document.getElementById('competency-bars');
-		if (!bars) return;
+		const bars = document.getElementById('competency-bars');
+		if (!panel || !bars) return;
 
-		const allKeys = Object.keys(COMP_META);
+		const panelHeadingSpan = panel.querySelector('.panel-heading span');
+		if (panelHeadingSpan) panelHeadingSpan.textContent = _t('rpg_hud_title', '⚔️ RPG postup');
 
-		// Support both raw {key: number} and enriched {key: {points, level, progress_pct}} formats
-		const getEntry = k => {
-			const v = pointsOrEnriched[k];
-			if (typeof v === 'object' && v !== null) return v;
-			const p = parseInt(v, 10) || 0;
-			return { points: p, level: null, progress_pct: 0 };
-		};
-
-		const hasAny = allKeys.some(k => getEntry(k).points > 0);
-		if (!hasAny) {
-			if (panel) panel.style.display = 'none';
+		if (!data || !data.progression) {
+			panel.style.display = 'none';
 			return;
 		}
 
-		const panelHeadingSpan = panel?.querySelector('.panel-heading span');
-		if (panelHeadingSpan) panelHeadingSpan.textContent = _t('comp_panel_title', 'Kompetencie');
-
-		const wasHidden = panel?.style.display === 'none' || !panel?.style.display;
-		if (panel) panel.style.display = '';
-
-		bars.innerHTML = '';
-		allKeys.forEach(key => {
-			const entry = getEntry(key);
-			const meta  = COMP_META[key];
-			const label = _t(meta.labelKey, meta.labelFb);
-			const levelLabel = entry.level ? ` · ${entry.level}` : '';
-
-			const row = document.createElement('div');
-			row.className = 'comp-row';
-			row.innerHTML = `
-				<div class="comp-label">
-					<i class="bi ${meta.icon}" style="color:${meta.color}"></i>
-					<span>${label}</span>
+		const prog = data.progression;
+		const xpLabel = prog.xpToNext
+			? `${prog.xp.toLocaleString()} / ${prog.xpToNext.toLocaleString()} XP`
+			: `${prog.xp.toLocaleString()} XP — MAX`;
+		const wasHidden = panel.style.display === 'none' || !panel.style.display;
+		panel.style.display = '';
+		bars.innerHTML = `
+			<div class="rpg-hud-compact">
+				<div class="rpg-hud-compact-row">
+					<span class="rpg-hud-lv">${_t('rpg_level_short', 'Lv.')} ${prog.level}</span>
+					<span class="rpg-hud-xp-mini">${xpLabel}</span>
 				</div>
-				<div class="comp-bar-wrap">
-					<div class="comp-bar" style="width:${entry.progress_pct}%;background:${meta.color}"></div>
+				<div class="rpg-hud-xpbar-wrap" title="${prog.progressPct ?? 0}%">
+					<div class="rpg-hud-xpbar" style="width:${prog.progressPct ?? 0}%"></div>
 				</div>
-				<span class="comp-val">${entry.points}${levelLabel}</span>`;
-			bars.appendChild(row);
-		});
+				<button type="button" class="btn btn-retro rpg-hud-open-btn" onclick="window.RpgScreen && RpgScreen.open()">
+					${_t('rpg_open_profile', '⚔️ Otvoriť RPG profil')}
+				</button>
+				${!data.eligible ? `<p class="rpg-hud-hint">${_t('rpg_hud_need_school', 'Pre talent tree a plné štatistiky sa zapoj do školy cez gIVEMEEDU.')}</p>` : ''}
+			</div>`;
 
-		// animationend listener (once:true) avoids coupling JS timeout to CSS duration.
-		if (panel && wasHidden) {
+		if (wasHidden) {
 			panel.classList.add('comp-panel-flash');
 			panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 			panel.addEventListener('animationend', () => panel.classList.remove('comp-panel-flash'), { once: true });
 		}
 	}
 
-	// ─── Profile modal competency view ───
-	// Full "character sheet" — all 6 competencies, level + XP bar within bracket.
-	// Accepts enriched {key:{points,level,progress_pct,next_threshold}} or raw {key:number}.
-	function renderProfileCompetencies(container, enriched) {
-		if (!container) return;
-		container.innerHTML = '';
-		Object.keys(COMP_META).forEach(key => {
-			const raw  = enriched[key];
-			const isEnriched = typeof raw === 'object' && raw !== null;
-			const pts  = isEnriched ? (raw.points || 0) : (parseInt(raw, 10) || 0);
-			const pct  = isEnriched ? (raw.progress_pct ?? 0) : 0;
-			const level = isEnriched ? (raw.level || '') : '';
-			const next  = isEnriched ? raw.next_threshold : null;
-			const meta  = COMP_META[key];
-			const label = _t(meta.labelKey, meta.labelFb);
+	/** Zachované meno pre staršie volania — vždy použije posledné načítané /api/rpg/talents. */
+	function renderCompetencies(_legacy) {
+		void _legacy;
+		renderRpgHudFromTalents(window.__lastRpgTalentsData || null);
+	}
 
-			const row = document.createElement('div');
-			row.className = 'comp-row profile-comp-row';
-			row.innerHTML = `
-				<div class="comp-label profile-comp-label">
-					<i class="bi ${meta.icon}" style="color:${meta.color}"></i>
-					<span>${label}</span>
-				</div>
-				<div class="profile-comp-right">
-					<div class="profile-comp-meta">
-						<span class="profile-comp-pts">${pts}</span>
-						${level ? `<span class="profile-comp-level" style="color:${meta.color}">${level}</span>` : ''}
-						${next  ? `<span class="profile-comp-next">→ ${next}</span>` : ''}
+	/** Modal gIVEME → záložka Profil — rovnaké štatistiky ako v RPG (Postup + 6 atribútov). */
+	function renderProfileRpgBlock(container, data) {
+		if (!container) return;
+		if (!data || !data.progression) {
+			container.innerHTML = `<p class="profile-rpg-muted">${_t('profile_rpg_load', 'Načítaj RPG údaje…')}</p>`;
+			return;
+		}
+
+		const prog = data.progression;
+		const stats = data.stats || {};
+		const base = stats.base || {};
+		const bonuses = stats.bonuses || {};
+		const effective = stats.effective || {};
+		const hasClass = Boolean(data.class_id);
+
+		const xpLine = prog.xpToNext
+			? `${prog.xp.toLocaleString()} / ${prog.xpToNext.toLocaleString()} XP`
+			: `${prog.xp.toLocaleString()} XP — MAX LEVEL`;
+		const needXp = prog.xpToNext ? Math.max(0, prog.xpToNext - prog.xp) : 0;
+
+		const statRows = Object.entries(RPG_STAT_META).map(([key, meta]) => {
+			const eff = effective[key] || 0;
+			const bon = bonuses[key] || 0;
+			const barW = hasClass ? Math.min(100, Math.round(eff / 20 * 100)) : 0;
+			const bonHtml = bon > 0 ? `<span class="rpg-stat-bonus">+${bon}</span>` : '';
+			const label = _t(meta.labelKey, meta.labelFb);
+			return `
+				<div class="profile-rpg-stat-row">
+					<span class="profile-rpg-stat-ic">${meta.icon}</span>
+					<span class="profile-rpg-stat-name">${label}</span>
+					<div class="profile-rpg-stat-bar-wrap">
+						<div class="profile-rpg-stat-bar" style="width:${barW}%;background:${meta.color}"></div>
 					</div>
-					<div class="comp-bar-wrap">
-						<div class="comp-bar" style="width:${pct}%;background:${meta.color}"></div>
-					</div>
+					<span class="profile-rpg-stat-val">${eff}${bonHtml}</span>
 				</div>`;
-			container.appendChild(row);
-		});
+		}).join('');
+
+		container.innerHTML = `
+			<section class="profile-rpg-block">
+				<h4 class="profile-rpg-subtitle">${_t('rpg_section_progress', '⚡ Postup')}</h4>
+				<div class="profile-rpg-level-row">
+					<span class="profile-rpg-badge">${_t('rpg_level_word', 'Level')} ${prog.level}</span>
+					<span class="profile-rpg-xp-line">${xpLine}</span>
+				</div>
+				<div class="profile-rpg-xpbar-wrap"><div class="profile-rpg-xpbar" style="width:${prog.progressPct ?? 0}%"></div></div>
+				${prog.xpToNext
+					? `<p class="profile-rpg-xp-hint">${_t('rpg_need_xp', 'Do ďalšieho levelu chýba {n} XP').replace('{n}', needXp.toLocaleString())}</p>`
+					: `<p class="profile-rpg-xp-hint">${_t('rpg_max_level', 'Maximálny level!')}</p>`}
+
+				<h4 class="profile-rpg-subtitle">${_t('rpg_section_stats', '📊 Atribúty postavy')}</h4>
+				${!hasClass
+					? `<p class="profile-rpg-muted">${_t('profile_rpg_pick_avatar', 'Vyber si RPG avatara v plnom RPG profile — potom sa zobrazia základné hodnoty triedy a bonusy z talentov.')}</p>`
+					: ''}
+				<div class="profile-rpg-stat-list">${statRows}</div>
+				${hasClass && Object.values(bonuses).some(v => v > 0)
+					? `<p class="profile-rpg-bonus-note">${_t('rpg_bonus_note', 'Zelené + sú bonusy z talent tree.')}</p>`
+					: ''}
+			</section>`;
+	}
+
+	/** @deprecated — kompetencie nahradené RPG; ponechané ako prázdny hook */
+	function renderProfileCompetencies(container, _legacy) {
+		renderProfileRpgBlock(container, window.__lastRpgTalentsData || null);
 	}
 
 	function activateRating(savedId, currentRating) {
@@ -471,57 +491,9 @@ const GameUI = (() => {
 		if (el) _renderRatingWidget(el, savedId, currentRating || 0);
 	}
 
-	// ─── Level-up feedback panel ───
-	// Shows a slide-in panel after game completion with per-competency point gains.
-	// levelChanges: { [compKey]: { previous_points, new_points, from_level, to_level, leveled_up } }
-	function showLevelUpFeedback(levelChanges) {
-		if (!levelChanges || !Object.keys(levelChanges).length) return;
-
-		const existing = document.getElementById('levelup-feedback');
-		if (existing) existing.remove();
-
-		// Filter to only competencies where points were actually gained
-		const gained = Object.entries(levelChanges).filter(([, c]) => c.new_points > c.previous_points);
-		if (!gained.length) return;
-
-		const panel = document.createElement('div');
-		panel.id = 'levelup-feedback';
-		panel.className = 'levelup-panel';
-
-		panel.innerHTML = `
-			<div class="levelup-panel-header">
-				<span>${_t('levelup_title', '🧠 Kompetencie')}</span>
-				<button class="levelup-close" onclick="document.getElementById('levelup-feedback')?.remove()">✕</button>
-			</div>
-			<div class="levelup-list"></div>`;
-
-		const list = panel.querySelector('.levelup-list');
-		let hasLevelUp = false;
-		gained.forEach(([key, change], i) => {
-			const meta = COMP_META[key];
-			if (!meta) return;
-			const pts    = change.new_points - change.previous_points;
-			const label  = _t(meta.labelKey, meta.labelFb);
-			const lvlTxt = change.leveled_up
-				? `${change.from_level} → ${change.to_level} <span class="levelup-badge">${_t('levelup_badge', '▲ Level Up!')}</span>`
-				: change.to_level;
-			if (change.leveled_up) hasLevelUp = true;
-
-			const row = document.createElement('div');
-			row.className = 'levelup-row' + (change.leveled_up ? ' leveled-up' : '');
-			row.style.animationDelay = `${i * 100}ms`;
-			row.innerHTML = `
-				<i class="bi ${meta.icon} levelup-icon" style="color:${meta.color}"></i>
-				<span class="levelup-name">${label}</span>
-				<span class="levelup-pts">+${pts} ${_t('levelup_pts', 'b.')}</span>
-				<span class="levelup-level">${lvlTxt}</span>`;
-			list.appendChild(row);
-		});
-
-		document.body.appendChild(panel);
-		if (hasLevelUp && window.SFX) SFX.play('levelup');
-		// Auto-dismiss after 10 s
-		setTimeout(() => { if (document.getElementById('levelup-feedback') === panel) panel.remove(); }, 10000);
+	// ─── Level-up feedback — kompetencie nahradené RPG (XP efekt + toast) ───
+	function showLevelUpFeedback(_levelChanges) {
+		void _levelChanges;
 	}
 
 	return {
@@ -530,6 +502,7 @@ const GameUI = (() => {
 		openHelp, toggleFullscreen, toggleHistory,
 		toggleMobileFilters, toggleMobileSmarta, closeMobileOverlays,
 		toast, setStatus, updateStats, renderCompetencies, renderProfileCompetencies,
+		renderRpgHudFromTalents, renderProfileRpgBlock,
 		activateRating, showLevelUpFeedback
 	};
 })();

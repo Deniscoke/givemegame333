@@ -52,6 +52,7 @@ const RpgTalents = (() => {
       });
       if (!res.ok) { _data = null; return null; }
       _data = await res.json();
+      try { window.__lastRpgTalentsData = _data; } catch (_) {}
       return _data;
     } catch {
       _data = null;

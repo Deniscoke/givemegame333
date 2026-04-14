@@ -2922,6 +2922,55 @@ body.light-mode .profile-comp-section { border-top-color: rgba(0,0,0,0.1); }
 .profile-comp-next { font-size: 10px; opacity: 0.45; margin-left: auto; }
 body.light-mode .profile-comp-level { background: rgba(0,0,0,0.07); }
 
+/* RPG HUD (pravý panel) + profil modal — namiesto kompetenčných barov */
+.rpg-hud-compact { display: flex; flex-direction: column; gap: 8px; }
+.rpg-hud-compact-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.rpg-hud-lv { font-family: 'Press Start 2P', cursive; font-size: 9px; color: var(--accent, #a855f7); }
+.rpg-hud-xp-mini { font-size: 11px; opacity: 0.75; }
+.rpg-hud-xpbar-wrap {
+	height: 8px; border-radius: 2px; background: rgba(255,255,255,0.08);
+	overflow: hidden; border: 1px solid rgba(168,85,247,0.35);
+}
+body.light-mode .rpg-hud-xpbar-wrap { background: rgba(0,0,0,0.06); }
+.rpg-hud-xpbar { height: 100%; background: linear-gradient(90deg, #7c3aed, #a855f7); transition: width 0.4s ease; }
+.rpg-hud-open-btn { font-size: 11px !important; padding: 6px 10px !important; margin-top: 4px; }
+.rpg-hud-hint { font-size: 10px; opacity: 0.55; line-height: 1.35; margin: 0; }
+
+.profile-rpg-block { text-align: left; }
+.profile-rpg-subtitle {
+	font-family: 'Press Start 2P', cursive; font-size: 8px; opacity: 0.65;
+	text-transform: uppercase; letter-spacing: 0.04em; margin: 14px 0 8px;
+}
+.profile-rpg-level-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+.profile-rpg-badge {
+	font-family: 'Press Start 2P', cursive; font-size: 9px; color: #fcd34d;
+}
+.profile-rpg-xp-line { font-size: 13px; opacity: 0.85; }
+.profile-rpg-xpbar-wrap {
+	height: 10px; border-radius: 3px; background: rgba(255,255,255,0.08);
+	overflow: hidden; border: 1px solid rgba(168,85,247,0.35); margin: 6px 0;
+}
+body.light-mode .profile-rpg-xpbar-wrap { background: rgba(0,0,0,0.06); }
+.profile-rpg-xpbar { height: 100%; background: linear-gradient(90deg, #7c3aed, #a855f7); }
+.profile-rpg-xp-hint { font-size: 11px; opacity: 0.55; margin: 0 0 4px; }
+.profile-rpg-muted { font-size: 12px; opacity: 0.6; line-height: 1.4; }
+.profile-rpg-stat-list { display: flex; flex-direction: column; gap: 8px; }
+.profile-rpg-stat-row {
+	display: grid;
+	grid-template-columns: 22px 1fr minmax(52px, 72px) 52px;
+	align-items: center; gap: 6px; font-size: 12px;
+}
+.profile-rpg-stat-ic { font-size: 14px; }
+.profile-rpg-stat-name { opacity: 0.9; }
+.profile-rpg-stat-bar-wrap {
+	height: 6px; border-radius: 2px; background: rgba(255,255,255,0.07);
+	overflow: hidden;
+}
+.profile-rpg-stat-bar { height: 100%; border-radius: 2px; }
+.profile-rpg-stat-val { text-align: right; font-variant-numeric: tabular-nums; }
+.profile-rpg-stat-val .rpg-stat-bonus { color: #86efac; font-size: 10px; margin-left: 2px; }
+.profile-rpg-bonus-note { font-size: 10px; opacity: 0.5; margin-top: 8px; }
+
 /* ─── Game Rating Widget ─── */
 .game-rating-widget {
   padding: 10px 16px 12px;

@@ -1293,49 +1293,18 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		return res.status(500).json({ error: 'Kontrola limitu zlyhala', code: 'COOLDOWN_CHECK_ERROR' });
 	}
 
-	// Atomically: update competency points + award coins + award RPG XP
+	// Atomically: award coins + RPG XP (kompetencie z hry ostávajú len v game_json / RVP — bez samostatných „kompetenčných bodov“)
+	const validKomps = kompetence.filter(k => VALID_COMPETENCY_KEYS.includes(k));
 	let soloClient;
 	try {
 		soloClient = await coinsDbPool.connect();
 		await soloClient.query('BEGIN');
 
-		// Fetch current competency points (inside transaction for consistency)
-		const { rows: profileRows } = await soloClient.query(
-			'SELECT competency_points FROM public.profiles WHERE id = $1',
+		const { rows: preRows } = await soloClient.query(
+			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1',
 			[user.id]
 		);
-		const current = profileRows[0]?.competency_points || {};
-
-		// Merge: add COMPETENCY_AWARD to each listed competency
-		const updated = { ...current };
-		const awarded = {};
-		const validKomps = kompetence.filter(k => VALID_COMPETENCY_KEYS.includes(k));
-		// Snapshot levels before awarding — used for level-up detection below
-		const prevLevels = {};
-		validKomps.forEach(k => { prevLevels[k] = computeLevel(current[k] || 0); });
-		validKomps.forEach(k => {
-			updated[k] = (parseInt(updated[k], 10) || 0) + COMPETENCY_AWARD;
-			awarded[k] = COMPETENCY_AWARD;
-		});
-		// Compute per-competency level changes
-		const level_changes = {};
-		validKomps.forEach(k => {
-			const from = prevLevels[k];
-			const to   = computeLevel(updated[k]);
-			level_changes[k] = {
-				previous_points: from.points,
-				new_points:      to.points,
-				from_level:      from.level,
-				to_level:        to.level,
-				leveled_up:      from.level !== to.level,
-			};
-		});
-
-		// Write updated competency points
-		await soloClient.query(
-			'UPDATE public.profiles SET competency_points = $1 WHERE id = $2',
-			[JSON.stringify(updated), user.id]
-		);
+		const levelBefore = computeRpgLevel(preRows[0]?.rpg_xp || 0).level;
 
 		// Award completion bonus coins
 		await soloClient.query(
@@ -1344,7 +1313,10 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		);
 		await soloClient.query(
 			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
-			[user.id, COMPLETION_BONUS, 'solo_complete', JSON.stringify({ kompetence: awarded })]
+			[user.id, COMPLETION_BONUS, 'solo_complete', JSON.stringify({
+				kompetence_keys: validKomps,
+				duration_max: game_json?.duration?.max ?? null,
+			})]
 		);
 
 		// Award RPG XP — amount depends on activity length (game_json.duration.max)
@@ -1352,18 +1324,20 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
 			soloClient, user.id, soloXpAward, 'solo_complete'
 		);
+		const rpg_level_up = rpg_level > levelBefore;
 
 		await soloClient.query('COMMIT');
 
 		res.json({
 			ok: true,
-			awarded,
-			competency_points: updated,
-			competencies: enrichCompetencies(updated),
-			level_changes,
+			awarded: {},
+			competency_points: {},
+			competencies: {},
+			level_changes: {},
 			rpg_xp_gained: soloXpAward,
 			rpg_xp,
 			rpg_level,
+			rpg_level_up,
 		});
 	} catch (err) {
 		if (soloClient) { try { await soloClient.query('ROLLBACK'); } catch (_) {} }
@@ -1400,28 +1374,18 @@ app.get('/api/profile/analytics', async (req, res) => {
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
 
-	// Map competency keys to their i18n label keys (mirrors COMP_META in game-ui.js)
-	const COMP_LABEL_KEYS = {
-		'k-uceni':             'comp_learning',
-		'k-reseni-problemu':   'comp_problem',
-		'komunikativni':       'comp_comm',
-		'socialni-personalni': 'comp_social',
-		'obcanske':            'comp_civic',
-		'pracovni':            'comp_work',
-		'digitalni':           'comp_digital',
-	};
-
 	try {
 		// 1. Profile row — games_generated, games_exported, competency_points
 		const { rows: profRows } = await queryCoinsDb(
 			`SELECT COALESCE(games_generated, 0)::int AS games_generated,
 			        COALESCE(games_exported,  0)::int AS games_exported,
-			        competency_points
+			        COALESCE(rpg_xp, 0)::int AS rpg_xp
 			 FROM public.profiles WHERE id = $1`,
 			[user.id]
 		);
 		const prof = profRows[0] || {};
-		const compPoints = prof.competency_points || {};
+		const rpgXpRaw = parseInt(prof.rpg_xp, 10) || 0;
+		const rpgProg = computeRpgLevel(rpgXpRaw);
 
 		// 2. Transaction aggregates — solo/session counts + coin flows
 		const { rows: txRows } = await queryCoinsDb(
@@ -1437,19 +1401,7 @@ app.get('/api/profile/analytics', async (req, res) => {
 		const solo     = parseInt(tx.solo_completions,    10) || 0;
 		const sessions = parseInt(tx.session_completions, 10) || 0;
 
-		// 3. Derive competency stats from stored points
-		const pointEntries = VALID_COMPETENCY_KEYS.map(k => [k, parseInt(compPoints[k], 10) || 0]);
-		const total_xp     = pointEntries.reduce((s, [, v]) => s + v, 0);
-		const withPoints   = pointEntries.filter(([, v]) => v > 0);
-		const strongest    = withPoints.length
-			? withPoints.reduce((a, b) => b[1] > a[1] ? b : a)[0]
-			: null;
-		// Weakest only meaningful when ≥2 competencies have points
-		const weakest      = withPoints.length > 1
-			? withPoints.reduce((a, b) => b[1] < a[1] ? b : a)[0]
-			: null;
-
-		// 4. Dominant mode: inferred from solo vs session completions
+		// 3. Dominant mode: inferred from solo vs session completions
 		const dominant_mode = solo > sessions ? 'solo'
 			: sessions > solo              ? 'session'
 			: (solo + sessions > 0)        ? 'balanced'
@@ -1462,11 +1414,8 @@ app.get('/api/profile/analytics', async (req, res) => {
 			session_completions:    sessions,
 			coins_earned:           parseInt(tx.coins_earned, 10) || 0,
 			coins_spent:            parseInt(tx.coins_spent,  10) || 0,
-			total_xp,
-			strongest,
-			strongest_label_key:    strongest ? (COMP_LABEL_KEYS[strongest] || strongest) : null,
-			weakest,
-			weakest_label_key:      weakest   ? (COMP_LABEL_KEYS[weakest]   || weakest)   : null,
+			rpg_xp:                 rpgXpRaw,
+			rpg_level:              rpgProg.level,
 			dominant_mode,
 		});
 	} catch (err) {
@@ -1772,15 +1721,14 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 		// ─── Filter and whitelist competency keys ──────────────────────
 		const rawKompetence = sess.game_json?.rvp?.kompetence || [];
 		const kompetence = rawKompetence.filter(k => VALID_COMPETENCY_KEYS.includes(k));
-		const awarded = {};
-		kompetence.forEach(k => { awarded[k] = COMPETENCY_AWARD; });
+		const awardedMarker = { rpg: true, kompetence_keys: kompetence };
 
 		// ─── Transactional reward loop ─────────────────────────────────
 		// All awards are wrapped in a single DB transaction to prevent
 		// partial awarding on crash/error (atomicity guarantee).
 		const client = await coinsDbPool.connect();
 		let participantsRewarded = 0;
-		let myLevelChanges = null;
+		let myRpgLevelUp = false;
 		let myXpGained = 0;
 		try {
 			await client.query('BEGIN');
@@ -1792,58 +1740,38 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 			);
 
 			for (const p of parts) {
-				const { rows: profRows } = await client.query(
-					'SELECT competency_points FROM public.profiles WHERE id = $1', [p.user_id]
+				const { rows: preXpRows } = await client.query(
+					'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1 FOR UPDATE',
+					[p.user_id]
 				);
-				const current = profRows[0]?.competency_points || {};
-				const updated = { ...current };
-				const pPrevLevels = {};
-				kompetence.forEach(k => { pPrevLevels[k] = computeLevel(current[k] || 0); });
-				kompetence.forEach(k => {
-					updated[k] = (parseInt(updated[k], 10) || 0) + COMPETENCY_AWARD;
-				});
-				// Track level changes for the requesting user
-				if (p.user_id === user.id) {
-					myLevelChanges = {};
-					kompetence.forEach(k => {
-						const from = pPrevLevels[k];
-						const to   = computeLevel(updated[k]);
-						myLevelChanges[k] = {
-							previous_points: from.points,
-							new_points:      to.points,
-							from_level:      from.level,
-							to_level:        to.level,
-							leveled_up:      from.level !== to.level,
-						};
-					});
-				}
+				const levelBefore = computeRpgLevel(preXpRows[0]?.rpg_xp || 0).level;
 
-				// UPSERT guards against silent failure when profile row does not exist yet;
-				// a plain UPDATE would award 0 points with no error if the profile is missing.
-				const { rowCount: profileRowCount } = await client.query(
-					`INSERT INTO public.profiles (id, competency_points)
-					 VALUES ($1, $2)
-					 ON CONFLICT (id) DO UPDATE SET competency_points = EXCLUDED.competency_points`,
-					[p.user_id, JSON.stringify(updated)]
-				);
-				if (profileRowCount === 0) console.error(`[Sessions] complete: profile upsert returned 0 rows for user ${p.user_id}`);
 				await client.query(
 					`UPDATE public.session_participants
 					 SET awarded_competencies = $1 WHERE session_id = $2 AND user_id = $3`,
-					[JSON.stringify(awarded), sess.id, p.user_id]
+					[JSON.stringify(awardedMarker), sess.id, p.user_id]
 				);
-				await client.query(
+
+				const { rowCount: coinRows } = await client.query(
 					'UPDATE public.profiles SET coins = COALESCE(coins,0) + $1 WHERE id = $2',
 					[COMPLETION_BONUS, p.user_id]
 				);
+				if (coinRows === 0) {
+					await client.query(
+						'INSERT INTO public.profiles (id, coins) VALUES ($1, $2)',
+						[p.user_id, COMPLETION_BONUS]
+					);
+				}
 				await client.query(
 					'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
-					[p.user_id, COMPLETION_BONUS, 'session_complete', JSON.stringify({ session_code: code, kompetence: awarded })]
+					[p.user_id, COMPLETION_BONUS, 'session_complete', JSON.stringify({ session_code: code, kompetence_keys: kompetence })]
 				);
 
-				// Award RPG XP — piggybacks on the reflection_done + awarded_competencies IS NULL guard
-				await awardXpInTransaction(client, p.user_id, SESSION_XP_AWARD, 'session_complete');
-				if (p.user_id === user.id) myXpGained = SESSION_XP_AWARD;
+				const { level: rpgLvlAfter } = await awardXpInTransaction(client, p.user_id, SESSION_XP_AWARD, 'session_complete');
+				if (p.user_id === user.id) {
+					myXpGained = SESSION_XP_AWARD;
+					myRpgLevelUp = rpgLvlAfter > levelBefore;
+				}
 			}
 			participantsRewarded = parts.length;
 
@@ -1866,7 +1794,15 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 
 			await client.query('COMMIT');
 
-			res.json({ ok: true, awarded, participants_rewarded: participantsRewarded, validation, my_level_changes: myLevelChanges, rpg_xp_gained: myXpGained });
+			res.json({
+				ok: true,
+				awarded: awardedMarker,
+				participants_rewarded: participantsRewarded,
+				validation,
+				my_level_changes: {},
+				my_rpg_level_up: myRpgLevelUp,
+				rpg_xp_gained: myXpGained,
+			});
 		} catch (txErr) {
 			await client.query('ROLLBACK');
 			// Revert status lock so host can retry
@@ -1918,6 +1854,12 @@ app.get('/api/sessions/:code/my-reward', async (req, res) => {
 			return res.json({ awarded: {}, competencies: enrichCompetencies({}), level_changes: {} });
 		}
 
+		// Odmena len cez RPG XP — žiadne kompetenčné level_changes
+		if (awarded.rpg === true) {
+			return res.json({ awarded, competencies: enrichCompetencies({}), level_changes: {} });
+		}
+
+		// Legacy: staré číselné kompetenčné odmeny (spätna kompatibilita)
 		// 3. Fetch current profile points (this user only)
 		const { rows: profRows } = await queryCoinsDb(
 			'SELECT competency_points FROM public.profiles WHERE id = $1', [user.id]

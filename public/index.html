@@ -7,7 +7,7 @@
 	<title>gIVEMEGAME.IO — Generátor vzdělávacích her</title>
 	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-	<link rel="stylesheet" href="style.css?v=17">
+	<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body class="mode-party">
 
@@ -610,11 +610,11 @@
 					</div>
 				</div>
 
-				<!-- ─── Competency Panel ─── -->
+				<!-- ─── RPG postup (namiesto kompetenčných barov) ─── -->
 				<div id="competency-panel" class="competency-panel" style="display:none">
 				  <div class="panel-heading" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;opacity:0.7">
 				    <i class="bi bi-bar-chart-fill"></i>
-				    <span>Kompetencie</span>
+				    <span data-i18n="rpg_hud_title">⚔️ RPG postup</span>
 				  </div>
 				  <div id="competency-bars"></div>
 				</div>
@@ -682,7 +682,7 @@
 				</div>
 				<!-- Competency progression — loaded lazily when Profil tab activates -->
 				<div class="profile-comp-section" id="profile-competencies" style="display:none">
-					<div class="profile-comp-title" data-i18n="comp_panel_title">Kompetencie</div>
+					<div class="profile-comp-title" data-i18n="profile_rpg_title">Postup a štatistiky</div>
 					<div id="profile-comp-bars"></div>
 				</div>
 				<div class="profile-logout-section" id="profile-logout-section" style="display:none;">
@@ -910,17 +910,17 @@
 	<script src="js/timer.js?v=1"></script>
 	<script src="js/game-data.js?v=1"></script>
 	<script src="js/sfx.js?v=1"></script>
-	<script src="js/game-ui.js?v=12"></script>
+	<script src="js/game-ui.js?v=13"></script>
 	<script src="js/reflection.js?v=3"></script>
-	<script src="js/session.js?v=8"></script>
+	<script src="js/session.js?v=9"></script>
 	<script src="js/game-api.js?v=2"></script>
 	<script src="js/library.js?v=4"></script>
 	<script src="js/game-edit.js?v=1"></script>
 	<script src="js/rpg-avatar.js?v=2"></script>
-	<script src="js/rpg-talents.js?v=3"></script>
+	<script src="js/rpg-talents.js?v=4"></script>
 	<script src="js/rpg-screen.js?v=3"></script>
 	<script src="js/rpg-xp-fx.js?v=1"></script>
-	<script src="script.js?v=28"></script>
+	<script src="script.js?v=29"></script>
 	<script src="cursor-effect.js?v=2"></script>
 
 
