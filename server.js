@@ -1162,6 +1162,17 @@ app.post('/api/coins/log', async (req, res) => {
 // ─── Billing API (Payment Link MVP — manual provisioning) ───
 const STRIPE_PAYMENT_LINK = process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '';
 
+/** Verejný endpoint — žiadne tajomstvá; UI vie či je platba zapnutá a kontakt na podporu. */
+app.get('/api/billing/public-config', (req, res) => {
+	const link = (process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '').trim();
+	const support = (process.env.BILLING_SUPPORT_EMAIL || '').trim();
+	res.json({
+		upgradeAvailable: Boolean(link),
+		supportEmail: support || null,
+		proPlanLabel: 'Pro Teacher Monthly'
+	});
+});
+
 app.get('/api/billing/state', async (req, res) => {
 	if (!coinApiReady()) return res.status(503).json({ error: 'Service unavailable', code: 'DB_UNAVAILABLE' });
 	const user = await requireSupabaseUser(req, res);

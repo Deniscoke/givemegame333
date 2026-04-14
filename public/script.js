@@ -1611,21 +1611,46 @@ const App = (() => {
 			const statusEl = document.getElementById('profile-billing-status');
 			const upgradeBtn = document.getElementById('btn-billing-upgrade');
 			const hintEl = document.getElementById('profile-billing-hint');
+			const warnEl = document.getElementById('profile-billing-warning');
 			if (!section || !statusEl) return;
 			const token = await getToken();
 			if (!token) { section.style.display = 'none'; return; }
 			try {
-				const res = await fetch('/api/billing/state', {
-					headers: { ...ngrokHeaders(), 'Authorization': `Bearer ${token}` }
-				});
-				if (!res.ok) { statusEl.textContent = 'Free'; if (upgradeBtn) upgradeBtn.style.display = 'block'; return; }
-				const data = await res.json();
+				const [stateRes, cfgRes] = await Promise.all([
+					fetch('/api/billing/state', { headers: { ...ngrokHeaders(), 'Authorization': `Bearer ${token}` } }),
+					fetch('/api/billing/public-config', { headers: { ...ngrokHeaders() } })
+				]);
+				const cfg = cfgRes.ok ? await cfgRes.json().catch(() => ({})) : {};
+				if (!stateRes.ok) {
+					statusEl.textContent = 'Free';
+					if (upgradeBtn) upgradeBtn.style.display = 'block';
+					if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
+					return;
+				}
+				const data = await stateRes.json();
 				statusEl.textContent = data.hasPaidAccess ? 'Pro' : 'Free';
-				if (upgradeBtn) upgradeBtn.style.display = data.hasPaidAccess ? 'none' : 'block';
-				if (hintEl) hintEl.textContent = data.hasPaidAccess ? '30 hier/min, premium funkcie' : 'Pro: 30 hier/min. Platba bezpečne cez Stripe.';
+				const paid = data.hasPaidAccess;
+				const canPay = cfg.upgradeAvailable === true;
+				if (upgradeBtn) upgradeBtn.style.display = paid ? 'none' : 'block';
+				if (upgradeBtn) upgradeBtn.disabled = !paid && !canPay;
+				if (hintEl) {
+					hintEl.textContent = paid
+						? '30 hier/min, premium funkcie'
+						: 'Pro: ' + (cfg.proPlanLabel || 'Pro Teacher Monthly') + ' — vyšší limit generovania. Platba cez Stripe.';
+				}
+				if (warnEl) {
+					if (!paid && !canPay) {
+						warnEl.style.display = 'block';
+						warnEl.textContent = 'Platobný odkaz nie je nastavený na serveri. Ak si prevádzkovateľ, nastav STRIPE_PAYMENT_LINK_PRO_MONTHLY na Verceli.';
+					} else {
+						warnEl.style.display = 'none';
+						warnEl.textContent = '';
+					}
+				}
 			} catch (e) {
 				statusEl.textContent = 'Free';
-				if (upgradeBtn) upgradeBtn.style.display = 'block';
+				if (upgradeBtn) { upgradeBtn.style.display = 'block'; upgradeBtn.disabled = false; }
+				if (warnEl) { warnEl.style.display = 'none'; warnEl.textContent = ''; }
 			}
 		}
 
@@ -1633,6 +1658,13 @@ const App = (() => {
 			const token = await getToken();
 			if (!token) { GameUI.toast('Prihlás sa pre upgrade'); return; }
 			try {
+				const cfgRes = await fetch('/api/billing/public-config', { headers: { ...ngrokHeaders() } });
+				const cfg = cfgRes.ok ? await cfgRes.json() : {};
+				if (!cfg.upgradeAvailable) {
+					const em = cfg.supportEmail ? ` Kontakt: ${cfg.supportEmail}` : '';
+					GameUI.toast('Platba nie je nastavená.' + em);
+					return;
+				}
 				const res = await fetch('/api/billing/upgrade-url', {
 					headers: { ...ngrokHeaders(), 'Authorization': `Bearer ${token}` }
 				});

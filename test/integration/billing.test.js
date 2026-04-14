@@ -56,4 +56,12 @@ describe('Billing API (Payment Link MVP)', () => {
 		const html = await res.text();
 		assert.ok(html.includes('zrušen') || html.includes('cancel'));
 	});
+
+	it('GET /api/billing/public-config returns JSON without auth', async () => {
+		const res = await fetch(`${baseUrl}/api/billing/public-config`);
+		assert.strictEqual(res.status, 200);
+		const data = await res.json();
+		assert.ok(typeof data.upgradeAvailable === 'boolean');
+		assert.ok('proPlanLabel' in data || 'supportEmail' in data);
+	});
 });

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="sk">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,6 +13,7 @@
 		.billing-page p { font-size: 16px; line-height: 1.6; margin-bottom: 12px; opacity: 0.9; }
 		.billing-page .note { font-size: 14px; opacity: 0.8; background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; border: 2px solid var(--border); margin: 20px 0; text-align: left; }
 		.billing-page .btn { display: inline-block; margin-top: 16px; padding: 12px 24px; }
+		#support-email { word-break: break-all; }
 	</style>
 </head>
 <body class="mode-party">
@@ -21,10 +22,24 @@
 		<p>Vaša platba bola úspešne spracovaná.</p>
 		<div class="note">
 			<strong>Pro prístup — čo ďalej?</strong><br>
-			V tejto verzii MVP sa Pro prístup aktivuje manuálne. Ak sa váš plán ešte nezobrazuje ako aktívny, môže to trvať krátku chvíľu. Obnovte stránku alebo sa prihláste znova o pár minút.
+			V tejto verzii sa Pro prístup aktivuje manuálne po overení platby. Ak sa váš plán ešte nezobrazuje ako aktívny, obnovte stránku alebo sa prihláste znova o pár minút po aktivácii.
 		</div>
-		<p>Ak sa Pro prístup neaktivuje do niekoľkých hodín, kontaktujte nás.</p>
+		<p id="support-block">Ak potrebujete pomoc, kontaktujte nás: <span id="support-email">—</span></p>
 		<a href="/index.html" class="btn btn-retro">← Späť do aplikácie</a>
 	</div>
+	<script>
+		fetch('/api/billing/public-config', { headers: { 'ngrok-skip-browser-warning': '1' } })
+			.then(function (r) { return r.json(); })
+			.then(function (cfg) {
+				var el = document.getElementById('support-email');
+				var block = document.getElementById('support-block');
+				if (cfg.supportEmail) {
+					el.innerHTML = '<a href="mailto:' + cfg.supportEmail.replace(/"/g, '') + '">' + cfg.supportEmail + '</a>';
+				} else {
+					block.style.display = 'none';
+				}
+			})
+			.catch(function () { document.getElementById('support-block').style.display = 'none'; });
+	</script>
 </body>
 </html>
