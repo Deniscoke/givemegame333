@@ -196,8 +196,10 @@ const RpgAvatar = (() => {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'rpg-avatar-picker-modal';
-      modal.className = 'modal-overlay';
+      modal.className = 'modal-overlay rpg-avatar-picker-overlay';
       document.body.appendChild(modal);
+    } else {
+      modal.classList.add('rpg-avatar-picker-overlay');
     }
     modal.style.display = 'flex';
 

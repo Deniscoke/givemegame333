@@ -1502,6 +1502,10 @@ body.light-mode .game-card { box-shadow: 4px 4px 0px #999; }
 	justify-content: center;
 	align-items: center;
 }
+/* Nad fullscreen RPG profilom (15000) a talent confirm (20000) */
+.modal-overlay.rpg-avatar-picker-overlay {
+	z-index: 21000;
+}
 .modal-box {
 	background: var(--panel);
 	border: 4px solid #fff;
