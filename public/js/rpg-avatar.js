@@ -132,11 +132,13 @@ const RpgAvatar = (() => {
           <div class="rpg-avatar-display rpg-avatar-placeholder">
             <span class="rpg-avatar-placeholder-icon">\u2694\ufe0f</span>
           </div>
-          <div class="rpg-avatar-info" style="flex:1">
-            <span style="font-family:'Press Start 2P',cursive;font-size:9px;display:block;margin-bottom:4px">RPG Avatar</span>
-            <span style="font-size:11px;opacity:0.65">Zapoj sa do školy cez gIVEMEEDU a vyber si svojho hrdinu.</span>
+          <div class="rpg-avatar-content-col">
+            <div class="rpg-avatar-info">
+              <span style="font-family:'Press Start 2P',cursive;font-size:9px;display:block;margin-bottom:4px">RPG Avatar</span>
+              <span style="font-size:11px;opacity:0.65">Zapoj sa do školy cez gIVEMEEDU a vyber si svojho hrdinu.</span>
+            </div>
+            <a href="/edu/index.html" class="btn btn-retro rpg-avatar-change-btn" style="text-decoration:none;font-size:10px !important">&#127982; gIVEMEEDU</a>
           </div>
-          <a href="/edu/index.html" class="btn btn-retro rpg-avatar-change-btn" style="text-decoration:none;font-size:10px !important">&#127982; gIVEMEEDU</a>
         </div>`;
       return;
     }
@@ -153,11 +155,13 @@ const RpgAvatar = (() => {
           <div class="rpg-avatar-display">
             <img src="/avatars/${currentId}.png" alt="RPG Avatar" class="rpg-avatar-img rpg-avatar-idle" loading="lazy">
           </div>
-          <div class="rpg-avatar-info">
-            <span class="rpg-avatar-role-badge rpg-role-${role}">${_esc(roleBadge)}</span>
-            <span class="rpg-avatar-school">${_esc(schoolName)}</span>
+          <div class="rpg-avatar-content-col">
+            <div class="rpg-avatar-info">
+              <span class="rpg-avatar-role-badge rpg-role-${role}">${_esc(roleBadge)}</span>
+              <span class="rpg-avatar-school">${_esc(schoolName)}</span>
+            </div>
+            <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-rpg-screen">\u2694\ufe0f RPG Profil</button>
           </div>
-          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-rpg-screen">\u2694\ufe0f RPG Profil</button>
         </div>`;
     } else {
       container.innerHTML = `
@@ -165,11 +169,13 @@ const RpgAvatar = (() => {
           <div class="rpg-avatar-display rpg-avatar-placeholder">
             <span class="rpg-avatar-placeholder-icon">\u2694\ufe0f</span>
           </div>
-          <div class="rpg-avatar-info">
-            <span class="rpg-avatar-role-badge rpg-role-${role}">${_esc(roleBadge)}</span>
-            <span class="rpg-avatar-school">${_esc(schoolName)}</span>
+          <div class="rpg-avatar-content-col">
+            <div class="rpg-avatar-info">
+              <span class="rpg-avatar-role-badge rpg-role-${role}">${_esc(roleBadge)}</span>
+              <span class="rpg-avatar-school">${_esc(schoolName)}</span>
+            </div>
+            <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-rpg-screen">\u2694\ufe0f RPG Profil &#9654;</button>
           </div>
-          <button class="btn btn-retro rpg-avatar-change-btn" data-action="open-rpg-screen">\u2694\ufe0f RPG Profil &#9654;</button>
         </div>`;
     }
 

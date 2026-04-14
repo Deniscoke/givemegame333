@@ -3250,13 +3250,21 @@ body.light-mode #levelup-feedback {
 /* --- Avatar section in profile modal --- */
 .rpg-avatar-section {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 12px;
 	padding: 12px;
 	margin-bottom: 16px;
 	background: rgba(99, 60, 255, 0.08);
 	border: 2px solid rgba(99, 60, 255, 0.25);
 	border-radius: 12px;
+}
+.rpg-avatar-content-col {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 10px;
 }
 .rpg-avatar-display {
 	width: 72px;
@@ -3284,10 +3292,10 @@ body.light-mode #levelup-feedback {
 	font-size: 28px;
 }
 .rpg-avatar-info {
-	flex: 1;
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+	min-width: 0;
 }
 .rpg-avatar-role-badge {
 	display: inline-block;
@@ -3304,11 +3312,17 @@ body.light-mode #levelup-feedback {
 .rpg-avatar-school {
 	font-size: 11px;
 	opacity: 0.7;
+	word-break: break-word;
 }
 .rpg-avatar-change-btn {
 	font-size: 10px !important;
 	padding: 6px 10px !important;
-	white-space: nowrap;
+	max-width: 100%;
+}
+.rpg-avatar-content-col .rpg-avatar-change-btn {
+	width: 100%;
+	box-sizing: border-box;
+	text-align: center;
 }
 
 /* --- Idle animation (subtle float) — future: per-avatar keyframes --- */
