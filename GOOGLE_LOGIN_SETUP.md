@@ -7,10 +7,10 @@ Google login používa **Supabase Auth** s OAuth 2.0. Ak prihlásenie nefunguje 
 1. Otvorte [Supabase Dashboard](https://supabase.com/dashboard) → váš projekt **vhpkkbixshfyytohkruv**
 2. **Authentication** → **Providers** → **Google** — zapnite a vložte **Client ID** a **Client Secret** z Google Cloud
 3. **Authentication** → **URL Configuration**:
-   - **Site URL**: vaša produkčná URL (napr. `https://gmska.vercel.app`) — ak je localhost, po OAuth sa vrátiš na localhost!
+   - **Site URL**: produkčná URL **`https://givemegame333.vercel.app`** — ak je localhost, po OAuth sa vrátiš na localhost!
    - **Redirect URLs** — **KRITICKÉ** — ak tu nie je vaša URL, Supabase presmeruje na Site URL (localhost):
      - `http://localhost:3000/login.html`
-     - `https://VASA-VERCEL-URL.vercel.app/login.html` (nahraďte VASA-VERCEL-URL)
+     - `https://givemegame333.vercel.app/login.html`
      - Ak používate ngrok: `https://xxx.ngrok-free.app/login.html` (URL sa mení pri reštarte)
 
    **Tip:** Na login stránke v prehliadači otvorte "🔧 Safari/iPhone nefunguje?" — zobrazí sa presná URL, ktorú treba pridať.
@@ -21,7 +21,7 @@ Google login používa **Supabase Auth** s OAuth 2.0. Ak prihlásenie nefunguje 
 2. OAuth 2.0 Client ID (Web application)
 3. **Authorized JavaScript origins** — pridajte:
    - `http://localhost:3000`
-   - `https://VASA-VERCEL-URL.vercel.app` (bez /login.html)
+   - `https://givemegame333.vercel.app` (bez /login.html)
 4. **Authorized redirect URIs** — musí byť presne:
    - `https://vhpkkbixshfyytohkruv.supabase.co/auth/v1/callback`
 

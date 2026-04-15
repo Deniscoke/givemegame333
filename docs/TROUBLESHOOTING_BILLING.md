@@ -25,7 +25,7 @@ Ak si to neurobil, tabuľka `user_billing` alebo stĺpce `paid_access_enabled` /
 
 ## 4. Vercel / produkcia
 
-- Ak testuješ na **produkcii** (napr. givemegame.io): po pushi na GitHub môže trvať 1–2 minúty, kým Vercel nasadí novú verziu
+- Ak testuješ na **produkcii** (napr. [givemegame333.vercel.app](https://givemegame333.vercel.app)): po pushi na GitHub môže trvať 1–2 minúty, kým Vercel nasadí novú verziu
 - Vercel Dashboard → Deployments — skontroluj, či posledný deploy zelený
 - **Hard refresh**: Ctrl+Shift+R (Windows) alebo Cmd+Shift+R (Mac) — vymazanie cache
 - Alebo otvor v anonymnom okne

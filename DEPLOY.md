@@ -52,7 +52,7 @@ vercel
 # - Set up and deploy? Y
 # - Which scope? (tvoj účet)
 # - Link to existing project? N
-# - Project name? givemegame-io
+# - Project name? givemegame333 (alebo ako máš projekt na Verceli)
 # - Directory? ./
 ```
 
@@ -62,12 +62,15 @@ Potom pridaj env premenné v [vercel.com/dashboard](https://vercel.com) → tvoj
 
 ## 3. Výsledok
 
-Po deployi dostaneš URL, napr.:
+**Produkčná URL tohto projektu na Verceli:**
+
 ```
-https://givemegame-io.vercel.app
+https://givemegame333.vercel.app
 ```
 
-Túto URL môžeš poslať kamarátovi — funguje bez tunelov.
+Hlavná stránka: [https://givemegame333.vercel.app/index.html](https://givemegame333.vercel.app/index.html) (alebo len `/` — root presmeruje na app).
+
+Túto URL môžeš poslať kamarátovi — funguje bez tunelov. Preview deploye z iných vetiev majú vlastné `*.vercel.app` adresy v dashboarde **Deployments**.
 
 ---
 

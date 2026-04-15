@@ -32,13 +32,17 @@ Ale ak chceš, aby **Google prihlásenie** fungovalo na produkčnej URL, musíš
 
 ## 4. Supabase Dashboard (pre Google login)
 
+**Produkčná Vercel URL:** `https://givemegame333.vercel.app`
+
 1. Choď na **[supabase.com/dashboard](https://supabase.com/dashboard)** → tvoj projekt
 2. **Authentication** → **URL Configuration**
-3. Do **Redirect URLs** pridaj (nahraď `TVOJA-VERCEL-URL`):
+3. Do **Redirect URLs** pridaj:
    ```
-   https://TVOJA-VERCEL-URL.vercel.app/login.html
+   https://givemegame333.vercel.app/login.html
    ```
-4. **Site URL** môžeš zmeniť na: `https://TVOJA-VERCEL-URL.vercel.app`
+4. **Site URL** môžeš nastaviť na: `https://givemegame333.vercel.app`
+
+*(Pre iný projekt / preview nahraď doménu za svoju `*.vercel.app` adresu.)*
 
 ---
 
@@ -48,7 +52,7 @@ Ale ak chceš, aby **Google prihlásenie** fungovalo na produkčnej URL, musíš
 2. Otvor svoj **OAuth 2.0 Client ID** (Web application)
 3. Do **Authorized JavaScript origins** pridaj:
    ```
-   https://TVOJA-VERCEL-URL.vercel.app
+   https://givemegame333.vercel.app
    ```
 4. **Authorized redirect URIs** — `https://vhpkkbixshfyytohkruv.supabase.co/auth/v1/callback` tam už má byť (ak nie, pridaj)
 
