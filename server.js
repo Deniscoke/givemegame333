@@ -33,7 +33,6 @@ const {
 } = require('./lib/billing');
 
 const SESSION_JOIN_COST = 100;
-const COMPETENCY_AWARD  = 50;
 const COMPLETION_BONUS  = 100;
 const JOIN_CODE_CHARS   = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const JOIN_CODE_LENGTH  = 6;
@@ -55,31 +54,6 @@ const MIN_SESSION_DURATION_FLOOR = 3;    // minutes — absolute minimum even if
 const MIN_SESSION_DURATION_FALLBACK = 5; // minutes — used when game has no duration.min
 const HOST_COOLDOWN_MAX  = 5;            // max completed sessions per host per rolling hour
 const SOLO_DAILY_LIMIT   = 10;           // max solo completions per user per 24h
-
-// ─── Competency level thresholds ───────────────────────────────────────────
-const COMP_LEVELS = [
-	{ name: 'Nováčik', min:    0, next:  250 },
-	{ name: 'Skúsený', min:  250, next:  750 },
-	{ name: 'Expert',  min:  750, next: 1500 },
-	{ name: 'Majster', min: 1500, next: 3000 },
-	{ name: 'Legenda', min: 3000, next: null },
-];
-
-function computeLevel(pts) {
-	const p = parseInt(pts, 10) || 0;
-	let lvl = COMP_LEVELS[0];
-	for (const l of COMP_LEVELS) { if (p >= l.min) lvl = l; }
-	const progress_pct = lvl.next
-		? Math.min(100, Math.round((p - lvl.min) / (lvl.next - lvl.min) * 100))
-		: 100;
-	return { points: p, level: lvl.name, next_threshold: lvl.next, progress_pct };
-}
-
-function enrichCompetencies(raw) {
-	const result = {};
-	VALID_COMPETENCY_KEYS.forEach(k => { result[k] = computeLevel(raw[k] || 0); });
-	return result;
-}
 
 const app = express();
 // Trust proxy for correct req.ip behind Vercel/nginx
@@ -845,6 +819,47 @@ app.post('/api/generate-game', async (req, res, next) => {
 	const didacticGuidance = buildDidacticGuidance(f);
 	const aiLanguage = f.aiLanguage || 'Czech';
 
+	// ─── RPG avatar stats for personalized generation ───────────────
+	let rpgProfileBlock = '';
+	try {
+		const user = await optionalSupabaseUser(req);
+		if (user && coinsDbPool) {
+			const { rows: pRows } = await queryCoinsDb(
+				`SELECT rpg_avatar_id, COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1`,
+				[user.id]
+			);
+			const p = pRows[0];
+			if (p?.rpg_avatar_id) {
+				const avatarEntry = getAvatarById(p.rpg_avatar_id);
+				const { rows: uRows } = await queryCoinsDb(
+					`SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1`, [user.id]
+				);
+				const tManifest = getTalentManifest();
+				const uTalents = uRows.map(r => tManifest.find(t => t.id === r.talent_id)).filter(Boolean);
+				const stats = getEffectiveStats(p.rpg_avatar_id, uTalents);
+				const prog = computeRpgLevel(p.rpg_xp || 0);
+				const sLines = Object.entries(stats.effective).map(([k, v]) => `  ${k}: ${v}`).join('\n');
+				rpgProfileBlock = `
+══════════════════════════════════════
+RPG PROFIL HRÁČA (personalizácia):
+══════════════════════════════════════
+Trieda: ${avatarEntry?.label || 'Unknown'} (${avatarEntry?.theme || '-'})
+Level: ${prog.level}
+Atribúty (effective):
+${sLines}
+
+Prispôsob hru silným stránkam hráča:
+- Vysoký insight/focus → zaraď analytické výzvy, pozorovanie, hádanky
+- Vysoká creativity → zaraď tvorivé úlohy, improvizáciu, dizajn
+- Vysoká communication → zaraď diskusie, tímovú komunikáciu, prezentovanie
+- Vysoká resilience → zaraď výzvy na vytrvalosť, zvládanie stresu, adaptáciu
+- Vysoká strategy → zaraď plánovanie, stratégiu, logické úlohy
+NEPREHÁŇAJ personalizáciu — jemne uprednostni aktivity ladené s najvyššími statmi.
+══════════════════════════════════════`;
+			}
+		}
+	} catch (e) { /* non-critical — generate without personalization */ }
+
 	// Zhrnutie panelu pre AI — VŠETKO nad "Spawnuj hru", ľudsky čitateľné
 	const modeLabels = { party: 'Párty/teambuilding', classroom: 'Trieda/vzdelávanie', reflection: 'Reflexia', circus: 'Cirkus', cooking: 'Varenie', meditation: 'Meditácia' };
 	const playerLabels = { solo: '1 hráč', small: '2–5 hráčov', medium: '6–15 hráčov', large: '16–30 hráčov' };
@@ -889,7 +904,7 @@ DIDACTIC GUIDANCE (research-backed):
 ══════════════════════════════════════
 
 ${didacticGuidance}
-
+${rpgProfileBlock}
 ──────────────────────────────────────
 ÚLOHA: Vygeneruj jednu originálnu hru/aktivitu.
 POUŽI VŠETKY vstupy z panelu vyššie — každý filter je tvoj brief.
@@ -1337,10 +1352,6 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 
 		res.json({
 			ok: true,
-			awarded: {},
-			competency_points: {},
-			competencies: {},
-			level_changes: {},
 			rpg_xp_gained: soloXpAward,
 			rpg_xp,
 			rpg_level,
@@ -1355,27 +1366,35 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 	}
 });
 
-// ─── Get competency points for authenticated user ───
+// ─── Get RPG stats for authenticated user (replaced legacy competency_points) ───
 app.get('/api/profile/competencies', async (req, res) => {
 	if (!coinApiReady()) return respondCoinApiDisabled(res);
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
 	try {
-		const { rows } = await queryCoinsDb(
-			'SELECT competency_points FROM public.profiles WHERE id = $1',
+		const { rows: profileRows } = await queryCoinsDb(
+			`SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp, rpg_avatar_id FROM public.profiles WHERE id = $1`,
 			[user.id]
 		);
-		const raw = rows[0]?.competency_points || {};
-		res.json({ competency_points: raw, competencies: enrichCompetencies(raw) });
+		const profile = profileRows[0] || {};
+		const classId = profile.rpg_avatar_id || null;
+		const { rows: unlockedRows } = await queryCoinsDb(
+			`SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1`, [user.id]
+		);
+		const unlocked = unlockedRows.map(r => r.talent_id);
+		const talentManifest = getTalentManifest();
+		const unlockedTalents = unlocked.map(id => talentManifest.find(t => t.id === id)).filter(Boolean);
+		const stats = getEffectiveStats(classId, unlockedTalents);
+		const progression = computeRpgLevel(profile.rpg_xp || 0);
+		res.json({ stats, progression, class_id: classId });
 	} catch (err) {
-		console.error('[Competencies] fetch failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa načítať kompetencie', code: 'COMP_ERROR' });
+		console.error('[RPG Stats] fetch failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa načítať RPG štatistiky', code: 'STATS_ERROR' });
 	}
 });
 
 // ─── Teacher analytics — aggregated stats for the authenticated user ───
-// Reads profiles (games_generated, competency_points) + coin_transactions aggregate.
-// No new tables or columns required.
+// Reads profiles (games_generated, rpg_xp) + coin_transactions aggregate.
 app.get('/api/profile/analytics', async (req, res) => {
 	if (!coinApiReady()) return respondCoinApiDisabled(res);
 	const user = await requireSupabaseUser(req, res);
@@ -1827,8 +1846,7 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 	}
 });
 
-// ─── Session reward: participant fetches their own level changes ───
-// Back-calculates from stored awarded_competencies + current profile points.
+// ─── Session reward: participant fetches their own RPG reward status ───
 // Only returns data for the authenticated requesting user — never exposes others.
 app.get('/api/sessions/:code/my-reward', async (req, res) => {
 	if (!coinApiReady()) return respondCoinApiDisabled(res);
@@ -1837,7 +1855,6 @@ app.get('/api/sessions/:code/my-reward', async (req, res) => {
 
 	const code = (req.params.code || '').toUpperCase().trim();
 	try {
-		// 1. Verify session exists and is completed
 		const { rows: sessRows } = await queryCoinsDb(
 			'SELECT id, status FROM public.sessions WHERE join_code = $1', [code]
 		);
@@ -1847,7 +1864,6 @@ app.get('/api/sessions/:code/my-reward', async (req, res) => {
 			return res.status(400).json({ error: 'Session ešte nie je dokončená', code: 'NOT_COMPLETED' });
 		}
 
-		// 2. Fetch only this user's participant row
 		const { rows: partRows } = await queryCoinsDb(
 			`SELECT awarded_competencies FROM public.session_participants
 			 WHERE session_id = $1 AND user_id = $2`,
@@ -1856,41 +1872,7 @@ app.get('/api/sessions/:code/my-reward', async (req, res) => {
 		if (!partRows.length) return res.status(404).json({ error: 'Nie si účastníkom tejto session', code: 'NOT_PARTICIPANT' });
 
 		const awarded = partRows[0].awarded_competencies || {};
-		if (!Object.keys(awarded).length) {
-			// Participant didn't reflect or wasn't rewarded — return empty, no panel shown
-			return res.json({ awarded: {}, competencies: enrichCompetencies({}), level_changes: {} });
-		}
-
-		// Odmena len cez RPG XP — žiadne kompetenčné level_changes
-		if (awarded.rpg === true) {
-			return res.json({ awarded, competencies: enrichCompetencies({}), level_changes: {} });
-		}
-
-		// Legacy: staré číselné kompetenčné odmeny (spätna kompatibilita)
-		// 3. Fetch current profile points (this user only)
-		const { rows: profRows } = await queryCoinsDb(
-			'SELECT competency_points FROM public.profiles WHERE id = $1', [user.id]
-		);
-		const current = profRows[0]?.competency_points || {};
-
-		// 4. Back-calculate level changes: previous = current - awarded
-		const level_changes = {};
-		Object.keys(awarded).forEach(k => {
-			const gain    = parseInt(awarded[k], 10) || 0;
-			const newPts  = parseInt(current[k],  10) || 0;
-			const prevPts = Math.max(0, newPts - gain);
-			const from    = computeLevel(prevPts);
-			const to      = computeLevel(newPts);
-			level_changes[k] = {
-				previous_points: prevPts,
-				new_points:      newPts,
-				from_level:      from.level,
-				to_level:        to.level,
-				leveled_up:      from.level !== to.level,
-			};
-		});
-
-		res.json({ awarded, competencies: enrichCompetencies(current), level_changes });
+		res.json({ awarded, rpg: true });
 	} catch (err) {
 		console.error('[Sessions] my-reward failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa načítať odmenu', code: 'REWARD_ERROR' });

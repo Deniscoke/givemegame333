@@ -312,9 +312,9 @@ const Session = (() => {
 	}
 
 	function _onCompleted() {
-		GameUI.toast(_t('sess_completed', '🏆 Session dokončená! Kompetencie boli udelené.'));
+		GameUI.toast(_t('sess_completed', '🏆 Session dokončená! RPG odmeny udelené.'));
 		if (window.Coins?.load) window.Coins.load();
-		_loadAndRenderCompetencies();
+		_loadAndRenderRpgHud();
 		_fetchAndShowMyReward();
 		_closeLobby();
 		_channel?.unsubscribe();
