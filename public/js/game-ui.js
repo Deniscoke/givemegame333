@@ -75,13 +75,17 @@ const GameUI = (() => {
 		if (vcEl) {
 			const vc = game.verificationChallenge;
 			if (vc && vc.description) {
+				const vb = window.__verificationPhotoBonus || { xp: 100, coins: 75 };
+				const bonusLine = _t('verify_bonus_line', 'Po úspešnom overení fotky (solo): +{xp} XP a +{coins} gIVEMECOIN.')
+					.replace('{xp}', String(vb.xp)).replace('{coins}', String(vb.coins));
 				vcEl.innerHTML = `
 					<div class="game-verification-card">
 						<span class="game-verification-icon">📸</span>
 						<div>
-							<strong>${_t('verify_title', 'Foto výzva (bonus XP)')}</strong>
+							<strong>${_t('verify_title', 'Foto výzva (bonus XP + gIVEMECOIN)')}</strong>
 							<p>${vc.description}</p>
 							${vc.hint ? `<small>${vc.hint}</small>` : ''}
+							<p class="game-verification-bonus">${bonusLine}</p>
 						</div>
 					</div>`;
 				vcEl.style.display = '';

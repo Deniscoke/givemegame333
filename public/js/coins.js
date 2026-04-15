@@ -258,6 +258,7 @@ const Coins = (() => {
 		shop_reroll_free: '🔄 Free Re-roll',
 		shop_xp_potion_500: '🧪 XP Potion',
 		solo_complete_boosted: '⚡ Solo (boosted)',
+		photo_verify_bonus: '📸 Foto výzva (overené)',
 	};
 
 	function formatRelativeTime(isoString) {

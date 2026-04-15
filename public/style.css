@@ -3029,6 +3029,13 @@ body.light-mode .library-action-btn:hover {
   font-size: 11px;
   opacity: 0.55;
 }
+.game-verification-bonus {
+  font-size: 11px;
+  margin: 8px 0 0;
+  line-height: 1.35;
+  opacity: 0.9;
+  color: #fde68a;
+}
 
 /* ─── Photo Verification ─── */
 .reflection-photo-section {
@@ -3063,6 +3070,13 @@ body.light-mode .library-action-btn:hover {
   opacity: 0.6;
   display: block;
   margin-top: 4px;
+}
+.reflection-photo-bonus {
+  font-size: 11px;
+  margin: 8px 0 0;
+  line-height: 1.35;
+  opacity: 0.9;
+  color: #fde68a;
 }
 .reflection-photo-upload {
   display: flex;

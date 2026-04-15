@@ -41,6 +41,9 @@ const {
 
 const SESSION_JOIN_COST = 100;
 const COMPLETION_BONUS  = 100;
+/** Solo: bonus po úspešnom AI overení fotky (musí sedieť s /api/status verificationPhotoBonus). */
+const VERIFICATION_XP_BONUS   = 100;
+const VERIFICATION_COIN_BONUS = 75;
 const JOIN_CODE_CHARS   = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const JOIN_CODE_LENGTH  = 6;
 
@@ -1462,7 +1465,6 @@ app.post('/api/shop/purchase', async (req, res) => {
 });
 
 // ─── Photo verification — AI checks if the uploaded photo matches the game challenge ───
-const VERIFICATION_XP_BONUS = 100;
 app.post('/api/verify-completion', async (req, res) => {
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
@@ -1508,8 +1510,9 @@ Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "
 			result = { verified: false, confidence: 0, feedback: 'Nepodarilo sa vyhodnotiť fotku' };
 		}
 
-		// Award bonus XP if verified
+		// Award bonus XP + gIVEMECOIN if verified
 		let bonusXp = 0;
+		let bonusCoins = 0;
 		let rpgLevel = null;
 		let rpgLevelUp = false;
 		if (result.verified && coinApiReady()) {
@@ -1525,10 +1528,24 @@ Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "
 					bonusXp = VERIFICATION_XP_BONUS;
 					rpgLevel = xpResult.level;
 					rpgLevelUp = xpResult.level > levelBefore;
+					await client.query(
+						'UPDATE public.profiles SET coins = COALESCE(coins, 0) + $1 WHERE id = $2',
+						[VERIFICATION_COIN_BONUS, user.id]
+					);
+					await client.query(
+						'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
+						[
+							user.id,
+							VERIFICATION_COIN_BONUS,
+							'photo_verify_bonus',
+							JSON.stringify({ game_title: game_title || null, xp_bonus: VERIFICATION_XP_BONUS })
+						]
+					);
+					bonusCoins = VERIFICATION_COIN_BONUS;
 					await client.query('COMMIT');
 				} catch (e) {
 					try { await client.query('ROLLBACK'); } catch (_) {}
-					console.error('[Verify] XP award failed:', e.message);
+					console.error('[Verify] XP/coin award failed:', e.message);
 				} finally { client.release(); }
 			} catch (e) { console.error('[Verify] DB connection failed:', e.message); }
 		}
@@ -1538,6 +1555,7 @@ Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "
 			confidence: result.confidence || 0,
 			feedback: result.feedback || '',
 			bonus_xp: bonusXp,
+			bonus_coins: bonusCoins,
 			rpg_level: rpgLevel,
 			rpg_level_up: rpgLevelUp,
 		});
@@ -3143,6 +3161,10 @@ app.get('/api/status', (req, res) => {
 		model: process.env.OPENAI_MODEL || 'gpt-4o',
 		engine: openai ? 'ai' : 'local',
 		randomFactSource: hasKey ? 'openai' : 'local',
+		verificationPhotoBonus: {
+			xp: VERIFICATION_XP_BONUS,
+			coins: VERIFICATION_COIN_BONUS
+		},
 		knowledge: {
 			fileCount: knowledgeCache.length,
 			totalChars: knowledgeSummary.length

@@ -78,15 +78,19 @@ const Reflection = (() => {
 		// Photo verification section (if game has verificationChallenge)
 		const vc = game?.verificationChallenge;
 		if (vc && vc.description) {
+			const vb = window.__verificationPhotoBonus || { xp: 100, coins: 75 };
+			const bonusLine = _t('refl_photo_bonus_line', 'Odmena po overení: +{xp} XP, +{coins} gIVEMECOIN.')
+				.replace('{xp}', String(vb.xp)).replace('{coins}', String(vb.coins));
 			const photoDiv = document.createElement('div');
 			photoDiv.className = 'reflection-photo-section';
 			photoDiv.innerHTML = `
 				<div class="reflection-photo-challenge">
 					<div class="reflection-photo-icon">📸</div>
 					<div class="reflection-photo-text">
-						<strong>${_t('refl_photo_title', 'Foto dôkaz (bonus XP)')}</strong>
+						<strong>${_t('refl_photo_title', 'Foto dôkaz (bonus XP + gIVEMECOIN)')}</strong>
 						<p>${vc.description}</p>
 						${vc.hint ? `<small class="reflection-photo-hint">💡 ${vc.hint}</small>` : ''}
+						<p class="reflection-photo-bonus">${bonusLine}</p>
 					</div>
 				</div>
 				<div class="reflection-photo-upload" id="reflection-photo-upload">

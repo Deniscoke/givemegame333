@@ -260,7 +260,9 @@ const App = (() => {
 							});
 							const vData = await vRes.json();
 							if (vData.verified) {
-								GameUI.toast(`📸 ${t('refl_verified', 'Overené!')} +${vData.bonus_xp} XP bonus! ${vData.feedback}`);
+								const bc = vData.bonus_coins > 0 ? ` +${vData.bonus_coins} gIVEMECOIN` : '';
+								GameUI.toast(`📸 ${t('refl_verified', 'Overené!')} +${vData.bonus_xp || 0} XP${bc}! ${vData.feedback || ''}`);
+								if (vData.bonus_coins > 0 && window.Coins?.load) await window.Coins.load();
 								if (vData.bonus_xp > 0 && window.RpgXpFx) RpgXpFx.trigger(vData.bonus_xp, '📸 Foto verifikácia');
 								if (vData.rpg_level_up) GameUI.toast(`⭐ Level up: ${vData.rpg_level}!`);
 								if (window.RpgTalents?.load) {
@@ -307,6 +309,9 @@ const App = (() => {
 		// Vždy AI engine — skontroluj stav servera pre info
 		const indicator = document.getElementById('engine-indicator');
 		const serverStatus = await GameAPI.checkServer();
+		if (serverStatus?.verificationPhotoBonus) {
+			window.__verificationPhotoBonus = serverStatus.verificationPhotoBonus;
+		}
 		if (serverStatus && serverStatus.hasApiKey) {
 			if (indicator) indicator.textContent = `🤖 ${t('engine_label', 'IndieWeb Engine')} ✅`;
 			console.log('[App] AI server pripojený — API kľúč OK.');
