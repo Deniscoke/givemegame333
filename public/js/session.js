@@ -302,9 +302,14 @@ const Session = (() => {
 		if (modal?.style.display === 'flex') return; // already open
 
 		Reflection.open(window.currentGame, _code, () => {
-			// After player submits reflection
-			if (_isHost) _showCompleteButton();
-			GameUI.toast(_t('sess_refl_sent', '✅ Reflexia odoslaná! Čakaj na potvrdenie hostitela.'));
+			// After player submits reflection (multiplayer only — _code is set)
+			if (_isHost) {
+				_showCompleteButton();
+				GameUI.toast(_t('sess_refl_sent_host',
+					'✅ Reflexia uložená. Keď budú všetci hotoví, v lobby potvrď dokončenie session (Dokončiť).'));
+			} else {
+				GameUI.toast(_t('sess_refl_sent', '✅ Reflexia odoslaná! Čakaj na potvrdenie hostitela.'));
+			}
 		});
 	}
 

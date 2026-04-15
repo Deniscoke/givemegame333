@@ -256,6 +256,7 @@
   "sess_bad_code":        "⚠️ Enter a 6-character code",
   "sess_joined":          "✅ Joined! Entry costs {cost} 🪙 — deducted at start.",
   "sess_refl_sent":       "✅ Reflection submitted! Waiting for host to confirm.",
+  "sess_refl_sent_host":  "✅ Reflection saved. When everyone is done, confirm session completion in the lobby (Complete).",
   "sess_completed":       "🏆 Session complete! Competencies awarded.",
   "sess_end_success":     "🏆 Session ended! {count} players received points.",
   "sess_no_login_points": "Sign in to earn points",

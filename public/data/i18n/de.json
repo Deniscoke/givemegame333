@@ -257,6 +257,7 @@
   "sess_bad_code":        "⚠️ 6-stelligen Code eingeben",
   "sess_joined":          "✅ Beigetreten! Eintritt kostet {cost} 🪙 — wird beim Start abgezogen.",
   "sess_refl_sent":       "✅ Reflexion gesendet! Warte auf Bestätigung des Hosts.",
+  "sess_refl_sent_host":  "✅ Reflexion gespeichert. Wenn alle fertig sind, im Lobby den Abschluss bestätigen (Fertig).",
   "sess_completed":       "🏆 Session abgeschlossen! Kompetenzen vergeben.",
   "sess_end_success":     "🏆 Session beendet! {count} Spieler erhielten Punkte.",
   "sess_no_login_points": "Anmelden, um Punkte zu erhalten",

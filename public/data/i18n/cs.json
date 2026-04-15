@@ -261,6 +261,7 @@
   "sess_bad_code":        "⚠️ Zadej 6-místný kód",
   "sess_joined":          "✅ Připojen! Vstup stojí {cost} 🪙 — odečte se při startu.",
   "sess_refl_sent":       "✅ Reflexe odeslána! Čekej na potvrzení hostitele.",
+  "sess_refl_sent_host":  "✅ Reflexe uložena. Až budou všichni hotovi, v Session lobby potvrď dokončení a udělení bodů (tlačítko pro hostitele).",
   "sess_completed":       "🏆 Session dokončena! Kompetence byly uděleny.",
   "sess_end_success":     "🏆 Session ukončena! {count} hráčů dostalo body.",
   "sess_no_login_points": "Přihlas se pro získání bodů",

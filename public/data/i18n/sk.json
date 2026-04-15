@@ -250,6 +250,7 @@
   "sess_bad_code":        "⚠️ Zadaj 6-znakový kód",
   "sess_joined":          "✅ Pripojený! Vstup stojí {cost} 🪙 — odráta sa pri štarte.",
   "sess_refl_sent":       "✅ Reflexia odoslaná! Čakaj na potvrdenie hostitela.",
+  "sess_refl_sent_host":  "✅ Reflexia uložená. Keď budú všetci hotoví, v Session lobby potvrď dokončenie a udelenie bodov (tlačidlo hostiteľa).",
   "sess_completed":       "🏆 Session dokončená! Kompetencie boli udelené.",
   "sess_end_success":     "🏆 Session ukončená! {count} hráčov dostalo body.",
   "sess_no_login_points": "Prihlás sa pre získanie bodov",
