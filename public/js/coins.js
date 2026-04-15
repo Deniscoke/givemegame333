@@ -99,7 +99,12 @@ const Coins = (() => {
 	}
 
 	function award(source) {
-		const amount = rewards[source] || 1;
+		let amount = rewards[source] || 1;
+		const dc = getActivePowerup('double_coins');
+		if (dc) {
+			amount *= dc.value;
+			consumePowerup('double_coins');
+		}
 		balance += amount;
 		save();
 		updateDisplay();
@@ -191,6 +196,21 @@ const Coins = (() => {
 	function spend(action) {
 		const cost = costs[action] || 0;
 		if (cost <= 0) return true;
+
+		// Check for free_gen / free_reroll powerups
+		if ((action === 'generate' || action === 'surprise') && getActivePowerup('free_gen')) {
+			consumePowerup('free_gen');
+			GameUI.toast('🎲 Free generate použitý!');
+			logTransaction(0, `spend_${action}_free`);
+			return true;
+		}
+		if (action === 'remix' && getActivePowerup('free_reroll')) {
+			consumePowerup('free_reroll');
+			GameUI.toast('🔄 Free re-roll použitý!');
+			logTransaction(0, `spend_${action}_free`);
+			return true;
+		}
+
 		if (balance < cost) return false;
 		balance -= cost;
 		save();
@@ -202,6 +222,8 @@ const Coins = (() => {
 
 	function canAfford(action) {
 		const cost = costs[action] || 0;
+		if ((action === 'generate' || action === 'surprise') && getActivePowerup('free_gen')) return true;
+		if (action === 'remix' && getActivePowerup('free_reroll')) return true;
 		return balance >= cost;
 	}
 
@@ -228,7 +250,14 @@ const Coins = (() => {
 		tamagochi_coin: '🐣 Tamagotchi',
 		phone_buzz: '📱 Phone buzz',
 		spend_generate: '🎲 Generate game',
-		spend_surprise: '🎲 Surprise game'
+		spend_surprise: '🎲 Surprise game',
+		shop_xp_boost_2x: '⚡ XP Boost 2×',
+		shop_free_gen_3: '🎲 Free Generate ×3',
+		shop_timer_extend: '⏱️ Timer +5 min',
+		shop_double_coins: '🪙 Double Coins',
+		shop_reroll_free: '🔄 Free Re-roll',
+		shop_xp_potion_500: '🧪 XP Potion',
+		solo_complete_boosted: '⚡ Solo (boosted)',
 	};
 
 	function formatRelativeTime(isoString) {
@@ -241,7 +270,183 @@ const Coins = (() => {
 		return `${Math.floor(h / 24)}d`;
 	}
 
+	// ─── Shop catalog ───
+	// Each item: { id, icon, name, desc, cost, type, value, duration?, stackable? }
+	// type: 'xp_boost' | 'free_gen' | 'timer_extend' | 'double_coins' | 'cosmetic'
+	const SHOP_ITEMS = [
+		{ id: 'xp_boost_2x',    icon: '⚡', name: '2× XP Boost',           desc: 'Dvojnásobné XP z nasledujúcich 3 hier',              cost: 1500,  type: 'xp_boost',     value: 2, uses: 3 },
+		{ id: 'free_gen_3',     icon: '🎲', name: '3× Free Generate',      desc: 'Generuj 3 hry zadarmo (bez nákladov na coiny)',       cost: 500,   type: 'free_gen',     value: 3 },
+		{ id: 'timer_extend',   icon: '⏱️', name: 'Timer +5 min',          desc: 'Pridá 5 min navyše k aktuálnemu timeru',              cost: 300,   type: 'timer_extend', value: 5 },
+		{ id: 'double_coins',   icon: '🪙', name: '2× Coiny (3 hry)',      desc: 'Dvojnásobné coin odmeny z nasledujúcich 3 aktivít',   cost: 2000,  type: 'double_coins', value: 2, uses: 3 },
+		{ id: 'reroll_free',    icon: '🔄', name: 'Free Re-roll',          desc: 'Jeden remix/re-roll zadarmo',                          cost: 200,   type: 'free_reroll',  value: 1 },
+		{ id: 'xp_potion_500',  icon: '🧪', name: 'XP Potion (+500 XP)',   desc: 'Okamžite získaš +500 RPG XP',                         cost: 5000,  type: 'instant_xp',   value: 500 },
+	];
+
+	// Active powerups stored in localStorage
+	const POWERUPS_KEY = 'givemegame_powerups';
+	function _loadPowerups() {
+		try { return JSON.parse(localStorage.getItem(POWERUPS_KEY) || '{}'); } catch { return {}; }
+	}
+	function _savePowerups(p) {
+		try { localStorage.setItem(POWERUPS_KEY, JSON.stringify(p)); } catch {}
+	}
+
+	function getActivePowerup(type) {
+		const p = _loadPowerups();
+		const pu = p[type];
+		if (!pu || (pu.uses != null && pu.uses <= 0)) return null;
+		return pu;
+	}
+
+	function consumePowerup(type) {
+		const p = _loadPowerups();
+		if (!p[type]) return false;
+		if (p[type].uses != null) {
+			p[type].uses--;
+			if (p[type].uses <= 0) delete p[type];
+		} else {
+			delete p[type];
+		}
+		_savePowerups(p);
+		return true;
+	}
+
+	async function _getAuthToken() {
+		if (!supabaseClient) return null;
+		try {
+			const r = await Promise.race([
+				supabaseClient.auth.getSession(),
+				new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+			]);
+			return r.data?.session?.access_token || null;
+		} catch { return null; }
+	}
+
+	async function purchaseItem(itemId) {
+		const item = SHOP_ITEMS.find(i => i.id === itemId);
+		if (!item) return;
+		if (balance < item.cost) {
+			GameUI.toast(`🪙 Nedostatok coinov! Treba ${item.cost}, máš ${balance}`);
+			return;
+		}
+
+		// Instant-use items that need server call (XP potion)
+		if (item.type === 'instant_xp') {
+			const token = await _getAuthToken();
+			if (!token) { GameUI.toast('⚠️ Prihlás sa pre nákup'); return; }
+			try {
+				const res = await fetch('/api/shop/purchase', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+					body: JSON.stringify({ item_id: itemId })
+				});
+				const data = await res.json();
+				if (!res.ok) { GameUI.toast(`❌ ${data.error || 'Nákup zlyhal'}`); return; }
+				balance = data.new_balance ?? (balance - item.cost);
+				save(); updateDisplay();
+				_updateShopBalance();
+				GameUI.toast(`${item.icon} ${item.name} aktivovaný! +${item.value} XP`);
+				if (window.RpgTalents?.load) {
+					const td = await RpgTalents.load();
+					if (td && GameUI.renderRpgHudFromTalents) GameUI.renderRpgHudFromTalents(td);
+				}
+				if (window.RpgScreen?.refresh) RpgScreen.refresh();
+				if (data.rpg_level_up) GameUI.toast(`⭐ Nový RPG level: ${data.rpg_level}!`);
+				if (data.rpg_xp_gained > 0 && window.RpgXpFx) RpgXpFx.trigger(data.rpg_xp_gained, `${item.icon} ${item.name}`);
+				_renderShop();
+				return;
+			} catch (e) { GameUI.toast(`❌ ${e.message}`); return; }
+		}
+
+		// Timer extend — instant effect, no stored powerup
+		if (item.type === 'timer_extend') {
+			balance -= item.cost;
+			save(); updateDisplay();
+			logTransaction(-item.cost, `shop_${itemId}`);
+			if (window.Timer?.addTime) Timer.addTime(item.value);
+			else GameUI.toast('⏱️ Najprv spusti timer!');
+			playCoinSound();
+			_updateShopBalance();
+			_renderShop();
+			return;
+		}
+
+		// Client-side powerup items — deduct locally and log server-side
+		balance -= item.cost;
+		save(); updateDisplay();
+
+		const p = _loadPowerups();
+		if (item.uses) {
+			if (p[item.type]) {
+				p[item.type].uses = (p[item.type].uses || 0) + item.uses;
+				p[item.type].value = item.value;
+			} else {
+				p[item.type] = { value: item.value, uses: item.uses };
+			}
+		} else {
+			p[item.type] = { value: item.value, uses: item.value };
+		}
+		_savePowerups(p);
+
+		logTransaction(-item.cost, `shop_${itemId}`);
+		playCoinSound();
+		GameUI.toast(`${item.icon} ${item.name} kúpený!`);
+		_updateShopBalance();
+		_renderShop();
+	}
+
+	function _updateShopBalance() {
+		const el = document.getElementById('coin-history-balance');
+		if (el) el.textContent = balance;
+	}
+
+	function _renderShop() {
+		const list = document.getElementById('coin-shop-list');
+		if (!list) return;
+
+		const powerups = _loadPowerups();
+		const activeBadges = Object.entries(powerups)
+			.filter(([, v]) => v && (v.uses == null || v.uses > 0))
+			.map(([type, v]) => {
+				const item = SHOP_ITEMS.find(i => i.type === type);
+				return `<div class="shop-active-badge">${item?.icon || '✨'} ${item?.name || type}${v.uses != null ? ` (${v.uses}×)` : ''}</div>`;
+			}).join('');
+
+		const activeSection = activeBadges
+			? `<div class="shop-active-section"><div class="shop-section-title">✨ Aktívne bonusy</div>${activeBadges}</div>`
+			: '';
+
+		const itemsHtml = SHOP_ITEMS.map(item => {
+			const canBuy = balance >= item.cost;
+			const existing = powerups[item.type];
+			const stackInfo = existing?.uses > 0 ? `<span class="shop-item-stack">(aktívne: ${existing.uses}×)</span>` : '';
+			return `
+				<div class="shop-item ${canBuy ? '' : 'shop-item-locked'}">
+					<div class="shop-item-icon">${item.icon}</div>
+					<div class="shop-item-info">
+						<div class="shop-item-name">${item.name} ${stackInfo}</div>
+						<div class="shop-item-desc">${item.desc}</div>
+					</div>
+					<button class="shop-item-buy ${canBuy ? '' : 'disabled'}"
+						onclick="Coins.purchaseItem('${item.id}')" ${canBuy ? '' : 'disabled'}>
+						🪙 ${item.cost.toLocaleString()}
+					</button>
+				</div>`;
+		}).join('');
+
+		list.innerHTML = `${activeSection}<div class="shop-section-title">🛒 Obchod</div>${itemsHtml}`;
+	}
+
 	let historyOpen = false;
+	let currentTab = 'history';
+
+	function switchTab(tab) {
+		currentTab = tab;
+		document.querySelectorAll('.coin-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+		document.getElementById('coin-tab-history').style.display = tab === 'history' ? '' : 'none';
+		document.getElementById('coin-tab-shop').style.display = tab === 'shop' ? '' : 'none';
+		if (tab === 'shop') _renderShop();
+	}
 
 	async function toggleHistory() {
 		const dropdown = document.getElementById('coin-history-dropdown');
@@ -264,7 +469,8 @@ const Coins = (() => {
 
 		if (balanceEl) balanceEl.textContent = balance;
 
-		// Fetch history
+		if (currentTab === 'shop') { _renderShop(); return; }
+
 		const listEl = document.getElementById('coin-history-list');
 		if (listEl) listEl.innerHTML = '<div class="coin-history-loading">Načítavam...</div>';
 
@@ -274,7 +480,6 @@ const Coins = (() => {
 		}
 
 		try {
-			// 8s timeout — prevents hanging if Supabase auth is slow on token refresh
 			const sessionResult = await Promise.race([
 				supabaseClient.auth.getSession(),
 				new Promise((_, reject) => setTimeout(() => reject(new Error('session_timeout')), 8000))
@@ -291,9 +496,7 @@ const Coins = (() => {
 					headers: { Authorization: `Bearer ${sessionResult.data.session.access_token}` },
 					signal: controller.signal
 				});
-			} finally {
-				clearTimeout(fetchTimeout);
-			}
+			} finally { clearTimeout(fetchTimeout); }
 			if (!resp.ok) throw new Error(resp.status);
 			const { transactions } = await resp.json();
 			if (!listEl) return;
@@ -318,13 +521,21 @@ const Coins = (() => {
 
 	// Close dropdown when clicking outside
 	document.addEventListener('click', (e) => {
-		if (historyOpen && !document.getElementById('coin-display')?.contains(e.target)) {
-			historyOpen = false;
-			document.getElementById('coin-history-dropdown')?.classList.remove('open');
+		if (historyOpen) {
+			const dropdown = document.getElementById('coin-history-dropdown');
+			const coinDisplay = document.getElementById('coin-display');
+			if (!dropdown?.contains(e.target) && !coinDisplay?.contains(e.target)) {
+				historyOpen = false;
+				dropdown?.classList.remove('open');
+			}
 		}
 	});
 
-	return { load, award, spend, spendAmount, canAfford, getCost, getBalance, toggleHistory };
+	return {
+		load, award, spend, spendAmount, canAfford, getCost, getBalance,
+		toggleHistory, switchTab, purchaseItem,
+		getActivePowerup, consumePowerup
+	};
 })();
 
 // Expose globally so App can bridge it as `const Coins = window.Coins`

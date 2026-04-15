@@ -854,21 +854,33 @@
 	<!-- ═══════════════════ CURSOR EFFECT CANVAS ═══════════════════ -->
 	<canvas id="cursor-canvas" class="cursor-canvas"></canvas>
 
-	<!-- COIN HISTORY DROPDOWN (top-level — outside any transform context) -->
+	<!-- COIN PANEL (top-level — outside any transform context) -->
 	<div class="coin-history-dropdown" id="coin-history-dropdown" onclick="event.stopPropagation()">
 		<div class="coin-history-header">
 			<span class="coin-history-title">🪙 gIVEMECOIN</span>
 			<span class="coin-history-balance" id="coin-history-balance">0</span>
 		</div>
-		<div class="coin-history-list" id="coin-history-list">
-			<div class="coin-history-empty">Otváram históriu...</div>
+		<!-- Tabs: History / Shop -->
+		<div class="coin-tabs">
+			<button class="coin-tab active" data-tab="history" onclick="Coins.switchTab('history')">📜 História</button>
+			<button class="coin-tab" data-tab="shop" onclick="Coins.switchTab('shop')">🛒 Shop</button>
 		</div>
-		<div class="coin-history-earn">
-			<div class="coin-history-earn-title">Ako zarobiť</div>
-			<div class="coin-earn-item">⏱ Dokonči timer <span>+500</span></div>
-			<div class="coin-earn-item">🤖 Robot Challenge <span>+250</span></div>
-			<div class="coin-earn-item">🎙 Vypočuj si zaujímavosť <span>+50</span></div>
-			<div class="coin-earn-item">📱 Buzz mobilu <span>+5</span></div>
+		<!-- History tab -->
+		<div class="coin-tab-panel" id="coin-tab-history">
+			<div class="coin-history-list" id="coin-history-list">
+				<div class="coin-history-empty">Otváram históriu...</div>
+			</div>
+			<div class="coin-history-earn">
+				<div class="coin-history-earn-title">Ako zarobiť</div>
+				<div class="coin-earn-item">⏱ Dokonči timer <span>+500</span></div>
+				<div class="coin-earn-item">🤖 Robot Challenge <span>+250</span></div>
+				<div class="coin-earn-item">🎙 Vypočuj si zaujímavosť <span>+50</span></div>
+				<div class="coin-earn-item">📱 Buzz mobilu <span>+5</span></div>
+			</div>
+		</div>
+		<!-- Shop tab -->
+		<div class="coin-tab-panel" id="coin-tab-shop" style="display:none">
+			<div class="coin-shop-list" id="coin-shop-list"></div>
 		</div>
 	</div>
 
@@ -908,8 +920,8 @@
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 	<!-- Phase 1+2+3 modules — must load before script.js -->
 	<script src="js/narrator.js?v=1"></script>
-	<script src="js/coins.js?v=1"></script>
-	<script src="js/timer.js?v=1"></script>
+	<script src="js/coins.js?v=2"></script>
+	<script src="js/timer.js?v=2"></script>
 	<script src="js/game-data.js?v=1"></script>
 	<script src="js/sfx.js?v=1"></script>
 	<script src="js/game-ui.js?v=15"></script>
@@ -922,7 +934,7 @@
 	<script src="js/rpg-talents.js?v=5"></script>
 	<script src="js/rpg-screen.js?v=5"></script>
 	<script src="js/rpg-xp-fx.js?v=1"></script>
-	<script src="script.js?v=31"></script>
+	<script src="script.js?v=32"></script>
 	<script src="cursor-effect.js?v=2"></script>
 
 

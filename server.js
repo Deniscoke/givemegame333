@@ -1305,6 +1305,70 @@ app.post('/api/coins/award-mode-click', async (req, res) => {
 	}
 });
 
+// ─── Shop purchase — server-validated items (XP potions, etc.) ───
+const SHOP_SERVER_ITEMS = {
+	xp_potion_500: { cost: 5000, xp: 500, label: 'XP Potion (+500 XP)' },
+};
+
+app.post('/api/shop/purchase', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const { item_id } = req.body || {};
+	const item = SHOP_SERVER_ITEMS[item_id];
+	if (!item) return res.status(400).json({ error: 'Neznámy item', code: 'UNKNOWN_ITEM' });
+
+	let client;
+	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+
+		const { rows } = await client.query(
+			'SELECT COALESCE(coins, 0)::int AS coins, COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1 FOR UPDATE',
+			[user.id]
+		);
+		const coins = rows[0]?.coins || 0;
+		if (coins < item.cost) {
+			await client.query('ROLLBACK');
+			return res.status(400).json({ error: 'Nedostatok coinov', code: 'INSUFFICIENT_COINS', required: item.cost, current: coins });
+		}
+
+		const levelBefore = computeRpgLevel(rows[0]?.rpg_xp || 0).level;
+
+		await client.query('UPDATE public.profiles SET coins = coins - $1 WHERE id = $2', [item.cost, user.id]);
+		await client.query(
+			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
+			[user.id, -item.cost, `shop_${item_id}`, JSON.stringify({ item_id, label: item.label })]
+		);
+
+		let rpgXpGained = 0, rpgLevel = levelBefore, rpgLevelUp = false;
+		if (item.xp > 0) {
+			const result = await awardXpInTransaction(client, user.id, item.xp, `shop_${item_id}`);
+			rpgXpGained = item.xp;
+			rpgLevel = result.level;
+			rpgLevelUp = result.level > levelBefore;
+		}
+
+		await client.query('COMMIT');
+
+		const { rows: afterRows } = await client.query('SELECT COALESCE(coins,0)::int AS coins FROM public.profiles WHERE id = $1', [user.id]);
+		res.json({
+			ok: true,
+			new_balance: afterRows[0]?.coins ?? (coins - item.cost),
+			rpg_xp_gained: rpgXpGained,
+			rpg_level: rpgLevel,
+			rpg_level_up: rpgLevelUp,
+		});
+	} catch (err) {
+		if (client) { try { await client.query('ROLLBACK'); } catch (_) {} }
+		console.error('[Shop] purchase failed:', err.message);
+		res.status(500).json({ error: 'Nákup zlyhal', code: 'PURCHASE_ERROR' });
+	} finally {
+		if (client) client.release();
+	}
+});
+
 // ─── Solo game completion — awards competency points to authenticated user ───
 app.post('/api/profile/complete-solo', async (req, res) => {
 	if (!coinApiReady()) return respondCoinApiDisabled(res);
@@ -1362,10 +1426,12 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			})]
 		);
 
-		// Award RPG XP — amount depends on activity length (game_json.duration.max)
-		const soloXpAward = computeSoloXpFromDurationMax(game_json?.duration?.max);
+		// Award RPG XP — amount depends on activity length; xp_multiplier from shop boosts
+		const rawXp = computeSoloXpFromDurationMax(game_json?.duration?.max);
+		const xpMul = Math.min(5, Math.max(1, parseInt(req.body.xp_multiplier) || 1));
+		const soloXpAward = rawXp * xpMul;
 		const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
-			soloClient, user.id, soloXpAward, 'solo_complete'
+			soloClient, user.id, soloXpAward, xpMul > 1 ? 'solo_complete_boosted' : 'solo_complete'
 		);
 		const rpg_level_up = rpg_level > levelBefore;
 

@@ -209,11 +209,14 @@ const App = (() => {
 					try {
 						let res;
 						try {
+							const xpBoost = Coins.getActivePowerup?.('xp_boost');
+							const bodyPayload = { game_json: window.currentGame };
+							if (xpBoost) bodyPayload.xp_multiplier = xpBoost.value;
 							res = await fetch('/api/profile/complete-solo', {
 								method: 'POST',
 								headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
 								signal: ctrl.signal,
-								body: JSON.stringify({ game_json: window.currentGame })
+								body: JSON.stringify(bodyPayload)
 							});
 						} finally { clearTimeout(_ft); }
 						const data = await res.json();
@@ -223,6 +226,7 @@ const App = (() => {
 							}
 							throw new Error(data.error || 'Chyba servera');
 						}
+					if (xpBoost && data.rpg_xp_gained > 0) Coins.consumePowerup?.('xp_boost');
 					GameUI.toast(t('solo_comp_awarded', '🪙 +{coins} coinov · +{xp} RPG XP')
 						.replace('{coins}', '100').replace('{xp}', String(data.rpg_xp_gained || 0)));
 					if (window.Coins?.load) window.Coins.load();

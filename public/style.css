@@ -1983,6 +1983,103 @@ body.light-mode .rvp-badge {
 }
 .coin-earn-item span { color: #4ade80; font-size: 13px; }
 
+/* ─── Coin Panel Tabs ─── */
+.coin-tabs {
+	display: flex;
+	border-bottom: 1px solid rgba(245,158,11,0.25);
+}
+.coin-tab {
+	flex: 1;
+	padding: 7px 0;
+	font-family: 'Press Start 2P', monospace;
+	font-size: 7px;
+	text-align: center;
+	background: transparent;
+	color: #94a3b8;
+	border: none;
+	cursor: pointer;
+	transition: background 0.2s, color 0.2s;
+}
+.coin-tab:hover { background: rgba(245,158,11,0.08); color: #f59e0b; }
+.coin-tab.active {
+	color: #fbbf24;
+	background: rgba(245,158,11,0.12);
+	border-bottom: 2px solid #f59e0b;
+}
+
+/* ─── Coin Shop ─── */
+.coin-shop-list { padding: 6px 0; }
+.shop-section-title {
+	font-family: 'Press Start 2P', monospace;
+	font-size: 7px;
+	color: #f59e0b;
+	padding: 6px 14px 4px;
+}
+.shop-active-section { padding-bottom: 4px; border-bottom: 1px solid rgba(245,158,11,0.15); }
+.shop-active-badge {
+	display: inline-block;
+	font-size: 12px;
+	padding: 2px 8px;
+	margin: 2px 4px 2px 14px;
+	background: rgba(0,255,200,0.1);
+	border: 1px solid rgba(0,255,200,0.25);
+	border-radius: 4px;
+	color: #86efac;
+}
+.shop-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	border-bottom: 1px solid rgba(255,255,255,0.04);
+	transition: background 0.15s;
+}
+.shop-item:hover { background: rgba(245,158,11,0.05); }
+.shop-item:last-child { border-bottom: none; }
+.shop-item-locked { opacity: 0.45; }
+.shop-item-icon { font-size: 20px; min-width: 26px; text-align: center; }
+.shop-item-info { flex: 1; min-width: 0; }
+.shop-item-name {
+	font-family: 'VT323', monospace;
+	font-size: 15px;
+	color: #e2e8f0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.shop-item-stack { font-size: 12px; color: #86efac; margin-left: 4px; }
+.shop-item-desc {
+	font-size: 11px;
+	color: #64748b;
+	line-height: 1.3;
+}
+.shop-item-buy {
+	font-family: 'Press Start 2P', monospace;
+	font-size: 7px;
+	padding: 5px 10px;
+	background: linear-gradient(135deg, #fbbf24, #f59e0b);
+	color: #78350f;
+	border: 1px solid #d97706;
+	border-radius: 6px;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: transform 0.15s, box-shadow 0.15s;
+}
+.shop-item-buy:hover:not(.disabled) {
+	transform: scale(1.06);
+	box-shadow: 0 2px 8px rgba(245,158,11,0.4);
+}
+.shop-item-buy.disabled {
+	background: #374151;
+	color: #6b7280;
+	border-color: #4b5563;
+	cursor: not-allowed;
+}
+
+/* Make dropdown wider for shop content */
+.coin-history-dropdown { width: 300px; }
+.coin-tab-panel { max-height: 340px; overflow-y: auto; }
+
 /* ═══════════════════════════════════════════════
    TIMER SYSTEM
    ═══════════════════════════════════════════════ */

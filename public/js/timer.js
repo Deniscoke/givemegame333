@@ -107,7 +107,17 @@ const Timer = (() => {
 		return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 	}
 
-	return { setup, start, stop, setOnComplete };
+	function addTime(minutes) {
+		const extra = (parseInt(minutes) || 0) * 60;
+		if (extra <= 0) return;
+		remainingSeconds += extra;
+		totalSeconds += extra;
+		const display = document.getElementById('timer-display');
+		if (display) display.textContent = formatTime(remainingSeconds);
+		GameUI.toast(`⏱️ +${minutes} min pridaných!`);
+	}
+
+	return { setup, start, stop, setOnComplete, addTime };
 })();
 
 // Expose globally so App can bridge it as `const Timer = window.Timer`
