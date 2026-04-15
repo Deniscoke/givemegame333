@@ -298,7 +298,11 @@ const App = (() => {
 		// Load persisted narrator prefs from server (overrides localStorage defaults).
 		// Falls back silently for guests or if the API is unavailable.
 		const prefsLoaded = await UserPreferences.load();
-		if (!prefsLoaded) await setLang(currentLang); // guest / offline fallback
+		// Ak prefs zo servera nezmenili jazyk, setLang sa nevolá — translationCache ostane prázdna
+		// a getFilters() padne na fallback "English". Vždy načítaj JSON pre aktuálny jazyk.
+		if (!translationCache[currentLang]) {
+			await setLang(currentLang);
+		}
 
 		// Vždy AI engine — skontroluj stav servera pre info
 		const indicator = document.getElementById('engine-indicator');
@@ -353,9 +357,10 @@ const App = (() => {
 
 	// ─── Sběr filtrů ───
 	function getFilters() {
-		// Získaj ai_language z i18n cache pre AI generovanie
+		// Získaj ai_language z i18n cache pre AI generovanie (fallback podľa kódu jazyka, nie English)
 		const tr = translationCache[currentLang];
-		const aiLanguage = tr?._meta?.ai_language || 'English';
+		const AI_LANG_BY_UI = { cs: 'Czech', sk: 'Slovak', de: 'German', en: 'English', es: 'Spanish' };
+		const aiLanguage = tr?._meta?.ai_language || AI_LANG_BY_UI[currentLang] || 'English';
 
 		return {
 			mode: currentMode,
