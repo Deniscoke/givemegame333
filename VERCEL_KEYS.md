@@ -84,6 +84,20 @@ Aplikácia **nepoužíva** `STRIPE_SECRET_KEY` na tlačidlo Upgrade. Stačí **o
 
 Potom **Redeploy** projektu (Deployments → … → Redeploy), aby sa env načítal.
 
+### 6.2a Pridal som premennú, ale v aplikácii stále červený text
+
+Over v prehliadači (Production):
+
+`https://givemegame333.vercel.app/api/billing/public-config`
+
+Ak je `"upgradeAvailable": false`, server **stále nevidí** odkaz. Skontroluj:
+
+1. **Správny projekt na Verceli** — ten, ktorý má doménu `givemegame333.vercel.app` (Settings → Domains).
+2. **Názov premennej** — presne `STRIPE_PAYMENT_LINK_PRO_MONTHLY` (žiadna medzera, iný názov typu `STRIPE_PAYMENT_LINK` nefunguje).
+3. **Prostredie (Environment)** — pri ukladaní premennej musí byť zaškrtnuté **Production**. Ak je len Preview/Development, Production ostane prázdny.
+4. **Hodnota** — celá URL `https://buy.stripe.com/...` bez úvodzoviek; nie prázdny riadok.
+5. **Nový deployment** po uložení env — **Deployments** → tri bodky pri poslednom deployi → **Redeploy** (alebo prázdny commit / push z GitHubu).
+
 ### 6.3 API kľúče (kedy áno / nie)
 
 | Kľúč | Potrebný teraz? |

@@ -1204,10 +1204,11 @@ app.post('/api/coins/log', async (req, res) => {
 });
 
 // ─── Billing API (Payment Link MVP — manual provisioning) ───
-const STRIPE_PAYMENT_LINK = process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '';
+// Čítaj STRIPE_PAYMENT_LINK_PRO_MONTHLY pri každom requeste (serverless + aktuálne env z Vercelu).
 
 /** Verejný endpoint — žiadne tajomstvá; UI vie či je platba zapnutá a kontakt na podporu. */
 app.get('/api/billing/public-config', (req, res) => {
+	res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
 	const link = (process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '').trim();
 	const support = (process.env.BILLING_SUPPORT_EMAIL || '').trim();
 	res.json({
@@ -1239,7 +1240,7 @@ app.get('/api/billing/state', async (req, res) => {
 app.get('/api/billing/upgrade-url', async (req, res) => {
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
-	const url = (STRIPE_PAYMENT_LINK || '').trim();
+	const url = (process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '').trim();
 	if (!url) return res.status(503).json({ error: 'Upgrade not configured', code: 'BILLING_DISABLED' });
 	res.json({ url }); // Payment Link URL — no secret, safe to expose
 });
