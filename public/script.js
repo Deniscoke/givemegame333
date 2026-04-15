@@ -286,6 +286,16 @@ const App = (() => {
 			});
 		});
 
+		// Solo: obnov hru + bežiaci časovač po F5 (nie počas multiplayer session)
+		try {
+			if (window.Timer?.restoreSoloSessionIfAny && !window.Session?.isInSession?.()) {
+				const ok = Timer.restoreSoloSessionIfAny();
+				if (ok) GameUI.setStatus(t('status_game_restored', 'GAME · resumed'));
+			}
+		} catch (e) {
+			console.warn('[App] Timer.restoreSoloSessionIfAny:', e?.message);
+		}
+
 		const loadedStats = await loadStats();
 		stats.generated = loadedStats.generated;
 		stats.exported = loadedStats.exported;

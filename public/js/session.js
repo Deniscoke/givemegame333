@@ -284,13 +284,9 @@ const Session = (() => {
 		const secLeft = Math.max(0, Math.round(msLeft / 1000));
 
 		if (window.Timer && secLeft > 0) {
-			// Use setup with max minutes, then override via start after slight delay
 			const approxMin = Math.ceil(secLeft / 60);
 			Timer.setup({ min: 0, max: approxMin });
-			// Override remaining seconds directly
-			Timer._remainingSeconds = secLeft;
-			const display = document.getElementById('timer-display');
-			if (display) display.textContent = _fmtTime(secLeft);
+			Timer.setRemaining(secLeft, approxMin * 60);
 
 			Timer.setOnComplete(() => {
 				// Move to reflection phase on this client
@@ -447,12 +443,6 @@ const Session = (() => {
 
 	// ─── Helpers ──────────────────────────────────────────────────
 
-	function _fmtTime(sec) {
-		const m = Math.floor(sec / 60);
-		const s = sec % 60;
-		return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-	}
-
 	async function _token() {
 		try {
 			const { data: { session } } = await Promise.race([
@@ -488,7 +478,11 @@ const Session = (() => {
 		} catch (e) { /* silent */ }
 	}
 
-	return { create, join, start, complete, openJoinDialog, _closeLobby, _submitJoin, _closeJoinModal };
+	function isInSession() {
+		return !!_code;
+	}
+
+	return { create, join, start, complete, openJoinDialog, _closeLobby, _submitJoin, _closeJoinModal, isInSession };
 })();
 
 window.Session = Session;
