@@ -193,7 +193,7 @@ const App = (() => {
 
 		// Wire timer completion → reflection → solo completion (RPG XP + coiny)
 		Timer.setOnComplete(() => {
-			if (window.SFX) SFX.play('complete');
+			if (window.SFX) SFX.play('victory');
 			if (!window.currentGame) return;
 			Reflection.open(window.currentGame, null, async (reflectionData) => {
 				try {
@@ -242,6 +242,39 @@ const App = (() => {
 						RpgXpFx.trigger(data.rpg_xp_gained, '📚 Solo hra dokončená');
 					}
 					if (window.RpgScreen?.refresh) await RpgScreen.refresh();
+
+					// Photo verification — bonus XP if player uploaded proof
+					const photoB64 = Reflection.getPhotoBase64?.();
+					const vc = window.currentGame?.verificationChallenge;
+					if (photoB64 && vc?.description && token) {
+						GameUI.toast(t('refl_verifying', '📸 Overujem fotku...'));
+						try {
+							const vRes = await fetch('/api/verify-completion', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+								body: JSON.stringify({
+									photo_base64: photoB64,
+									challenge_description: vc.description,
+									game_title: window.currentGame.title
+								})
+							});
+							const vData = await vRes.json();
+							if (vData.verified) {
+								GameUI.toast(`📸 ${t('refl_verified', 'Overené!')} +${vData.bonus_xp} XP bonus! ${vData.feedback}`);
+								if (vData.bonus_xp > 0 && window.RpgXpFx) RpgXpFx.trigger(vData.bonus_xp, '📸 Foto verifikácia');
+								if (vData.rpg_level_up) GameUI.toast(`⭐ Level up: ${vData.rpg_level}!`);
+								if (window.RpgTalents?.load) {
+									const td2 = await RpgTalents.load();
+									if (td2 && GameUI.renderRpgHudFromTalents) GameUI.renderRpgHudFromTalents(td2);
+								}
+								if (window.RpgScreen?.refresh) RpgScreen.refresh();
+							} else {
+								GameUI.toast(`📸 ${vData.feedback || t('refl_not_verified', 'Fotka neodpovedá výzve — skús to znova nabudúce')}`);
+							}
+						} catch (vErr) {
+							console.warn('[Verify] Photo verification failed:', vErr.message);
+						}
+					}
 					} catch (err) {
 						GameUI.toast(`❌ ${err.message}`);
 					}

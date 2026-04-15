@@ -2990,6 +2990,99 @@ body.light-mode .library-action-btn:hover {
   font-family: inherit;
 }
 
+/* ─── Game Card Verification Challenge ─── */
+.game-verification-card {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(0,255,255,0.06));
+  border: 1px dashed rgba(251,191,36,0.3);
+  border-radius: 10px;
+}
+.game-verification-icon { font-size: 24px; }
+.game-verification-card strong {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #fbbf24;
+  display: block;
+  margin-bottom: 4px;
+}
+.game-verification-card p {
+  font-size: 13px;
+  margin: 0;
+  opacity: 0.9;
+  line-height: 1.4;
+}
+.game-verification-card small {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+/* ─── Photo Verification ─── */
+.reflection-photo-section {
+  margin-bottom: 18px;
+  padding: 12px;
+  background: rgba(0,255,255,0.04);
+  border: 1px solid rgba(0,255,255,0.15);
+  border-radius: 10px;
+}
+.reflection-photo-challenge {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.reflection-photo-icon { font-size: 28px; }
+.reflection-photo-text strong {
+  display: block;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: #fbbf24;
+  margin-bottom: 4px;
+}
+.reflection-photo-text p {
+  font-size: 13px;
+  margin: 0;
+  opacity: 0.9;
+  line-height: 1.4;
+}
+.reflection-photo-hint {
+  font-size: 11px;
+  opacity: 0.6;
+  display: block;
+  margin-top: 4px;
+}
+.reflection-photo-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.reflection-photo-btn {
+  font-size: 11px !important;
+  padding: 8px 16px !important;
+}
+.reflection-photo-preview {
+  width: 100%;
+  max-height: 180px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.reflection-photo-preview img {
+  width: 100%;
+  height: auto;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.reflection-photo-status {
+  font-size: 12px;
+  color: #86efac;
+  text-align: center;
+  min-height: 18px;
+}
+
 /* ─── RPG Sidebar HUD ─── */
 @keyframes comp-panel-flash {
   0%   { box-shadow: 0 0 0 0 rgba(168,85,247,0); background: transparent; }

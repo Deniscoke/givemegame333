@@ -70,6 +70,26 @@ const GameUI = (() => {
 		renderList('game-adaptation', game.adaptationTips);
 		document.getElementById('game-facilitator').textContent = game.facilitatorNotes;
 
+		// Photo verification challenge
+		const vcEl = document.getElementById('game-verification');
+		if (vcEl) {
+			const vc = game.verificationChallenge;
+			if (vc && vc.description) {
+				vcEl.innerHTML = `
+					<div class="game-verification-card">
+						<span class="game-verification-icon">📸</span>
+						<div>
+							<strong>${_t('verify_title', 'Foto výzva (bonus XP)')}</strong>
+							<p>${vc.description}</p>
+							${vc.hint ? `<small>${vc.hint}</small>` : ''}
+						</div>
+					</div>`;
+				vcEl.style.display = '';
+			} else {
+				vcEl.style.display = 'none';
+			}
+		}
+
 		// Reset skládacích stavů
 		document.querySelectorAll('.collapsible').forEach(el => el.classList.remove('collapsed'));
 

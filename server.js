@@ -375,7 +375,7 @@ const SCHEMA_FALLBACK = `{
 
 // Compact schema for AI format reference (~85 tokens vs ~600 for a full example).
 // Field names + types are sufficient — sample values add noise, not signal.
-const COMPACT_GAME_SCHEMA = `{"id":"ai-XXXXXX","title":"string","pitch":"string","playerCount":{"min":2,"max":15},"ageRange":{"min":8,"max":15},"duration":{"min":15,"max":30},"setting":"indoor|outdoor|any","mode":"party|classroom|reflection|circus|cooking|meditation","energyLevel":"low|medium|high","materials":["string"],"instructions":["string"],"learningGoals":["string"],"reflectionPrompts":["string"],"safetyNotes":["string"],"adaptationTips":["string"],"facilitatorNotes":"string","rvp":{"kompetence":["k-uceni"],"oblasti":["string"],"stupen":"prvni|druhy","prurezova_temata":["string"],"ocekavane_vystupy":["string"],"doporucene_hodnoceni":"string"}}`;
+const COMPACT_GAME_SCHEMA = `{"id":"ai-XXXXXX","title":"string","pitch":"string","playerCount":{"min":2,"max":15},"ageRange":{"min":8,"max":15},"duration":{"min":15,"max":30},"setting":"indoor|outdoor|any","mode":"party|classroom|reflection|circus|cooking|meditation","energyLevel":"low|medium|high","materials":["string"],"instructions":["string"],"learningGoals":["string"],"reflectionPrompts":["string"],"safetyNotes":["string"],"adaptationTips":["string"],"facilitatorNotes":"string","verificationChallenge":{"description":"what to photograph as proof","hint":"short tip for a good photo"},"rvp":{"kompetence":["k-uceni"],"oblasti":["string"],"stupen":"prvni|druhy","prurezova_temata":["string"],"ocekavane_vystupy":["string"],"doporucene_hodnoceni":"string"}}`;
 
 // ─── Strict constraint mapping for AI ───
 function buildFilterDescription(filters) {
@@ -737,6 +737,7 @@ RULES:
 - If mode is "meditation", the game MUST be a mindfulness/wellness exercise.
 - Respond ONLY with a valid JSON object — no markdown, no comments.
 - Language is specified in the user message — write ALL output in that language.
+- ALWAYS include "verificationChallenge" with "description" (what players should photograph as proof they did the activity — be specific: finished result, group pose, materials used, etc.) and "hint" (short tip for a good photo).
 
 CRITICAL — PANEL INPUT COMPLIANCE:
 The user specifies MANDATORY constraints below. You MUST satisfy ALL of them. Before outputting JSON, verify:
@@ -1366,6 +1367,92 @@ app.post('/api/shop/purchase', async (req, res) => {
 		res.status(500).json({ error: 'Nákup zlyhal', code: 'PURCHASE_ERROR' });
 	} finally {
 		if (client) client.release();
+	}
+});
+
+// ─── Photo verification — AI checks if the uploaded photo matches the game challenge ───
+const VERIFICATION_XP_BONUS = 100;
+app.post('/api/verify-completion', async (req, res) => {
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const { photo_base64, challenge_description, game_title } = req.body || {};
+	if (!photo_base64 || !challenge_description) {
+		return res.status(400).json({ error: 'Chýba fotka alebo popis výzvy', code: 'MISSING_DATA' });
+	}
+
+	// Limit base64 size (~5 MB image → ~6.7 MB base64)
+	if (photo_base64.length > 8_000_000) {
+		return res.status(400).json({ error: 'Fotka je príliš veľká (max 5 MB)', code: 'PHOTO_TOO_LARGE' });
+	}
+
+	try {
+		const visionResp = await openai.chat.completions.create({
+			model: 'gpt-4o',
+			max_tokens: 300,
+			messages: [{
+				role: 'user',
+				content: [
+					{
+						type: 'text',
+						text: `You are a game completion verifier. The player played a game called "${game_title || 'Unknown'}".
+The verification challenge was: "${challenge_description}"
+Look at the uploaded photo and determine if it matches the challenge. Be generous — if the photo shows reasonable evidence of the activity, approve it.
+Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "feedback": "short message for the player"}`
+					},
+					{
+						type: 'image_url',
+						image_url: { url: photo_base64, detail: 'low' }
+					}
+				]
+			}]
+		});
+
+		const raw = (visionResp.choices?.[0]?.message?.content || '').trim();
+		let result;
+		try {
+			const jsonMatch = raw.match(/\{[\s\S]*\}/);
+			result = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+		} catch {
+			result = { verified: false, confidence: 0, feedback: 'Nepodarilo sa vyhodnotiť fotku' };
+		}
+
+		// Award bonus XP if verified
+		let bonusXp = 0;
+		let rpgLevel = null;
+		let rpgLevelUp = false;
+		if (result.verified && coinApiReady()) {
+			try {
+				const client = await coinsDbPool.connect();
+				try {
+					await client.query('BEGIN');
+					const { rows: pre } = await client.query(
+						'SELECT COALESCE(rpg_xp,0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
+					);
+					const levelBefore = computeRpgLevel(pre[0]?.rpg_xp || 0).level;
+					const xpResult = await awardXpInTransaction(client, user.id, VERIFICATION_XP_BONUS, 'photo_verify');
+					bonusXp = VERIFICATION_XP_BONUS;
+					rpgLevel = xpResult.level;
+					rpgLevelUp = xpResult.level > levelBefore;
+					await client.query('COMMIT');
+				} catch (e) {
+					try { await client.query('ROLLBACK'); } catch (_) {}
+					console.error('[Verify] XP award failed:', e.message);
+				} finally { client.release(); }
+			} catch (e) { console.error('[Verify] DB connection failed:', e.message); }
+		}
+
+		res.json({
+			verified: !!result.verified,
+			confidence: result.confidence || 0,
+			feedback: result.feedback || '',
+			bonus_xp: bonusXp,
+			rpg_level: rpgLevel,
+			rpg_level_up: rpgLevelUp,
+		});
+	} catch (err) {
+		console.error('[Verify] Vision API failed:', err.message);
+		res.status(500).json({ error: 'Overenie zlyhalo', code: 'VERIFY_ERROR' });
 	}
 });
 

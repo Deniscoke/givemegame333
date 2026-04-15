@@ -61,14 +61,45 @@ const Reflection = (() => {
 		return questions;
 	}
 
+	let _pendingPhotoBase64 = null;
+	let _currentGame = null;
+
 	function open(game, sessionCode, onSubmitted) {
 		const modal = document.getElementById(MODAL_ID);
 		if (!modal) return;
+		_pendingPhotoBase64 = null;
+		_currentGame = game;
 
 		const questions = buildQuestions(game);
 		const form = modal.querySelector('#reflection-form');
 		if (!form) return;
 		form.innerHTML = '';
+
+		// Photo verification section (if game has verificationChallenge)
+		const vc = game?.verificationChallenge;
+		if (vc && vc.description) {
+			const photoDiv = document.createElement('div');
+			photoDiv.className = 'reflection-photo-section';
+			photoDiv.innerHTML = `
+				<div class="reflection-photo-challenge">
+					<div class="reflection-photo-icon">📸</div>
+					<div class="reflection-photo-text">
+						<strong>${_t('refl_photo_title', 'Foto dôkaz (bonus XP)')}</strong>
+						<p>${vc.description}</p>
+						${vc.hint ? `<small class="reflection-photo-hint">💡 ${vc.hint}</small>` : ''}
+					</div>
+				</div>
+				<div class="reflection-photo-upload" id="reflection-photo-upload">
+					<input type="file" accept="image/*" capture="environment" id="reflection-photo-input"
+						style="display:none" onchange="Reflection._onPhotoSelected(this)">
+					<button type="button" class="btn btn-retro reflection-photo-btn" onclick="document.getElementById('reflection-photo-input').click()">
+						📷 ${_t('refl_photo_btn', 'Odfoť / Nahraj fotku')}
+					</button>
+					<div id="reflection-photo-preview" class="reflection-photo-preview" style="display:none"></div>
+					<div id="reflection-photo-status" class="reflection-photo-status"></div>
+				</div>`;
+			form.appendChild(photoDiv);
+		}
 
 		questions.forEach(q => {
 			const div = document.createElement('div');
@@ -109,6 +140,29 @@ const Reflection = (() => {
 		}
 
 		modal.style.display = 'flex';
+	}
+
+	function _onPhotoSelected(input) {
+		const file = input.files?.[0];
+		if (!file) return;
+		const preview = document.getElementById('reflection-photo-preview');
+		const status = document.getElementById('reflection-photo-status');
+
+		if (file.size > 5 * 1024 * 1024) {
+			if (status) status.textContent = _t('refl_photo_too_big', '⚠️ Fotka je príliš veľká (max 5 MB)');
+			return;
+		}
+
+		const reader = new FileReader();
+		reader.onload = () => {
+			_pendingPhotoBase64 = reader.result;
+			if (preview) {
+				preview.innerHTML = `<img src="${reader.result}" alt="Preview">`;
+				preview.style.display = 'block';
+			}
+			if (status) status.textContent = _t('refl_photo_ready', '✅ Fotka pripravená — odošli reflexiu');
+		};
+		reader.readAsDataURL(file);
 	}
 
 	async function _submit(questions, form, sessionCode, onSubmitted) {
@@ -187,9 +241,14 @@ const Reflection = (() => {
 	function close() {
 		const modal = document.getElementById(MODAL_ID);
 		if (modal) modal.style.display = 'none';
+		_pendingPhotoBase64 = null;
+		_currentGame = null;
 	}
 
-	return { open, close, buildQuestions };
+	function getPhotoBase64() { return _pendingPhotoBase64; }
+	function getCurrentGame() { return _currentGame; }
+
+	return { open, close, buildQuestions, _onPhotoSelected, getPhotoBase64, getCurrentGame };
 })();
 
 window.Reflection = Reflection;
