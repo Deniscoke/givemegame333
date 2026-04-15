@@ -68,7 +68,13 @@ const GameAPI = (() => {
 
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
-				throw new Error(err.error || `Server vrátil ${res.status}`);
+				let msg = err.error || `Server vrátil ${res.status}`;
+				if (err.code === 'PLAN_AI_DAILY_LIMIT' && err.resetsAtUtc) {
+					msg += ` (Obnova UTC: ${new Date(err.resetsAtUtc).toLocaleString()})`;
+				}
+				const e = new Error(msg);
+				if (err.code) e.code = err.code;
+				throw e;
 			}
 
 			const game = await res.json();
@@ -96,7 +102,13 @@ const GameAPI = (() => {
 			}, 65000);
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({}));
-				throw new Error(err.error || `Server vrátil ${res.status}`);
+				let msg = err.error || `Server vrátil ${res.status}`;
+				if (err.code === 'PLAN_AI_DAILY_LIMIT' && err.resetsAtUtc) {
+					msg += ` (Obnova UTC: ${new Date(err.resetsAtUtc).toLocaleString()})`;
+				}
+				const e = new Error(msg);
+				if (err.code) e.code = err.code;
+				throw e;
 			}
 			const game = await res.json();
 			console.log(`[GameAPI] REMIX: "${game.title}"`, game);

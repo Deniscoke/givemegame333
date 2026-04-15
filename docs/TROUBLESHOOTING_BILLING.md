@@ -39,10 +39,18 @@ Na Verceli musia byť nastavené:
 
 Bez `STRIPE_PAYMENT_LINK_PRO_MONTHLY` tlačidlo "Upgrade to Pro" vráti chybu.
 
-## 6. Lokálne testovanie
+## 6. Migrácia `plan_usage_daily` (Free vs Pro limity)
+
+Pre denný limit AI hier (`/api/generate-game`) treba tabuľku z `supabase/migrations/018_plan_usage_daily.sql`. Spusti ju v **SQL Editor** (rovnako ako billing SQL vyššie). Ak chýba, server v konzole varuje pri inkrementácii; denný limit sa nemusí presne uplatniť.
+
+## 7. Lokálne testovanie
 
 ```bash
 npm start
 ```
 
 Potom otvor `http://localhost:3000` a skontroluj konzolu prehlíadača (F12) — či nie sú chyby pri volaní `/api/billing/state`.
+
+## 8. Limity plánov (prehľad)
+
+Konfigurácia čísel je v `lib/plan-entitlements.js` (Free vs Pro). API `/api/billing/state` vracia `entitlements` a `usage` pre UI.

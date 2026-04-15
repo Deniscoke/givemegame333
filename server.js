@@ -31,6 +31,13 @@ const {
 	getUserPlan,
 	PLAN_PRO
 } = require('./lib/billing');
+const { entitlementsForPlan, nextUtcMidnightIso } = require('./lib/plan-entitlements');
+const {
+	getAiGenerationsTodayUtc,
+	incrementAiGenerationsSuccess,
+	countRobotChallengesLast24h,
+	countSoloCompletionsLast24h,
+} = require('./lib/plan-usage');
 
 const SESSION_JOIN_COST = 100;
 const COMPLETION_BONUS  = 100;
@@ -40,7 +47,7 @@ const JOIN_CODE_LENGTH  = 6;
 // ─── RPG XP award amounts ───────────────────────────────────────────────────
 // XP is awarded server-side only. No public endpoint.
 // Solo completion XP scales with game duration (see computeSoloXpFromDurationMax).
-// Rate limiting: SOLO_DAILY_LIMIT completions per 24h.
+// Rate limiting: solo completions per 24h — Free vs Pro (plan-entitlements).
 const TALENT_XP_AWARD  = 25;  // per talent unlock (idempotent via UNIQUE constraint)
 const SESSION_XP_AWARD = 75;  // per multiplayer session completion (reflection_done guard)
 const ROBOT_XP_AWARD   = 30;  // per robot challenge completion (no daily cap — mini-game)
@@ -62,7 +69,7 @@ const GAME_KOMP_TO_STAT = {
 const MIN_SESSION_DURATION_FLOOR = 3;    // minutes — absolute minimum even if game.duration.min is lower
 const MIN_SESSION_DURATION_FALLBACK = 5; // minutes — used when game has no duration.min
 const HOST_COOLDOWN_MAX  = 5;            // max completed sessions per host per rolling hour
-const SOLO_DAILY_LIMIT   = 10;           // max solo completions per user per 24h
+// Solo completions / 24h — Free vs Pro: see lib/plan-entitlements.js (soloCompletionsPer24h)
 
 const app = express();
 // Trust proxy for correct req.ip behind Vercel/nginx
@@ -759,10 +766,8 @@ IMPORTANT: Generate "id" as "ai-" + random 6-character code. All fields are requ
 // Computed once at startup — identical string every call → OpenAI prompt cache activates.
 const STATIC_SYSTEM_PROMPT = buildSystemPrompt();
 
-// ─── Rate limit for /api/generate-game (per-IP or per-user, paid=higher limit) ───
+// ─── Rate limit for /api/generate-game (per-IP or per-user; limits z plan-entitlements) ───
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT_MAX_FREE = 10;
-const RATE_LIMIT_MAX_PRO = 30;
 const generateGameRateMap = new Map(); // key -> { count, resetAt }
 
 function cleanupRateLimitMap() {
@@ -788,14 +793,14 @@ function checkGenerateGameRateLimit(key, limit) {
 // ─── API endpoint ───
 app.post('/api/generate-game', async (req, res, next) => {
 	const ip = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-	let limit = RATE_LIMIT_MAX_FREE;
+	let limit = entitlementsForPlan(false).generatePerMinute;
 	let key = `ip:${ip}`;
 	try {
 		const user = await optionalSupabaseUser(req);
 		if (user && coinsDbPool) {
 			key = `user:${user.id}`;
 			const state = await getUserBillingState(coinsDbPool, user.id);
-			if (hasPaidAccess(state)) limit = RATE_LIMIT_MAX_PRO;
+			limit = entitlementsForPlan(hasPaidAccess(state)).generatePerMinute;
 		}
 	} catch (e) {
 		console.warn('[GenerateGame] Rate limit user lookup:', e.message);
@@ -827,6 +832,30 @@ app.post('/api/generate-game', async (req, res, next) => {
 		openai = new OpenAI({ apiKey: effectiveKey });
 	}
 
+	const genUser = await optionalSupabaseUser(req);
+	let genPaid = false;
+	if (genUser && coinsDbPool) {
+		const st = await getUserBillingState(coinsDbPool, genUser.id);
+		genPaid = hasPaidAccess(st);
+	}
+	const genEnt = entitlementsForPlan(genPaid);
+	if (genUser && coinsDbPool && genEnt.aiGamesPerUtcDay != null) {
+		try {
+			const usedAi = await getAiGenerationsTodayUtc(coinsDbPool, genUser.id);
+			if (usedAi >= genEnt.aiGamesPerUtcDay) {
+				return res.status(429).json({
+					error: `Denný limit AI hier: ${usedAi}/${genEnt.aiGamesPerUtcDay} (UTC deň). Obnoví sa o polnoci UTC alebo predplaťte Pro učiteľ.`,
+					code: 'PLAN_AI_DAILY_LIMIT',
+					limit: genEnt.aiGamesPerUtcDay,
+					used: usedAi,
+					resetsAtUtc: nextUtcMidnightIso()
+				});
+			}
+		} catch (e) {
+			console.warn('[GenerateGame] plan_usage_daily check:', e.message);
+		}
+	}
+
 	const f = filters || {};
 	const filterDescription = buildFilterDescription(f);
 	const didacticGuidance = buildDidacticGuidance(f);
@@ -836,17 +865,16 @@ app.post('/api/generate-game', async (req, res, next) => {
 	// ─── RPG avatar stats for personalized generation ───────────────
 	let rpgProfileBlock = '';
 	try {
-		const user = await optionalSupabaseUser(req);
-		if (user && coinsDbPool) {
+		if (genUser && coinsDbPool) {
 			const { rows: pRows } = await queryCoinsDb(
 				`SELECT rpg_avatar_id, COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1`,
-				[user.id]
+				[genUser.id]
 			);
 			const p = pRows[0];
 			if (p?.rpg_avatar_id) {
 				const avatarEntry = getAvatarById(p.rpg_avatar_id);
 				const { rows: uRows } = await queryCoinsDb(
-					`SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1`, [user.id]
+					`SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1`, [genUser.id]
 				);
 				const tManifest = getTalentManifest();
 				const uTalents = uRows.map(r => tManifest.find(t => t.id === r.talent_id)).filter(Boolean);
@@ -1078,6 +1106,14 @@ Write the remix in ${aiLanguage}.
 		game._model = usedModel;
 		game._timestamp = new Date().toISOString();
 
+		if (genUser && coinsDbPool) {
+			try {
+				await incrementAiGenerationsSuccess(coinsDbPool, genUser.id);
+			} catch (e) {
+				console.warn('[GenerateGame] plan_usage_daily increment:', e.message);
+			}
+		}
+
 		res.json(game);
 
 	} catch (err) {
@@ -1178,14 +1214,34 @@ app.post('/api/coins/log', async (req, res) => {
 	if (!Number.isInteger(amount) || typeof action !== 'string' || !action.trim()) {
 		return res.status(400).json({ error: 'amount (integer) a action (string) sú povinné' });
 	}
+	const actionTrim = action.trim();
+	if (actionTrim === 'robot_challenge' && amount > 0) {
+		try {
+			const bill = await getUserBillingState(coinsDbPool, user.id);
+			const ent = entitlementsForPlan(hasPaidAccess(bill));
+			if (ent.robotCompletionsPer24h != null) {
+				const rc = await countRobotChallengesLast24h(coinsDbPool, user.id);
+				if (rc >= ent.robotCompletionsPer24h) {
+					return res.status(429).json({
+						error: `Limit Robot Challenge: ${rc}/${ent.robotCompletionsPer24h} za 24 h. Obnoví sa alebo predplaťte Pro učiteľ.`,
+						code: 'ROBOT_DAILY_LIMIT',
+						limit: ent.robotCompletionsPer24h,
+						used: rc
+					});
+				}
+			}
+		} catch (e) {
+			console.warn('[Coins] robot_challenge plan check:', e.message);
+		}
+	}
 	try {
 		await queryCoinsDb(
 			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
-			[user.id, amount, action.trim(), metadata || null]
+			[user.id, amount, actionTrim, metadata || null]
 		);
 
 		// Award RPG XP for robot_challenge completions (best-effort, non-blocking)
-		if (action.trim() === 'robot_challenge') {
+		if (actionTrim === 'robot_challenge') {
 			const xpClient = await coinsDbPool.connect();
 			try {
 				await awardXpInTransaction(xpClient, user.id, ROBOT_XP_AWARD, 'robot_challenge');
@@ -1226,10 +1282,44 @@ app.get('/api/billing/state', async (req, res) => {
 		const state = await getUserBillingState(coinsDbPool, user.id);
 		const planCode = getUserPlan(state);
 		const paid = hasPaidAccess(state);
+		const ent = entitlementsForPlan(paid);
+		let aiUsed = 0;
+		let robotUsed = 0;
+		let soloUsed = 0;
+		try {
+			aiUsed = await getAiGenerationsTodayUtc(coinsDbPool, user.id);
+		} catch (e) {
+			console.warn('[Billing] ai usage:', e.message);
+		}
+		try {
+			robotUsed = await countRobotChallengesLast24h(coinsDbPool, user.id);
+		} catch (e) {
+			console.warn('[Billing] robot usage:', e.message);
+		}
+		try {
+			soloUsed = await countSoloCompletionsLast24h(coinsDbPool, user.id);
+		} catch (e) {
+			console.warn('[Billing] solo usage:', e.message);
+		}
+		res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
 		res.json({
 			planCode,
 			hasPaidAccess: paid,
-			billingNote: state?.billing_note || null
+			billingNote: state?.billing_note || null,
+			entitlements: {
+				givemeSocial: ent.givemeSocial,
+				smartaOpenAiAndTts: ent.smartaOpenAiAndTts,
+				aiGamesPerUtcDay: ent.aiGamesPerUtcDay,
+				robotCompletionsPer24h: ent.robotCompletionsPer24h,
+				soloCompletionsPer24h: ent.soloCompletionsPer24h,
+				generatePerMinute: ent.generatePerMinute
+			},
+			usage: {
+				aiGenerationsUtcDay: aiUsed,
+				robotCompletions24h: robotUsed,
+				soloCompletions24h: soloUsed,
+				resetsAiUtc: nextUtcMidnightIso()
+			}
 		});
 	} catch (err) {
 		console.error('[Billing] state failed:', err.message);
@@ -1469,18 +1559,23 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		return res.status(400).json({ error: 'game_json.rvp.kompetence je povinné', code: 'MISSING_COMPETENCIES' });
 	}
 
-	// ─── Solo cooldown: max SOLO_DAILY_LIMIT per 24h ──────────────
+	// ─── Solo cooldown: max per 24h (Free vs Pro) ──────────────
+	let soloLimit = entitlementsForPlan(false).soloCompletionsPer24h;
 	try {
+		const bill = await getUserBillingState(coinsDbPool, user.id);
+		soloLimit = entitlementsForPlan(hasPaidAccess(bill)).soloCompletionsPer24h;
 		const { rows: soloRows } = await queryCoinsDb(
 			`SELECT COUNT(*)::int AS cnt FROM public.coin_transactions
 			 WHERE user_id = $1 AND action = 'solo_complete'
 			   AND created_at > NOW() - INTERVAL '24 hours'`,
 			[user.id]
 		);
-		if ((soloRows[0]?.cnt || 0) >= SOLO_DAILY_LIMIT) {
+		if ((soloRows[0]?.cnt || 0) >= soloLimit) {
 			return res.status(429).json({
-				error: `Denný limit solo hier dosiahnutý (${soloRows[0].cnt}/${SOLO_DAILY_LIMIT})`,
-				code: 'SOLO_DAILY_LIMIT'
+				error: `Denný limit solo hier dosiahnutý (${soloRows[0].cnt}/${soloLimit}). Obnoví sa za 24 h od poslednej hry alebo predplaťte Pro učiteľ.`,
+				code: 'SOLO_DAILY_LIMIT',
+				limit: soloLimit,
+				used: soloRows[0].cnt
 			});
 		}
 	} catch (e) {
@@ -2833,10 +2928,32 @@ app.get('/api/random-fact', async (req, res) => {
 	const effectiveKey = process.env.OPENAI_API_KEY;
 	const hasKey = effectiveKey && effectiveKey !== 'sk-your-openai-api-key-here';
 
+	let smartaPaid = false;
+	try {
+		const u = await optionalSupabaseUser(req);
+		if (u && coinsDbPool) {
+			const st = await getUserBillingState(coinsDbPool, u.id);
+			smartaPaid = hasPaidAccess(st);
+		}
+	} catch (e) {
+		console.warn('[API] random-fact billing:', e.message);
+	}
+
 	if (!hasKey) {
 		const fact = getRandomLocalFact(lang);
 		console.log('[API] random-fact: no API key, local fact');
 		return res.json({ fact, source: 'local' });
+	}
+
+	// Free / neprihlásený: len lokálne fakty (OpenAI Smarta = Pro)
+	if (!smartaPaid) {
+		const fact = getRandomLocalFact(lang);
+		return res.json({
+			fact,
+			source: 'local',
+			planGate: 'smarta_pro_only',
+			hint: 'AI Smarta (OpenAI) je v pláne Pro učiteľ — tu je lokálna zaujímavosť; hlas cez Web Speech.'
+		});
 	}
 
 	// OpenAI API — GPT-5.4 (Chat) pre generovanie, TTS pre čítanie
@@ -2937,6 +3054,28 @@ const TTS_STYLE_CONFIG = {
 	genz: { voice: 'nova', speed: 1.05, instructions: 'Speak casually and conversationally. Relaxed, friendly tone. Natural, laid-back delivery.' }
 };
 app.post('/api/tts', async (req, res) => {
+	const ttsUser = await optionalSupabaseUser(req);
+	if (!ttsUser) {
+		return res.status(401).json({
+			error: 'OpenAI TTS vyžaduje prihlásenie. Prihlás sa cez Google alebo použi Web Speech.',
+			code: 'AUTH_REQUIRED_TTS'
+		});
+	}
+	if (coinsDbPool) {
+		try {
+			const st = await getUserBillingState(coinsDbPool, ttsUser.id);
+			if (!hasPaidAccess(st)) {
+				return res.status(403).json({
+					error: 'OpenAI hlas (TTS) je len v pláne Pro učiteľ. Použi Web Speech v prehliadači.',
+					code: 'PLAN_TTS_PRO_ONLY'
+				});
+			}
+		} catch (e) {
+			console.warn('[TTS] billing check:', e.message);
+			return res.status(503).json({ error: 'Nepodarilo sa overiť plán', code: 'BILLING_ERROR' });
+		}
+	}
+
 	const apiKey = process.env.OPENAI_API_KEY;
 	if (!apiKey || apiKey === 'sk-your-openai-api-key-here') {
 		return res.status(503).json({ error: 'TTS nie je nakonfigurovaný. Nastav OPENAI_API_KEY.' });

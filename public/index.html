@@ -704,6 +704,12 @@
 				</div>
 			</div>
 			<div class="profile-tab-content" id="profile-tab-giveme" style="display:none;">
+				<div id="giveme-pro-lock" class="giveme-pro-lock" style="display:none;" aria-live="polite">
+					<div class="giveme-pro-lock-inner">
+						<p class="giveme-pro-lock-text"></p>
+						<button type="button" class="btn btn-retro" onclick="App.Profile.switchTab('profil')">← Profil</button>
+					</div>
+				</div>
 				<iframe id="giveme-iframe" src="gIVEME/index.html" title="gIVEME sociálna sieť" onload="App.Profile.onGivemeLoad(this)"></iframe>
 			</div>
 		</div>

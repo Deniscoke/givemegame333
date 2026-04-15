@@ -38,8 +38,8 @@ describe('Rate limit on /api/generate-game', () => {
 		return { status: res.status, body };
 	}
 
-	it('returns 429 RATE_LIMIT_EXCEEDED when exceeding 10 requests per minute', async () => {
-		// Fire 11 requests in parallel — at least one should get rate limited
+	it('returns 429 RATE_LIMIT_EXCEEDED when exceeding anonymous per-minute cap', async () => {
+		// Fire 11 requests in parallel — free anonymous cap is 8/min; at least one 429
 		const promises = Array.from({ length: 11 }, () => postGenerateGame());
 		const results = await Promise.all(promises);
 		const rateLimited = results.filter(r => r.status === 429 && r.body?.code === 'RATE_LIMIT_EXCEEDED');

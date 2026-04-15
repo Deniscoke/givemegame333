@@ -17,6 +17,20 @@ const SMARTA_DAILY_LIMIT = 10;
 const SMARTA_USAGE_KEY = 'givemegame_smarta_usage';
 const SMARTA_STYLES_KEY = 'givemegame_smarta_styles';
 
+async function narratorAuthHeaders() {
+	const headers = { ...(typeof ngrokHeaders === 'function' ? ngrokHeaders() : {}), 'Content-Type': 'application/json' };
+	try {
+		if (typeof supabaseClient !== 'undefined' && supabaseClient?.auth) {
+			const { data: { session } } = await Promise.race([
+				supabaseClient.auth.getSession(),
+				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+			]);
+			if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+		}
+	} catch (e) { /* ignore */ }
+	return headers;
+}
+
 function getSmartaStylesKey() {
 	try {
 		const raw = sessionStorage.getItem('givemegame_user');
@@ -260,7 +274,7 @@ const Narrator = (() => {
 				const to = setTimeout(() => ctrl.abort(), TTS_TIMEOUT_MS);
 				const res = await fetch('/api/tts', {
 					method: 'POST',
-					headers: { ...ngrokHeaders(), 'Content-Type': 'application/json' },
+					headers: await narratorAuthHeaders(),
 					body: JSON.stringify({ text: fact, voice: 'marin', styles: Array.isArray(styles) ? styles : [] }),
 					signal: ctrl.signal
 				});
@@ -353,7 +367,7 @@ const Narrator = (() => {
 			if (area) url += `&area=${encodeURIComponent(area)}`;
 			if (styles.length) url += '&style=' + encodeURIComponent(styles.join(','));
 			const res = await fetch(url, {
-				headers: ngrokHeaders(),
+				headers: await narratorAuthHeaders(),
 				signal: controller.signal
 			});
 			clearTimeout(timeoutId);
@@ -362,6 +376,10 @@ const Narrator = (() => {
 			const source = data?.source || 'local';
 			if (!fact && !res.ok) {
 				console.warn('[Narrator] API error:', res.status, data?.error);
+			}
+			if (data?.planGate === 'smarta_pro_only' && source === 'local') {
+				const _t = window.givemegame_t || ((k, f) => f || k);
+				GameUI.toast(_t('smarta_pro_hint', 'AI Smarta (OpenAI) je v pláne Pro — používam lokálnu zaujímavosť a Web Speech.'));
 			}
 			if (source === 'local' && data?._debug) {
 				console.error('[Narrator] OpenAI zlyhalo:', data._debug);

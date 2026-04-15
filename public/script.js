@@ -1164,13 +1164,21 @@ const App = (() => {
 			render();
 		}
 
-		function handleSuccess() {
+		async function handleSuccess() {
 			score++;
 			currentIdx++;
 			if (currentIdx >= TOTAL_CHALLENGES) {
 				stage = 'success';
-				Coins.award('robot_challenge');
-				if (window.RpgXpFx) RpgXpFx.trigger(30, '🤖 Robot challenge!');
+				if (App?.Billing?.refreshState) await App.Billing.refreshState();
+				const plan = window.__givemegamePlan;
+				const lim = plan?.entitlements?.robotCompletionsPer24h;
+				const used = plan?.usage?.robotCompletions24h ?? 0;
+				if (plan && !plan.hasPaidAccess && lim != null && used >= lim) {
+					GameUI.toast(t('robot_plan_limit', 'Bez Pro: limit Robot Challenge / 24 h — odmena dnes už nie. Skús neskôr alebo Pro učiteľ.'));
+				} else {
+					Coins.award('robot_challenge');
+					if (window.RpgXpFx) RpgXpFx.trigger(30, '🤖 Robot challenge!');
+				}
 				render();
 			} else {
 				nextChallenge(currentIdx);
@@ -1299,7 +1307,7 @@ const App = (() => {
 					const val = parseInt(btn.dataset.val);
 					if (val === ch.answer) {
 						btn.classList.add('correct');
-						setTimeout(handleSuccess, 500);
+						setTimeout(() => { void handleSuccess(); }, 500);
 					} else {
 						btn.classList.add('wrong');
 						setTimeout(handleFailure, 500);
@@ -1330,7 +1338,7 @@ const App = (() => {
 					const val = parseInt(btn.dataset.val);
 					if (val === ch.answer) {
 						btn.classList.add('correct');
-						setTimeout(handleSuccess, 500);
+						setTimeout(() => { void handleSuccess(); }, 500);
 					} else {
 						btn.classList.add('wrong');
 						setTimeout(handleFailure, 500);
@@ -1358,7 +1366,7 @@ const App = (() => {
 			});
 			el.querySelector('.robot-verify-btn').addEventListener('click', () => {
 				const allCorrect = imageGrid.every(c => c.selected === c.isTarget);
-				if (allCorrect) handleSuccess();
+				if (allCorrect) void handleSuccess();
 				else handleFailure();
 			});
 		}
@@ -1456,7 +1464,7 @@ const App = (() => {
 			window.location.href = '/login.html';
 		}
 
-		function switchTab(tab) {
+		async function switchTab(tab) {
 			document.querySelectorAll('.profile-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
 			document.getElementById('profile-tab-profil').style.display    = tab === 'profil'    ? 'block' : 'none';
 			document.getElementById('profile-tab-analytics').style.display = tab === 'analytics' ? 'block' : 'none';
@@ -1469,12 +1477,32 @@ const App = (() => {
 				const coinsEl = document.getElementById('profile-coins');
 				if (coinsEl) coinsEl.textContent = Coins.getBalance();
 				_loadProfileCompetencies();
-				if (App?.Billing?.refreshState) App.Billing.refreshState();
+				if (App?.Billing?.refreshState) void App.Billing.refreshState();
 			}
 			if (tab === 'analytics') _loadAnalytics();
 			if (tab === 'giveme') {
+				if (App?.Billing?.refreshState) await App.Billing.refreshState();
 				const iframe = document.getElementById('giveme-iframe');
-				if (iframe) syncGivemeIframe(iframe);
+				const lock = document.getElementById('giveme-pro-lock');
+				const user = getCurrentUser();
+				const plan = window.__givemegamePlan;
+				const paid = Boolean(plan?.hasPaidAccess);
+				if (lock && iframe) {
+					const txt = lock.querySelector('.giveme-pro-lock-text');
+					if (!user || user.uid === 'guest') {
+						lock.style.display = 'flex';
+						iframe.style.display = 'none';
+						if (txt) txt.textContent = t('giveme_login', 'Prihlás sa cez Google pre gIVEME.');
+					} else if (!paid) {
+						lock.style.display = 'flex';
+						iframe.style.display = 'none';
+						if (txt) txt.textContent = t('giveme_pro_only', 'gIVEME sociálna sieť je v pláne Pro učiteľ. Free účet ju nemá — klikni Upgrade to Pro v záložke Profil.');
+					} else {
+						lock.style.display = 'none';
+						iframe.style.display = '';
+						syncGivemeIframe(iframe);
+					}
+				}
 			}
 		}
 
@@ -1636,13 +1664,27 @@ const App = (() => {
 				const data = await stateRes.json();
 				statusEl.textContent = data.hasPaidAccess ? 'Pro' : 'Free';
 				const paid = data.hasPaidAccess;
+				const ent = data.entitlements || {};
+				const usage = data.usage || {};
+				window.__givemegamePlan = {
+					hasPaidAccess: paid,
+					entitlements: ent,
+					usage,
+					planCode: data.planCode || 'free'
+				};
 				const canPay = cfg.upgradeAvailable === true;
 				if (upgradeBtn) upgradeBtn.style.display = paid ? 'none' : 'block';
 				if (upgradeBtn) upgradeBtn.disabled = !paid && !canPay;
 				if (hintEl) {
-					hintEl.textContent = paid
-						? '30 hier/min, premium funkcie'
-						: 'Pro: ' + (cfg.proPlanLabel || 'Pro Teacher Monthly') + ' — vyšší limit generovania. Platba cez Stripe.';
+					if (paid) {
+						hintEl.textContent = 'Pro: AI Smarta + TTS, gIVEME, vyššie limity (UTC denné počítadlá v nápovedách).';
+					} else {
+						const aiL = ent.aiGamesPerUtcDay;
+						const aiU = usage.aiGenerationsUtcDay ?? 0;
+						const rb = ent.robotCompletionsPer24h != null ? `${usage.robotCompletions24h ?? 0}/${ent.robotCompletionsPer24h} robot/24h` : 'robot ∞';
+						const so = `${usage.soloCompletions24h ?? 0}/${ent.soloCompletionsPer24h ?? '?'} solo/24h`;
+						hintEl.textContent = `Free: AI hry ${aiU}/${aiL ?? '∞'} (UTC deň), ${rb}, ${so}. Smarta AI/TTS len Pro. ${cfg.proPlanLabel || 'Pro'} cez Stripe.`;
+					}
 				}
 				if (warnEl) {
 					if (!paid && !canPay) {
