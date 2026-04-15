@@ -223,20 +223,21 @@ const App = (() => {
 							}
 							throw new Error(data.error || 'Chyba servera');
 						}
-						GameUI.toast(t('solo_comp_awarded', '🪙 +{coins} coinov · +{xp} RPG XP')
-							.replace('{coins}', '100').replace('{xp}', String(data.rpg_xp_gained || 0)));
-						if (window.Coins?.load) window.Coins.load();
-						if (window.RpgTalents?.load) {
-							const td = await RpgTalents.load();
-							if (td && GameUI.renderRpgHudFromTalents) GameUI.renderRpgHudFromTalents(td);
-						}
-						if (data.rpg_level_up && data.rpg_level) {
-							GameUI.toast(t('rpg_level_up_toast', '⭐ Nový RPG level: {lv}!').replace('{lv}', String(data.rpg_level)));
-						}
-						if (data.rpg_xp_gained > 0 && window.RpgXpFx) {
-							RpgXpFx.trigger(data.rpg_xp_gained, '📚 Solo hra dokončená');
-						}
-						if (window.RpgScreen?.refresh) await RpgScreen.refresh();
+					GameUI.toast(t('solo_comp_awarded', '🪙 +{coins} coinov · +{xp} RPG XP')
+						.replace('{coins}', '100').replace('{xp}', String(data.rpg_xp_gained || 0)));
+					if (window.Coins?.load) window.Coins.load();
+					if (window.RpgTalents?.load) {
+						const td = await RpgTalents.load();
+						if (td && GameUI.renderRpgHudFromTalents) GameUI.renderRpgHudFromTalents(td);
+					}
+					if (GameUI.updateGameCardStats) GameUI.updateGameCardStats(data);
+					if (data.rpg_level_up && data.rpg_level) {
+						GameUI.toast(t('rpg_level_up_toast', '⭐ Nový RPG level: {lv}!').replace('{lv}', String(data.rpg_level)));
+					}
+					if (data.rpg_xp_gained > 0 && window.RpgXpFx) {
+						RpgXpFx.trigger(data.rpg_xp_gained, '📚 Solo hra dokončená');
+					}
+					if (window.RpgScreen?.refresh) await RpgScreen.refresh();
 					} catch (err) {
 						GameUI.toast(`❌ ${err.message}`);
 					}

@@ -48,7 +48,6 @@ const RpgScreen = (() => {
   const PANELS = [
     { id: 'talents',      label: '⚔️  Talenты',    ready: true  },
     { id: 'stats',        label: '📊 Štatistiky',  ready: true  },
-    { id: 'attributes',   label: '✨ Atribúty',    ready: false },
     { id: 'quests',       label: '📜 Úlohy',       ready: false },
     { id: 'achievements', label: '🏆 Úspechy',     ready: false },
   ];
@@ -233,6 +232,18 @@ const RpgScreen = (() => {
   }
 
   // ─── Stats Panel ────────────────────────────────────────────────
+  const STAT_SOURCES = {
+    insight:       'Digitálna gramotnosť, Riešenie problémov',
+    focus:         'Kompetencia k učeniu, Koncentrácia',
+    creativity:    'Kultúrna kompetencia, Umenie',
+    resilience:    'Občianska kompetencia, Vytrvalosť',
+    communication: 'Komunikácia, Sociálna kompetencia',
+    strategy:      'Matematika, Pracovná kompetencia',
+  };
+  function _getStatSources(statKey) {
+    return STAT_SOURCES[statKey] || '';
+  }
+
   let _lastData = null; // cached from last _loadAndRender call
 
   function _renderStatsPanel() {
@@ -279,6 +290,15 @@ const RpgScreen = (() => {
       ? '<p class="rpg-stats-no-class">Vyber si avatara pre zobrazenie štatistík tvojej triedy.</p>'
       : '';
 
+    const attrMapRows = hasClass ? Object.entries(STAT_META).map(([key, meta]) => {
+      const src = _getStatSources(key);
+      return `<div class="rpg-attr-map-row">
+        <span class="rpg-attr-map-icon">${meta.icon}</span>
+        <span class="rpg-attr-map-label">${meta.label}</span>
+        <span class="rpg-attr-map-src">${src}</span>
+      </div>`;
+    }).join('') : '';
+
     el.innerHTML = `
       <div class="rpg-stats-panel">
         <section class="rpg-stats-section">
@@ -294,7 +314,7 @@ const RpgScreen = (() => {
         </section>
 
         <section class="rpg-stats-section">
-          <h3 class="rpg-stats-heading">📊 Štatistiky postavy</h3>
+          <h3 class="rpg-stats-heading">📊 Atribúty postavy</h3>
           ${noClassNote}
           <div class="rpg-stat-list">
             ${statRows}
@@ -303,6 +323,11 @@ const RpgScreen = (() => {
             ? '<p class="rpg-stats-bonus-note">Hodnoty <span class="rpg-stat-bonus">+zelené</span> sú bonusy z talent tree.</p>'
             : ''}
         </section>
+
+        ${hasClass ? `<section class="rpg-stats-section">
+          <h3 class="rpg-stats-heading">🎯 Čo trénuje aký atribút</h3>
+          <div class="rpg-attr-map">${attrMapRows}</div>
+        </section>` : ''}
       </div>`;
   }
 

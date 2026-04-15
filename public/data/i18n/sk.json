@@ -97,7 +97,7 @@
   "instructions": "Walkthrough",
   "learning_goals": "XP Ciele",
   "rvp_mapping": "EDU Mapa",
-  "key_competences": "Skill Tree",
+  "key_competences": "RPG Atribúty",
   "edu_areas": "Vzdelávacie oblasti",
   "level": "Level",
   "cross_topics": "Side questy",
@@ -292,5 +292,13 @@
   "err_duration_short":    "Session trvala príliš krátko ({actual}/{required} min)",
   "err_not_enough_players":"Nedostatok hráčov ({actual}/{required})",
   "err_host_cooldown":     "Príliš veľa sessions za hodinu. Skús neskôr.",
-  "err_solo_daily_limit":  "Denný limit solo hier dosiahnutý ({count}/{limit})"
+  "err_solo_daily_limit":  "Denný limit solo hier dosiahnutý ({count}/{limit})",
+
+  "rpg_stat_trained":      "Trénuje",
+  "rpg_stat_insight":      "Insight",
+  "rpg_stat_focus":        "Focus",
+  "rpg_stat_creativity":   "Kreativita",
+  "rpg_stat_resilience":   "Odolnosť",
+  "rpg_stat_communication":"Komunikácia",
+  "rpg_stat_strategy":     "Stratégia"
 }

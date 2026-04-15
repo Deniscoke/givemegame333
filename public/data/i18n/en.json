@@ -96,7 +96,7 @@
   "instructions": "Walkthrough",
   "learning_goals": "XP Goals",
   "rvp_mapping": "EDU Map",
-  "key_competences": "Skill Tree",
+  "key_competences": "RPG Attributes",
   "edu_areas": "Learning areas",
   "level": "Level",
   "cross_topics": "Side quests",
@@ -298,5 +298,13 @@
   "err_duration_short":    "Session was too short ({actual}/{required} min)",
   "err_not_enough_players":"Not enough players ({actual}/{required})",
   "err_host_cooldown":     "Too many sessions per hour. Try again later.",
-  "err_solo_daily_limit":  "Daily solo limit reached ({count}/{limit})"
+  "err_solo_daily_limit":  "Daily solo limit reached ({count}/{limit})",
+
+  "rpg_stat_trained":      "Trains",
+  "rpg_stat_insight":      "Insight",
+  "rpg_stat_focus":        "Focus",
+  "rpg_stat_creativity":   "Creativity",
+  "rpg_stat_resilience":   "Resilience",
+  "rpg_stat_communication":"Communication",
+  "rpg_stat_strategy":     "Strategy"
 }

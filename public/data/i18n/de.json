@@ -97,7 +97,7 @@
   "instructions": "Anleitung",
   "learning_goals": "Lernziele",
   "rvp_mapping": "EDU-Karte",
-  "key_competences": "Kompetenzen",
+  "key_competences": "RPG Attribute",
   "edu_areas": "Lernbereiche",
   "level": "Stufe",
   "cross_topics": "Übergreifende Themen",
@@ -299,5 +299,13 @@
   "err_duration_short":    "Session war zu kurz ({actual}/{required} min)",
   "err_not_enough_players":"Nicht genug Spieler ({actual}/{required})",
   "err_host_cooldown":     "Zu viele Sessions pro Stunde. Später erneut versuchen.",
-  "err_solo_daily_limit":  "Tägliches Solo-Limit erreicht ({count}/{limit})"
+  "err_solo_daily_limit":  "Tägliches Solo-Limit erreicht ({count}/{limit})",
+
+  "rpg_stat_trained":      "Trainiert",
+  "rpg_stat_insight":      "Erkenntnis",
+  "rpg_stat_focus":        "Fokus",
+  "rpg_stat_creativity":   "Kreativität",
+  "rpg_stat_resilience":   "Widerstandskraft",
+  "rpg_stat_communication":"Kommunikation",
+  "rpg_stat_strategy":     "Strategie"
 }

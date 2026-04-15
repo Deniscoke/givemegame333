@@ -96,7 +96,7 @@
   "instructions": "Walkthrough",
   "learning_goals": "XP Objetivos",
   "rvp_mapping": "Mapa EDU",
-  "key_competences": "Skill Tree",
+  "key_competences": "Atributos RPG",
   "edu_areas": "Áreas educativas",
   "level": "Nivel",
   "cross_topics": "Side quests",
@@ -298,5 +298,13 @@
   "err_duration_short":    "Sesión demasiado corta ({actual}/{required} min)",
   "err_not_enough_players":"Jugadores insuficientes ({actual}/{required})",
   "err_host_cooldown":     "Demasiadas sesiones por hora. Intenta más tarde.",
-  "err_solo_daily_limit":  "Límite diario de solo alcanzado ({count}/{limit})"
+  "err_solo_daily_limit":  "Límite diario de solo alcanzado ({count}/{limit})",
+
+  "rpg_stat_trained":      "Entrena",
+  "rpg_stat_insight":      "Perspicacia",
+  "rpg_stat_focus":        "Enfoque",
+  "rpg_stat_creativity":   "Creatividad",
+  "rpg_stat_resilience":   "Resiliencia",
+  "rpg_stat_communication":"Comunicación",
+  "rpg_stat_strategy":     "Estrategia"
 }

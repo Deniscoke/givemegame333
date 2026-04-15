@@ -50,6 +50,15 @@ const VALID_COMPETENCY_KEYS = [
 	'k-uceni', 'k-reseni-problemu', 'komunikativni',
 	'socialni-personalni', 'obcanske', 'pracovni', 'digitalni'
 ];
+const GAME_KOMP_TO_STAT = {
+	'k-uceni':            'focus',
+	'k-reseni-problemu':  'insight',
+	'komunikativni':      'communication',
+	'socialni-personalni':'communication',
+	'obcanske':           'resilience',
+	'pracovni':           'strategy',
+	'digitalni':          'insight',
+};
 const MIN_SESSION_DURATION_FLOOR = 3;    // minutes — absolute minimum even if game.duration.min is lower
 const MIN_SESSION_DURATION_FALLBACK = 5; // minutes — used when game has no duration.min
 const HOST_COOLDOWN_MAX  = 5;            // max completed sessions per host per rolling hour
@@ -1348,6 +1357,22 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		);
 		const rpg_level_up = rpg_level > levelBefore;
 
+		// Compute which stats this game trains and the user's effective stats after XP
+		const trainedStats = [...new Set(validKomps.map(k => GAME_KOMP_TO_STAT[k]).filter(Boolean))];
+		let statsAfter = {};
+		try {
+			const { rows: profileAfter } = await soloClient.query(
+				'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1', [user.id]
+			);
+			const classId = profileAfter[0]?.rpg_avatar_id || null;
+			if (classId) {
+				const { rows: tRows } = await soloClient.query(
+					'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [user.id]
+				);
+				statsAfter = getEffectiveStats(classId, tRows.map(r => r.talent_id));
+			}
+		} catch (_) { /* non-critical — stats are cosmetic */ }
+
 		await soloClient.query('COMMIT');
 
 		res.json({
@@ -1356,6 +1381,8 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			rpg_xp,
 			rpg_level,
 			rpg_level_up,
+			trained_stats: trainedStats,
+			stats_after: statsAfter,
 		});
 	} catch (err) {
 		if (soloClient) { try { await soloClient.query('ROLLBACK'); } catch (_) {} }
@@ -1820,6 +1847,22 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 
 			await client.query('COMMIT');
 
+			// Compute trained stats and effective stats for the host (cosmetic)
+			const sessionTrainedStats = [...new Set(kompetence.map(k => GAME_KOMP_TO_STAT[k]).filter(Boolean))];
+			let sessionStatsAfter = {};
+			try {
+				const { rows: hostProfile } = await queryCoinsDb(
+					'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1', [user.id]
+				);
+				const hClassId = hostProfile[0]?.rpg_avatar_id || null;
+				if (hClassId) {
+					const { rows: hTalRows } = await queryCoinsDb(
+						'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [user.id]
+					);
+					sessionStatsAfter = getEffectiveStats(hClassId, hTalRows.map(r => r.talent_id));
+				}
+			} catch (_) { /* non-critical */ }
+
 			res.json({
 				ok: true,
 				awarded: awardedMarker,
@@ -1828,6 +1871,8 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 				my_level_changes: {},
 				my_rpg_level_up: myRpgLevelUp,
 				rpg_xp_gained: myXpGained,
+				trained_stats: sessionTrainedStats,
+				stats_after: sessionStatsAfter,
 			});
 		} catch (txErr) {
 			await client.query('ROLLBACK');

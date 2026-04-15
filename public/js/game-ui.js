@@ -128,16 +128,23 @@ const GameUI = (() => {
 			return;
 		}
 
-		// Klíčové kompetence
+		// RPG stat indicators mapped from game's kompetence
 		const kompEl = document.getElementById('rvp-kompetence');
 		if (!kompEl) return;
 		kompEl.innerHTML = '';
+		const trainedStats = new Set();
 		(gameRvp.kompetence || []).forEach(key => {
-			const def = rvp.kompetence[key];
-			if (def) {
-				kompEl.appendChild(createRvpBadge(def.nazev, def.ikona, def.barva));
-			}
+			const stat = GAME_KOMP_TO_STAT[key];
+			if (stat) trainedStats.add(stat);
 		});
+		if (trainedStats.size > 0) {
+			_renderGameStatIndicators(kompEl, trainedStats);
+		} else {
+			(gameRvp.kompetence || []).forEach(key => {
+				const def = rvp.kompetence[key];
+				if (def) kompEl.appendChild(createRvpBadge(def.nazev, def.ikona, def.barva));
+			});
+		}
 
 		// Vzdělávací oblasti
 		const oblEl = document.getElementById('rvp-oblasti');
@@ -373,6 +380,79 @@ const GameUI = (() => {
 		strategy:      { labelKey: 'rpg_stat_strategy',      labelFb: 'Strategy',      icon: '♟️', color: '#c4b5fd' },
 	};
 
+	// Maps game's rvp.kompetence keys → RPG stat keys
+	const GAME_KOMP_TO_STAT = {
+		'k-uceni':            'focus',
+		'k-reseni-problemu':  'insight',
+		'komunikativni':      'communication',
+		'socialni-personalni':'communication',
+		'obcanske':           'resilience',
+		'pracovni':           'strategy',
+		'digitalni':          'insight',
+	};
+
+	/** Renders RPG stat indicators inside the game card (replaces old competency badges). */
+	function _renderGameStatIndicators(container, trainedStats) {
+		const rpgData = window.__lastRpgTalentsData;
+		const effective = rpgData?.stats?.effective || {};
+		const hasClass = Boolean(rpgData?.class_id);
+
+		container.innerHTML = Array.from(trainedStats).map(key => {
+			const meta = RPG_STAT_META[key];
+			if (!meta) return '';
+			const label = _t(meta.labelKey, meta.labelFb);
+			const val = hasClass ? (effective[key] || 0) : null;
+			const barW = hasClass ? Math.min(100, Math.round((val || 0) / 20 * 100)) : 0;
+			return `
+				<div class="game-rpg-stat" data-stat="${key}">
+					<span class="game-rpg-stat-icon">${meta.icon}</span>
+					<span class="game-rpg-stat-name">${label}</span>
+					${hasClass ? `
+						<div class="game-rpg-stat-bar-wrap">
+							<div class="game-rpg-stat-bar" style="width:${barW}%;background:${meta.color}"></div>
+						</div>
+						<span class="game-rpg-stat-val">${val}</span>
+					` : ''}
+					<span class="game-rpg-stat-trained">⬆ ${_t('rpg_stat_trained', 'Trénuje')}</span>
+				</div>`;
+		}).join('');
+	}
+
+	/**
+	 * Called after solo/session completion — animates stat gain indicators in the game card.
+	 * @param {{rpg_xp_gained:number, trained_stats:string[], stats_after:Object}} data
+	 */
+	function updateGameCardStats(data) {
+		if (!data) return;
+		const kompEl = document.getElementById('rvp-kompetence');
+		if (!kompEl) return;
+
+		const trainedArr = data.trained_stats || [];
+		const statsAfter = data.stats_after || {};
+
+		trainedArr.forEach(key => {
+			const row = kompEl.querySelector(`.game-rpg-stat[data-stat="${key}"]`);
+			if (!row) return;
+			const newVal = statsAfter[key];
+			if (newVal != null) {
+				const valEl = row.querySelector('.game-rpg-stat-val');
+				if (valEl) valEl.textContent = newVal;
+				const barEl = row.querySelector('.game-rpg-stat-bar');
+				if (barEl) barEl.style.width = `${Math.min(100, Math.round(newVal / 20 * 100))}%`;
+			}
+			row.classList.add('game-rpg-stat-gained');
+			const tag = row.querySelector('.game-rpg-stat-trained');
+			if (tag) tag.textContent = `+XP ✓`;
+		});
+
+		if (data.rpg_xp_gained > 0) {
+			const xpNote = document.createElement('div');
+			xpNote.className = 'game-rpg-xp-note';
+			xpNote.textContent = `⚡ +${data.rpg_xp_gained} XP`;
+			kompEl.appendChild(xpNote);
+		}
+	}
+
 	/** Pravý panel / SMARTA — kompaktný RPG postup (namiesto kompetenčných barov). */
 	function renderRpgHudFromTalents(data) {
 		const panel = document.getElementById('competency-panel');
@@ -502,7 +582,7 @@ const GameUI = (() => {
 		openHelp, toggleFullscreen, toggleHistory,
 		toggleMobileFilters, toggleMobileSmarta, closeMobileOverlays,
 		toast, setStatus, updateStats, renderCompetencies, renderProfileCompetencies,
-		renderRpgHudFromTalents, renderProfileRpgBlock,
+		renderRpgHudFromTalents, renderProfileRpgBlock, updateGameCardStats,
 		activateRating, showLevelUpFeedback
 	};
 })();

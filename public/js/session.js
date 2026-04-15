@@ -152,6 +152,7 @@ const Session = (() => {
 			GameUI.toast(_t('sess_end_success', '🏆 Session ukončená! {count} hráčov dostalo odmeny.').replace('{count}', data.participants_rewarded ?? '?'));
 			if (window.Coins?.load) window.Coins.load();
 			_loadAndRenderRpgHud();
+			if (GameUI.updateGameCardStats) GameUI.updateGameCardStats(data);
 			if (data.my_rpg_level_up && GameUI.toast) {
 				GameUI.toast(_t('rpg_level_up_toast', '⭐ Nový RPG level!'));
 			}

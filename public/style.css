@@ -2956,6 +2956,98 @@ body.light-mode .profile-rpg-xpbar-wrap { background: rgba(0,0,0,0.06); }
 .profile-rpg-stat-val .rpg-stat-bonus { color: #86efac; font-size: 10px; margin-left: 2px; }
 .profile-rpg-bonus-note { font-size: 10px; opacity: 0.5; margin-top: 8px; }
 
+/* ─── Game Card RPG Stat Indicators (replaces old competency badges) ─── */
+#rvp-kompetence:has(.game-rpg-stat) {
+	flex-direction: column;
+	gap: 4px;
+}
+.game-rpg-stat {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 5px 10px;
+	background: rgba(0,255,255,0.06);
+	border: 1px solid rgba(0,255,255,0.12);
+	border-radius: 4px;
+	font-family: 'VT323', monospace;
+	font-size: 15px;
+	transition: background 0.4s, border-color 0.4s;
+}
+.game-rpg-stat-icon { font-size: 16px; }
+.game-rpg-stat-name { opacity: 0.9; min-width: 80px; }
+.game-rpg-stat-bar-wrap {
+	flex: 1;
+	height: 6px;
+	border-radius: 3px;
+	background: rgba(255,255,255,0.08);
+	overflow: hidden;
+}
+.game-rpg-stat-bar {
+	height: 100%;
+	border-radius: 3px;
+	transition: width 0.8s ease-out;
+}
+.game-rpg-stat-val {
+	min-width: 24px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-size: 14px;
+}
+.game-rpg-stat-trained {
+	font-size: 10px;
+	padding: 1px 6px;
+	border-radius: 3px;
+	background: rgba(0,255,255,0.15);
+	color: #7dd3fc;
+	white-space: nowrap;
+}
+.game-rpg-stat-gained {
+	background: rgba(0,255,200,0.12);
+	border-color: rgba(0,255,200,0.3);
+	animation: statGainFlash 1.2s ease-out;
+}
+.game-rpg-stat-gained .game-rpg-stat-trained {
+	background: rgba(0,255,200,0.25);
+	color: #86efac;
+}
+.game-rpg-xp-note {
+	margin-top: 8px;
+	font-family: 'Press Start 2P', cursive;
+	font-size: 9px;
+	color: #fde68a;
+	text-align: center;
+	animation: xpNotePulse 2s ease-out forwards;
+}
+@keyframes statGainFlash {
+	0%   { background: rgba(0,255,200,0.25); }
+	100% { background: rgba(0,255,200,0.12); }
+}
+@keyframes xpNotePulse {
+	0%   { opacity: 0; transform: scale(0.8); }
+	30%  { opacity: 1; transform: scale(1.1); }
+	100% { opacity: 1; transform: scale(1); }
+}
+
+/* ─── RPG Attr Map (in RPG screen Stats panel) ─── */
+.rpg-attr-map {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.rpg-attr-map-row {
+	display: grid;
+	grid-template-columns: 24px 100px 1fr;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	padding: 4px 0;
+	border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.rpg-attr-map-icon { font-size: 15px; }
+.rpg-attr-map-label { font-weight: 600; }
+.rpg-attr-map-src { opacity: 0.6; font-size: 12px; }
+
 /* ─── Game Rating Widget ─── */
 .game-rating-widget {
   padding: 10px 16px 12px;
