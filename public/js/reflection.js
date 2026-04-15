@@ -64,6 +64,13 @@ const Reflection = (() => {
 	let _pendingPhotoBase64 = null;
 	let _currentGame = null;
 
+	/** Odstráni interné pole pred uložením/API (fotka ide len do solo callbacku). */
+	function _reflectionPayloadForApi(d) {
+		const o = { ...d };
+		delete o._verificationPhotoB64;
+		return o;
+	}
+
 	function open(game, sessionCode, onSubmitted) {
 		const modal = document.getElementById(MODAL_ID);
 		if (!modal) return;
@@ -192,6 +199,9 @@ const Reflection = (() => {
 			return;
 		}
 
+		// DÔLEŽITÉ: fotka musí zostať v dátach pre callback — close() nuluje _pendingPhotoBase64
+		data._verificationPhotoB64 = _pendingPhotoBase64 || null;
+
 		const submitBtn = document.getElementById('btn-reflection-submit');
 		if (submitBtn) submitBtn.disabled = true;
 
@@ -215,7 +225,7 @@ const Reflection = (() => {
 							'Authorization': `Bearer ${token}`
 						},
 						signal: ctrl.signal,
-						body: JSON.stringify({ reflection_data: data })
+						body: JSON.stringify({ reflection_data: _reflectionPayloadForApi(data) })
 					});
 				} finally { clearTimeout(fetchTimeout); }
 				if (!res.ok) {
@@ -223,11 +233,11 @@ const Reflection = (() => {
 					throw new Error(err.error || _t('refl_error', 'Chyba pri odosielaní reflexie'));
 				}
 			} else {
-				// Solo flow — ulož reflexiu do localStorage ako záloha
+				// Solo flow — ulož reflexiu do localStorage ako záloha (bez base64 fotky)
 				try {
 					const key = 'givemegame_solo_reflections';
 					const existing = JSON.parse(localStorage.getItem(key) || '[]');
-					existing.unshift({ ts: new Date().toISOString(), data });
+					existing.unshift({ ts: new Date().toISOString(), data: _reflectionPayloadForApi(data) });
 					if (existing.length > 20) existing.length = 20; // max 20 záznamov
 					localStorage.setItem(key, JSON.stringify(existing));
 				} catch (e) {}

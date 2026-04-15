@@ -243,8 +243,8 @@ const App = (() => {
 					}
 					if (window.RpgScreen?.refresh) await RpgScreen.refresh();
 
-					// Photo verification — bonus XP if player uploaded proof
-					const photoB64 = Reflection.getPhotoBase64?.();
+					// Photo verification — bonus XP (fotka je v reflectionData; close() už vymazala getPhotoBase64)
+					const photoB64 = reflectionData?._verificationPhotoB64 || Reflection.getPhotoBase64?.();
 					const vc = window.currentGame?.verificationChallenge;
 					if (photoB64 && vc?.description && token) {
 						GameUI.toast(t('refl_verifying', '📸 Overujem fotku...'));
@@ -258,8 +258,11 @@ const App = (() => {
 									game_title: window.currentGame.title
 								})
 							});
-							const vData = await vRes.json();
-							if (vData.verified) {
+							let vData = {};
+							try { vData = await vRes.json(); } catch { /* empty */ }
+							if (!vRes.ok) {
+								GameUI.toast(`📸 ${vData.error || t('refl_verify_failed', 'Overenie fotky zlyhalo (server). Skús znova alebo menšiu fotku.')}`);
+							} else if (vData.verified) {
 								const bc = vData.bonus_coins > 0 ? ` +${vData.bonus_coins} gIVEMECOIN` : '';
 								GameUI.toast(`📸 ${t('refl_verified', 'Overené!')} +${vData.bonus_xp || 0} XP${bc}! ${vData.feedback || ''}`);
 								if (vData.bonus_coins > 0 && window.Coins?.load) await window.Coins.load();
@@ -271,10 +274,12 @@ const App = (() => {
 								}
 								if (window.RpgScreen?.refresh) RpgScreen.refresh();
 							} else {
-								GameUI.toast(`📸 ${vData.feedback || t('refl_not_verified', 'Fotka neodpovedá výzve — skús to znova nabudúce')}`);
+								const fb = vData.feedback || t('refl_not_verified', 'Fotka neodpovedá výzve — skús to znova nabudúce');
+								GameUI.toast(`📸 ${fb}${typeof vData.confidence === 'number' ? ` (${vData.confidence}%)` : ''}`);
 							}
 						} catch (vErr) {
 							console.warn('[Verify] Photo verification failed:', vErr.message);
+							GameUI.toast(`📸 ${t('refl_verify_network', 'Overenie fotky sa nepodarilo (sieť). Skús znova.')}`);
 						}
 					}
 					} catch (err) {
