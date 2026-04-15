@@ -58,8 +58,52 @@ Ale ak chceš, aby **Google prihlásenie** fungovalo na produkčnej URL, musíš
 
 ---
 
+## 6. Stripe — Upgrade to Pro (Payment Link, bez API kľúča)
+
+Aplikácia **nepoužíva** `STRIPE_SECRET_KEY` na tlačidlo Upgrade. Stačí **odkaz na Payment Link** (verejná URL typu `https://buy.stripe.com/...`).
+
+### 6.1 Čo urobíš v Stripe Dashboard
+
+1. **[dashboard.stripe.com](https://dashboard.stripe.com)** — prihlásenie / účet (najprv **Test mode** vľavo hore).
+2. **Product catalog** → **Add product** (voliteľné — Payment Link vie vytvoriť produkt aj priamo v kroku nižšie).
+3. **Payment Links** → **New payment link**.
+4. Vyber **Products** → tvoj produkt (napr. „Pro Teacher Monthly“) s **recurring** cenou (mesačne), alebo vytvor cenu v sprievodcovi.
+5. Sekcia **After payment**:
+   - **Success URL:** `https://givemegame333.vercel.app/billing/success`
+   - **Cancel URL:** `https://givemegame333.vercel.app/billing/cancel`
+6. Ulož link → skopíruj **celú URL** odkazu (začína zvyčajne `https://buy.stripe.com/...`).
+
+### 6.2 Čo pridáš do Vercel
+
+**Settings** → **Environment Variables** → pridaj:
+
+| Názov | Hodnota |
+|------|---------|
+| `STRIPE_PAYMENT_LINK_PRO_MONTHLY` | celá URL z kroku 6.1 (bez medzier) |
+| `BILLING_SUPPORT_EMAIL` | voliteľné, napr. `tvoj@email.sk` |
+
+Potom **Redeploy** projektu (Deployments → … → Redeploy), aby sa env načítal.
+
+### 6.3 API kľúče (kedy áno / nie)
+
+| Kľúč | Potrebný teraz? |
+|------|-----------------|
+| **Payment Link URL** (`STRIPE_PAYMENT_LINK_PRO_MONTHLY`) | **Áno** — bez neho červené varovanie v profile |
+| **Publishable key** (`pk_test_...` / `pk_live_...`) | **Nie** — Payment Link beží na stránke Stripe |
+| **Secret key** (`sk_test_...` / `sk_live_...`) | **Nie** — pre tento MVP sa v kóde nepoužíva na upgrade |
+
+Secret key budeš potrebovať **až neskôr**, ak pridáme Checkout Session, Customer Portal alebo **webhook** na automatické zapnutie Pro po platbe.
+
+### 6.4 Po úspešnej platbe (dôležité)
+
+V tomto MVP sa **Pro nezapína sám**. Po platbe v Stripe nájdeš zákazníka (email), v Supabase nájdeš `user_id` a v tabuľke `user_billing` nastavíš `paid_access_enabled = true` (návod: `docs/BILLING_PAYMENT_LINK_MVP.md`).
+
+---
+
 ## Zhrnutie
 
 **Minimálne pre Vercel:** Stačí `OPENAI_API_KEY` — hra bude fungovať, AI generovanie tiež.
 
 **Pre Google login na produkcii:** Pridaj Vercel URL do Supabase Redirect URLs a Google Authorized origins (kroky 4 a 5).
+
+**Pre Stripe Upgrade v profile:** `STRIPE_PAYMENT_LINK_PRO_MONTHLY` + redeploy (krok 6). Secret key zatiaľ netreba.
