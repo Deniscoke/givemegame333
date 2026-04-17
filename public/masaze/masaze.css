@@ -1,0 +1,234 @@
+/* Masáže — samostatná stránka (Veronika Hrstková) */
+:root {
+	--m-bg: #1a1528;
+	--m-panel: rgba(255, 255, 255, 0.06);
+	--m-border: rgba(255, 255, 255, 0.12);
+	--m-text: #f4f0ff;
+	--m-muted: rgba(244, 240, 255, 0.65);
+	--m-accent: #c9a86c;
+	--m-accent-soft: rgba(201, 168, 108, 0.25);
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+* { box-sizing: border-box; }
+
+body.masaze-page {
+	margin: 0;
+	min-height: 100vh;
+	font-family: "Segoe UI", system-ui, sans-serif;
+	background: linear-gradient(165deg, #120f1a 0%, #1e1830 45%, #151020 100%);
+	color: var(--m-text);
+	line-height: 1.65;
+}
+
+.masaze-wrap {
+	max-width: 720px;
+	margin: 0 auto;
+	padding: 2rem 1.25rem 4rem;
+}
+
+.masaze-header h1 {
+	font-size: clamp(1.75rem, 4vw, 2.25rem);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	margin: 0 0 0.5rem;
+	color: var(--m-accent);
+}
+
+.masaze-sub {
+	font-size: 0.95rem;
+	color: var(--m-muted);
+	margin: 0 0 2rem;
+}
+
+.masaze-intro {
+	background: var(--m-panel);
+	border: 1px solid var(--m-border);
+	border-radius: 12px;
+	padding: 1.25rem 1.35rem;
+	margin-bottom: 2rem;
+	font-size: 1.02rem;
+}
+
+.masaze-intro p {
+	margin: 0;
+}
+
+.masaze-section-title {
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--m-muted);
+	margin: 0 0 0.75rem;
+}
+
+details.masaze-card {
+	background: var(--m-panel);
+	border: 1px solid var(--m-border);
+	border-radius: 12px;
+	margin-bottom: 0.65rem;
+	overflow: hidden;
+}
+
+details.masaze-card[open] {
+	border-color: var(--m-accent-soft);
+	box-shadow: 0 0 0 1px var(--m-accent-soft);
+}
+
+details.masaze-card > summary {
+	list-style: none;
+	cursor: pointer;
+	padding: 1rem 1.1rem;
+	font-weight: 600;
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.75rem;
+	user-select: none;
+}
+
+details.masaze-card > summary::-webkit-details-marker {
+	display: none;
+}
+
+details.masaze-card > summary::after {
+	content: "+";
+	flex-shrink: 0;
+	width: 1.75rem;
+	height: 1.75rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	background: var(--m-accent-soft);
+	color: var(--m-accent);
+	font-size: 1.1rem;
+	line-height: 1;
+	transition: transform 0.2s ease;
+}
+
+details.masaze-card[open] > summary::after {
+	content: "−";
+	transform: rotate(180deg);
+}
+
+.masaze-price {
+	color: var(--m-accent);
+	font-weight: 600;
+	white-space: nowrap;
+	font-size: 0.95rem;
+}
+
+.masaze-card-body {
+	padding: 0 1.1rem 1.15rem;
+	border-top: 1px solid var(--m-border);
+}
+
+.masaze-card-body p {
+	margin: 0.85rem 0 0;
+	color: var(--m-muted);
+	font-size: 0.98rem;
+}
+
+.masaze-card-body p:first-child {
+	margin-top: 0.75rem;
+}
+
+.masaze-card-body ul {
+	margin: 0.6rem 0 0;
+	padding-left: 1.2rem;
+	color: var(--m-muted);
+}
+
+.masaze-card-body li {
+	margin: 0.35rem 0;
+}
+
+.masaze-card-body strong {
+	color: var(--m-text);
+}
+
+.masaze-nested {
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px dashed var(--m-border);
+}
+
+.masaze-nested h4 {
+	margin: 0 0 0.5rem;
+	font-size: 0.95rem;
+	color: var(--m-text);
+}
+
+.masaze-rezervace {
+	margin-top: 2.5rem;
+	padding: 1.35rem;
+	background: var(--m-accent-soft);
+	border: 1px solid var(--m-border);
+	border-radius: 12px;
+	text-align: center;
+}
+
+.masaze-rezervace h2 {
+	margin: 0 0 0.5rem;
+	font-size: 1.15rem;
+	color: var(--m-text);
+}
+
+.masaze-rezervace p {
+	margin: 0;
+	color: var(--m-muted);
+	font-size: 0.95rem;
+}
+
+.masaze-rezervace a.btn-masaze {
+	display: inline-block;
+	margin-top: 1rem;
+	padding: 0.65rem 1.4rem;
+	background: var(--m-accent);
+	color: #1a1528;
+	text-decoration: none;
+	font-weight: 600;
+	border-radius: 10px;
+}
+
+.masaze-rezervace a.btn-masaze:hover {
+	filter: brightness(1.08);
+}
+
+.masaze-footer {
+	margin-top: 2.5rem;
+	text-align: center;
+	font-size: 0.9rem;
+	color: var(--m-muted);
+}
+
+.masaze-back {
+	display: inline-block;
+	margin-bottom: 1.5rem;
+	color: var(--m-accent);
+	text-decoration: none;
+	font-size: 0.9rem;
+}
+
+.masaze-back:hover {
+	text-decoration: underline;
+}
+
+.masaze-disclaimer {
+	font-size: 0.85rem;
+	color: var(--m-muted);
+	margin-top: 0.75rem;
+	font-style: italic;
+}
