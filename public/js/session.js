@@ -16,6 +16,30 @@
 
 const Session = (() => {
 	const JOIN_COST = 100; // musí byť rovnaké ako SESSION_JOIN_COST v server.js
+	const STORAGE_KEY = 'givemegame_active_session';
+	const STORAGE_TTL_MS = 6 * 60 * 60 * 1000; // 6 h — staršie záznamy ignorujeme
+
+	function _persist() {
+		if (!_code || !_sessionId) return;
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify({
+				code: _code, sessionId: _sessionId, isHost: _isHost, ts: Date.now()
+			}));
+		} catch {}
+	}
+	function _clearPersist() {
+		try { localStorage.removeItem(STORAGE_KEY); } catch {}
+	}
+	function _readPersist() {
+		try {
+			const raw = localStorage.getItem(STORAGE_KEY);
+			if (!raw) return null;
+			const obj = JSON.parse(raw);
+			if (!obj?.code || !obj?.sessionId) return null;
+			if (Date.now() - (obj.ts || 0) > STORAGE_TTL_MS) { _clearPersist(); return null; }
+			return obj;
+		} catch { return null; }
+	}
 
 	// Resolve translation at call-time so language changes are respected
 	const _t = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
@@ -48,6 +72,7 @@ const Session = (() => {
 			_code      = data.join_code;
 			_sessionId = data.id;
 			_isHost    = true;
+			_persist();
 
 			_openLobby();
 			_subscribe();
@@ -94,6 +119,7 @@ const Session = (() => {
 			_code      = code;
 			_sessionId = data.session_id;
 			_isHost    = false;
+			_persist();
 
 			_closeJoinModal();
 			_openLobby();
@@ -321,9 +347,151 @@ const Session = (() => {
 		_closeLobby();
 		_channel?.unsubscribe();
 		_channel = null;
+		_clearPersist();
+		_code = null; _sessionId = null; _isHost = false;
 		localStorage.removeItem('givemegame_session_notes');
 		const notesBlock = document.getElementById('session-notes-block');
 		if (notesBlock) notesBlock.style.display = 'none';
+	}
+
+	// ─── Restore on page load (sticky session, refresh-safe) ─────────
+	// Order of priority:
+	//   1) ?lobby=CODE in URL → auto-join (if not already a participant) or just open lobby
+	//   2) localStorage record → silently rehydrate channel + UI for current state
+	async function restoreFromUrlOrStorage() {
+		const params = new URLSearchParams(window.location.search);
+		const urlCode = (params.get('lobby') || '').toUpperCase().trim();
+
+		if (urlCode && urlCode.length === 6) {
+			// Strip ?lobby= from URL so a future refresh doesn't keep re-triggering join
+			params.delete('lobby');
+			const cleanQs = params.toString();
+			const cleanUrl = window.location.pathname + (cleanQs ? `?${cleanQs}` : '') + window.location.hash;
+			history.replaceState({}, '', cleanUrl);
+
+			const token = await _token();
+			if (!token) {
+				// Park the code so login flow can pick it up
+				try { sessionStorage.setItem('givemegame_pending_lobby', urlCode); } catch {}
+				GameUI.toast(_t('sess_login_join', 'Prihlás sa pre pripojenie'));
+				return;
+			}
+			await _restoreOrJoin(urlCode);
+			return;
+		}
+
+		// Pending lobby from pre-login redirect
+		try {
+			const pending = sessionStorage.getItem('givemegame_pending_lobby');
+			if (pending) {
+				sessionStorage.removeItem('givemegame_pending_lobby');
+				const token = await _token();
+				if (token) { await _restoreOrJoin(pending); return; }
+			}
+		} catch {}
+
+		// Fallback: localStorage rehydration
+		const saved = _readPersist();
+		if (!saved) return;
+		const token = await _token();
+		if (!token) return;
+		await _rehydrate(saved.code, saved.sessionId, saved.isHost);
+	}
+
+	// If user is already a participant of this code → just rehydrate. Otherwise call join.
+	async function _restoreOrJoin(code) {
+		const saved = _readPersist();
+		if (saved && saved.code === code) {
+			await _rehydrate(saved.code, saved.sessionId, saved.isHost);
+			return;
+		}
+		// Probe session state — if active/completed, we cannot re-join cleanly
+		const token = await _token();
+		try {
+			const probe = await fetchApi(`/api/sessions/${code}`, {
+				headers: { 'Authorization': `Bearer ${token}` }
+			});
+			if (probe.status === 404) { GameUI.toast(_t('sess_not_found', '❌ Session neexistuje')); return; }
+			const data = await probe.json();
+			if (data.status === 'completed') { GameUI.toast(_t('sess_already_done', '⚠️ Session už skončila')); return; }
+			if (data.status === 'waiting') { await join(code); return; }
+			// active/reflection — try to join, server returns 409 if already started
+			await join(code);
+		} catch {
+			await join(code); // best-effort
+		}
+	}
+
+	// Rehydrate UI/channel for an existing membership without re-charging coins.
+	async function _rehydrate(code, sessionId, isHost) {
+		_code = code;
+		_sessionId = sessionId;
+		_isHost = !!isHost;
+
+		const token = await _token();
+		if (!token) return;
+		try {
+			const res = await fetchApi(`/api/sessions/${code}`, {
+				headers: { 'Authorization': `Bearer ${token}` }
+			});
+			if (!res.ok) {
+				// Session gone — clear stale storage
+				_clearPersist();
+				_code = null; _sessionId = null; _isHost = false;
+				return;
+			}
+			const session = await res.json();
+
+			// Verify this user actually belongs (host or participant) — server already filters via RLS
+			const isParticipant = (session.participants || []).some(p => session.host_id && (p.user_id === session.host_id || true));
+			// We can't strictly check user_id without /me; trust localStorage + RLS.
+
+			_persist(); // refresh ts
+			_lastKnownStatus = session.status;
+			_subscribe();
+			_startPoll();
+
+			if (session.status === 'waiting') {
+				_openLobby();
+				await _refreshParticipants();
+			} else if (session.status === 'active') {
+				_onActive(session);
+				GameUI.toast(_t('sess_resumed', '▶️ Pokračuješ v session'));
+			} else if (session.status === 'reflection') {
+				_onReflection();
+			} else if (session.status === 'completed') {
+				_onCompleted();
+			}
+		} catch (e) {
+			// Network/transient — keep storage, retry next load
+		}
+	}
+
+	function _shareUrl() {
+		if (!_code) return '';
+		return `${window.location.origin}/?lobby=${_code}`;
+	}
+
+	async function _copyShareLink() {
+		const url = _shareUrl();
+		if (!url) return;
+		try {
+			await navigator.clipboard.writeText(url);
+			GameUI.toast(_t('sess_link_copied', '🔗 Odkaz skopírovaný'));
+		} catch {
+			window.prompt(_t('sess_link_manual', 'Skopíruj odkaz:'), url);
+		}
+	}
+
+	async function _shareNative() {
+		const url = _shareUrl();
+		if (!url) return;
+		const title = 'gIVEMEGAME.IO — pripoj sa do hry';
+		const text = _t('sess_share_text', 'Hraj so mnou! Klikni na odkaz a pripoj sa do lobby (kód {code}).').replace('{code}', _code);
+		if (navigator.share) {
+			try { await navigator.share({ title, text, url }); return; } catch {}
+		}
+		_copyShareLink();
 	}
 
 	// ─── Lobby UI ─────────────────────────────────────────────────
@@ -352,9 +520,19 @@ const Session = (() => {
 				</div>
 				<div style="text-align:center;font-size:36px;letter-spacing:10px;padding:16px 0;
 				            font-weight:700;color:var(--accent,#633cff)">${_code}</div>
-				<p style="text-align:center;opacity:0.6;font-size:12px;margin-bottom:16px">
+				<p style="text-align:center;opacity:0.6;font-size:12px;margin-bottom:10px">
 					${_t('sess_lobby_code_hint','Hráči zadajú tento kód · Vstup stojí {cost} 🪙').replace('{cost}', JOIN_COST)}
 				</p>
+				<div style="display:flex;gap:6px;margin-bottom:14px">
+					<input id="lobby-share-url" readonly value="${_shareUrl()}"
+						style="flex:1;font-size:11px;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);
+						       background:rgba(0,0,0,0.25);color:var(--text,#fff)"
+						onclick="this.select()">
+					<button class="btn btn-retro" style="padding:6px 10px;font-size:12px"
+					        onclick="Session._copyShareLink()" title="${_t('sess_copy_link','Skopírovať odkaz')}">📋</button>
+					<button class="btn btn-retro" style="padding:6px 10px;font-size:12px"
+					        onclick="Session._shareNative()" title="${_t('sess_share','Zdieľať')}">🔗</button>
+				</div>
 				<div id="lobby-status" style="text-align:center;font-size:13px;opacity:0.8;margin-bottom:12px">
 					${_t('sess_status_waiting','⏳ Čakám na hráčov...')}
 				</div>
@@ -487,7 +665,12 @@ const Session = (() => {
 		return !!_code;
 	}
 
-	return { create, join, start, complete, openJoinDialog, _closeLobby, _submitJoin, _closeJoinModal, isInSession };
+	return {
+		create, join, start, complete, openJoinDialog,
+		_closeLobby, _submitJoin, _closeJoinModal,
+		_copyShareLink, _shareNative,
+		restoreFromUrlOrStorage, isInSession
+	};
 })();
 
 window.Session = Session;

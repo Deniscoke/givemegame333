@@ -460,19 +460,27 @@
 
 <script>
   // ── Portal transition: click anything with [data-go-app] → animate → /index.html ──
+  // Also: if URL has ?lobby=CODE (someone shared a lobby link to root), forward it.
   (function(){
     const portal = document.getElementById('portal');
     const TRANSITION_MS = 1200;
+    const params = new URLSearchParams(window.location.search);
+    const lobbyCode = (params.get('lobby') || '').toUpperCase().trim();
+    const appUrl = lobbyCode ? `/index.html?lobby=${encodeURIComponent(lobbyCode)}` : '/index.html';
+
+    function go() {
+      portal.classList.add('portal-active');
+      const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const delay = mq.matches ? 200 : TRANSITION_MS;
+      setTimeout(() => { window.location.href = appUrl; }, delay);
+    }
     document.querySelectorAll('[data-go-app]').forEach(el => {
-      el.addEventListener('click', (e) => {
-        e.preventDefault();
-        portal.classList.add('portal-active');
-        // respect prefers-reduced-motion
-        const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-        const delay = mq.matches ? 200 : TRANSITION_MS;
-        setTimeout(() => { window.location.href = '/index.html'; }, delay);
-      });
+      el.addEventListener('click', (e) => { e.preventDefault(); go(); });
     });
+    // Auto-forward shared lobby links — show portal animation, then enter app
+    if (lobbyCode && lobbyCode.length === 6) {
+      setTimeout(go, 150);
+    }
   })();
 
   // ── Hero carousel: auto-rotate every 10s, manual dots, pause on hover ──

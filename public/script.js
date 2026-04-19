@@ -174,10 +174,19 @@ const App = (() => {
 				await syncAuthFromSupabase();
 				if (typeof Narrator !== 'undefined' && Narrator.loadSmartaStyles) Narrator.loadSmartaStyles();
 				UserPreferences.load().catch(() => {});
+				// Pickup pending ?lobby= deep-link parked before login
+				if (window.Session?.restoreFromUrlOrStorage) {
+					window.Session.restoreFromUrlOrStorage().catch(() => {});
+				}
 			} else if (event === 'SIGNED_OUT') {
 				if (typeof Narrator !== 'undefined' && Narrator.loadSmartaStyles) Narrator.loadSmartaStyles();
 			}
 		});
+
+		// Restore active lobby/session after refresh, or auto-join from ?lobby=CODE deep link
+		if (window.Session?.restoreFromUrlOrStorage) {
+			window.Session.restoreFromUrlOrStorage().catch(() => {});
+		}
 
 		await GameData.load();
 		await Coins.load();
