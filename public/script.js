@@ -372,19 +372,6 @@ const App = (() => {
 
 		isInitializing = false; // Allow coin awards + cursor effects from now on
 		GameUI.setStatus(t('status_ready', 'Ready'));
-
-		// Landing → /app?upgrade=1 auto-trigger: if the user arrived from the Pro CTA,
-		// fire the existing upgrade flow once authenticated. Falls back silently for guests.
-		try {
-			const params = new URLSearchParams(window.location.search || '');
-			if (params.get('upgrade') === '1' && Billing?.upgrade) {
-				// Strip the param so refreshes don't re-trigger.
-				const clean = window.location.pathname + window.location.hash;
-				window.history.replaceState({}, '', clean);
-				setTimeout(() => { Billing.upgrade().catch(() => {}); }, 300);
-			}
-		} catch (e) { /* non-critical */ }
-
 		console.log('[App] gIVEMEGAME.IO inicializováno.');
 	}
 
@@ -1058,8 +1045,8 @@ const App = (() => {
 		} catch (e) { console.warn('[QuestLog] save:', e); }
 	}
 
-	// ─── Language / i18n (v1 default: English-only global launch) ───
-	let currentLang = localStorage.getItem('givemegame_preferred_lang') || 'en';
+	// ─── Jazyk / i18n ───
+	let currentLang = localStorage.getItem('givemegame_preferred_lang') || 'cs';
 	window.givemegame_currentLang = currentLang;
 	const translationCache = {};
 

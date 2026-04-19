@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="cs">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23ff6b3d'/><text x='16' y='22' font-size='16' fill='white' text-anchor='middle' font-family='sans-serif' font-weight='700'>S</text></svg>">
-	<title>Sessionly — AI session planner for facilitators</title>
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23633cff'/><text x='16' y='22' font-size='14' fill='white' text-anchor='middle' font-family='sans-serif'>G</text></svg>">
+	<title>gIVEMEGAME.IO — Generátor vzdělávacích her</title>
 	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 	<link rel="stylesheet" href="style.css?v=22">
@@ -16,51 +16,47 @@
 
 		<!-- ═══════════════════ HEADER ═══════════════════ -->
 		<header>
-			<a href="/" class="brand-title" style="text-decoration:none;display:flex;align-items:center;gap:10px">
-				<span style="display:inline-grid;place-items:center;width:30px;height:30px;border-radius:7px;background:#ff6b3d;color:#fff;font-weight:700;font-size:15px;font-family:sans-serif">S</span>
-				<span style="font-weight:700;font-size:18px;color:inherit;letter-spacing:-0.01em;font-family:sans-serif">Sessionly</span>
-				<span style="color:var(--muted,#6a6a74);font-size:11px;letter-spacing:0.04em;font-family:sans-serif">AI SESSION PLANNER</span>
-			</a>
+			<div class="brand-title">
+				<span class="brand-give">gIVE</span><span class="brand-me">ME</span><span class="brand-game">GAME</span><span class="brand-io">.IO</span>
+			</div>
 
-			<!-- COIN DISPLAY — hidden in v1 (repositioning) -->
-			<div class="coin-display" id="coin-display" title="gIVEMECOIN" onclick="App.Coins.toggleHistory()" style="display:none">
+			<!-- COIN DISPLAY -->
+			<div class="coin-display" id="coin-display" title="gIVEMECOIN" onclick="App.Coins.toggleHistory()">
 				<span class="coin-icon">🪙</span>
 				<span class="coin-count" id="coin-count">0</span>
 			</div>
 
 			<!-- SHARE LINK (viditeľné len cez ngrok) -->
-			<div class="share-link-wrap" id="share-link-wrap" style="display:none" title="Share link">
-				<button type="button" class="btn-share-link" id="btn-share-link" title="Copy share link">
-					🔗 <span data-i18n="share_link">Share</span>
+			<div class="share-link-wrap" id="share-link-wrap" style="display:none" title="Skopíruj a pošli kamarátovi — NIE localhost!">
+				<button type="button" class="btn-share-link" id="btn-share-link" title="Skopíruj odkaz pre kamaráta">
+					🔗 <span data-i18n="share_link">Zdieľať</span>
 				</button>
 				<span class="share-link-url" id="share-link-url"></span>
 			</div>
 
-			<!-- ROBOT CHALLENGE BUTTON — hidden in v1 (repositioning) -->
-			<button class="btn-robot-challenge" id="btn-robot-challenge" onclick="App.RobotChallenge.open()" title="Robot Challenge" style="display:none">
+			<!-- ROBOT CHALLENGE BUTTON -->
+			<button class="btn-robot-challenge" id="btn-robot-challenge" onclick="App.RobotChallenge.open()" title="Robot Challenge — earn coins!">
 				🤖 <span data-i18n="robot_challenge">Challenge</span>
 			</button>
 
-			<!-- LANGUAGE SELECTOR — hidden in v1 (English-only launch) -->
-			<div class="lang-selector" id="lang-selector" style="display:none">
+			<!-- LANGUAGE SELECTOR -->
+			<div class="lang-selector" id="lang-selector">
 				<button class="btn-lang" data-lang="sk" title="Slovenčina">SK</button>
-				<button class="btn-lang" data-lang="cs" title="Čeština">CZ</button>
+				<button class="btn-lang active" data-lang="cs" title="Čeština">CZ</button>
 				<button class="btn-lang" data-lang="de" title="Deutsch">DE</button>
-				<button class="btn-lang active" data-lang="en" title="English">EN</button>
+				<button class="btn-lang" data-lang="en" title="English">EN</button>
 				<button class="btn-lang" data-lang="es" title="Español">ES</button>
 			</div>
 
 			<div class="header-actions">
-				<!-- edu shortcut hidden in v1 -->
-				<a href="/edu/index.html" class="btn btn-retro btn-action-header" title="gIVEMEEDU" style="display:none;text-decoration:none;font-size:16px">🏫</a>
-				<button class="btn btn-retro btn-action-header btn-mobile-filters mobile-only" id="btn-mobile-filters" onclick="App.UI.toggleMobileFilters()" title="Filters" aria-label="Filters">
+				<a href="/edu/index.html" class="btn btn-retro btn-action-header" title="gIVEMEEDU — Školské rozhranie" style="text-decoration:none;font-size:16px">🏫</a>
+				<button class="btn btn-retro btn-action-header btn-mobile-filters mobile-only" id="btn-mobile-filters" onclick="App.UI.toggleMobileFilters()" title="Filtry" aria-label="Filtry">
 					<i class="bi bi-sliders"></i>
 				</button>
-				<button class="btn btn-retro btn-action-header btn-mobile-smarta mobile-only" id="btn-mobile-smarta" onclick="App.UI.toggleMobileSmarta()" title="History" aria-label="History">
+				<button class="btn btn-retro btn-action-header btn-mobile-smarta mobile-only" id="btn-mobile-smarta" onclick="App.UI.toggleMobileSmarta()" title="SMARTA & Historie" aria-label="SMARTA">
 					<i class="bi bi-mic"></i>
 				</button>
-				<!-- phone (coin profile) hidden in v1 -->
-				<button class="btn btn-retro btn-action-header btn-phone" id="btn-phone" onclick="App.Profile.open()" title="Profile" style="display:none">
+				<button class="btn btn-retro btn-action-header btn-phone" id="btn-phone" onclick="App.Profile.open()" title="Profil & gIVEMECOIN">
 					<svg class="phone-icon" viewBox="0 0 16 24" width="16" height="24">
 						<rect x="2" y="1" width="12" height="22" rx="2" fill="var(--border)" stroke="var(--text)" stroke-width="1"/>
 						<rect x="3" y="2" width="10" height="18" rx="1" fill="var(--panel)"/>
@@ -68,26 +64,24 @@
 						<circle cx="8" cy="20" r="1.5" fill="var(--border)"/>
 					</svg>
 				</button>
-				<!-- music hidden in v1 -->
-				<button class="btn btn-retro btn-action-header btn-music" id="btn-music" onclick="App.Music.toggle()" title="Music" style="display:none">
+				<button class="btn btn-retro btn-action-header btn-music" id="btn-music" onclick="App.Music.toggle()" title="Hudba">
 					<i class="bi bi-music-note-beamed" id="music-icon"></i>
 				</button>
-				<button class="btn btn-retro btn-action-header" onclick="App.UI.openHelp()" title="Help">
+				<button class="btn btn-retro btn-action-header" onclick="App.UI.openHelp()" data-i18n-title="help">
 					<i class="bi bi-question-circle"></i>
 				</button>
-				<button class="btn btn-retro btn-action-header desktop-only" onclick="App.UI.toggleHistory()" title="History">
+				<button class="btn btn-retro btn-action-header desktop-only" onclick="App.UI.toggleHistory()" data-i18n-title="history">
 					<i class="bi bi-clock-history"></i>
 				</button>
-				<button class="btn btn-retro btn-action-header" id="btn-library" onclick="App.Library.open()" title="My library">
+				<button class="btn btn-retro btn-action-header" id="btn-library" onclick="App.Library.open()" title="Knižnica hier">
 					<i class="bi bi-collection"></i>
 				</button>
-				<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleTheme()" title="Theme">
+				<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleTheme()" data-i18n-title="appearance">
 					<i class="bi bi-moon-fill" id="theme-icon"></i>
 				</button>
-				<button class="btn btn-retro btn-action-header desktop-only" onclick="App.UI.toggleFullscreen()" title="Fullscreen">
+				<button class="btn btn-retro btn-action-header desktop-only" onclick="App.UI.toggleFullscreen()" data-i18n-title="fullscreen">
 					<i class="bi bi-arrows-fullscreen"></i>
 				</button>
-				<a href="/#pricing" class="btn btn-retro btn-action-header" title="Upgrade" style="text-decoration:none;background:#ff6b3d;color:#fff;font-weight:700;padding:6px 12px;font-size:12px">Upgrade</a>
 			</div>
 		</header>
 
@@ -97,116 +91,110 @@
 			<!-- ─── LEFT PANEL: MODE + FILTERS ─── -->
 			<aside class="left-panel">
 
-				<!-- SESSION TYPE (collapsed from 6 modes into 3 facilitator-facing chips) -->
+				<!-- MODE SELECTOR -->
 				<div class="panel-section mode-section">
-					<label class="panel-label"><i class="bi bi-people"></i> <span>Session type</span></label>
+					<label class="panel-label"><i class="bi bi-joystick"></i> <span data-i18n="mode">Režim</span></label>
 					<div class="mode-grid" id="mode-grid">
-						<button class="btn-mode active" data-mode="classroom" onclick="App.setMode('classroom')">
-							<span class="mode-emoji">🎯</span>
-							<span class="mode-name">Workshop</span>
+						<button class="btn-mode active" data-mode="party" onclick="App.setMode('party')">
+							<span class="mode-emoji">🎉</span>
+							<span class="mode-name" data-i18n="mode_party">Párty</span>
+						</button>
+						<button class="btn-mode" data-mode="classroom" onclick="App.setMode('classroom')">
+							<span class="mode-emoji">📚</span>
+							<span class="mode-name" data-i18n="mode_classroom">Třída</span>
 						</button>
 						<button class="btn-mode" data-mode="reflection" onclick="App.setMode('reflection')">
 							<span class="mode-emoji">🪞</span>
-							<span class="mode-name">Reflection</span>
+							<span class="mode-name" data-i18n="mode_reflection">Reflexe</span>
 						</button>
-						<button class="btn-mode" data-mode="party" onclick="App.setMode('party')">
-							<span class="mode-emoji">⚡</span>
-							<span class="mode-name">Warm-up</span>
-						</button>
-						<!-- Hidden in v1: circus, cooking, meditation (non-facilitator framing) -->
-						<button class="btn-mode" data-mode="circus" onclick="App.setMode('circus')" style="display:none">
+						<button class="btn-mode" data-mode="circus" onclick="App.setMode('circus')">
 							<span class="mode-emoji">🎪</span>
-							<span class="mode-name">Circus</span>
+							<span class="mode-name" data-i18n="mode_circus">Cirkus</span>
 						</button>
-						<button class="btn-mode" data-mode="cooking" onclick="App.setMode('cooking')" style="display:none">
+					<button class="btn-mode" data-mode="cooking" onclick="App.setMode('cooking')">
 							<span class="mode-emoji">🍳</span>
-							<span class="mode-name">Cooking</span>
+							<span class="mode-name" data-i18n="mode_cooking">Vaření</span>
 						</button>
-						<button class="btn-mode" data-mode="meditation" onclick="App.setMode('meditation')" style="display:none">
+						<button class="btn-mode" data-mode="meditation" onclick="App.setMode('meditation')">
 							<span class="mode-emoji">🧘</span>
-							<span class="mode-name">Meditation</span>
+							<span class="mode-name" data-i18n="mode_meditation">Meditace</span>
 						</button>
 					</div>
 				</div>
 
 				<!-- MAIN FILTERS -->
 				<div class="panel-section">
-					<label class="panel-label"><i class="bi bi-sliders"></i> <span>Session details</span></label>
+					<label class="panel-label"><i class="bi bi-sliders"></i> <span data-i18n="filters">Filtry</span></label>
 
 					<div class="filter-group">
-						<label class="filter-label">Participant age</label>
+						<label class="filter-label" data-i18n="age">Věk</label>
 						<div class="filter-row">
 							<select id="filter-age-min" class="form-select form-select-sm">
-								<option value="">From</option>
+								<option value="" data-i18n="from">Od</option>
 								<option value="3">3+</option>
 								<option value="5">5+</option>
 								<option value="6">6+</option>
 								<option value="8">8+</option>
 								<option value="10">10+</option>
 								<option value="12">12+</option>
-								<option value="18">18+ (adults)</option>
-								<option value="60">60+ (seniors)</option>
 							</select>
 							<span class="filter-dash">—</span>
 							<select id="filter-age-max" class="form-select form-select-sm">
-								<option value="">To</option>
+								<option value="" data-i18n="to">Do</option>
 								<option value="6">6</option>
 								<option value="8">8</option>
 								<option value="10">10</option>
 								<option value="12">12</option>
 								<option value="14">14</option>
-								<option value="16">16</option>
-								<option value="30">30</option>
-								<option value="60">60</option>
-								<option value="99">Any</option>
+								<option value="16">16+</option>
 							</select>
 						</div>
 					</div>
 
 					<div class="filter-group">
-						<label class="filter-label">Group size</label>
+						<label class="filter-label" data-i18n="players">Počet hráčů</label>
 						<select id="filter-players" class="form-select">
-							<option value="">Any size</option>
-							<option value="solo">Solo (1)</option>
-							<option value="small">Small (2–5)</option>
-							<option value="medium">Medium (6–15)</option>
-							<option value="large">Large (16–30)</option>
+							<option value="" data-i18n="any_option">Libovolný</option>
+							<option value="solo" data-i18n="players_solo">Sólo (1)</option>
+							<option value="small" data-i18n="players_small">Malý (2–5)</option>
+							<option value="medium" data-i18n="players_medium">Střední (6–15)</option>
+							<option value="large" data-i18n="players_large">Velký (16–30)</option>
 						</select>
 					</div>
 
 					<div class="filter-group">
-						<label class="filter-label">Duration</label>
+						<label class="filter-label" data-i18n="duration">Délka</label>
 						<select id="filter-duration" class="form-select">
-							<option value="">Any length</option>
-							<option value="quick">Short (5–15 min)</option>
-							<option value="medium">Medium (15–30 min)</option>
-							<option value="long">Long (30–60 min)</option>
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="quick" data-i18n="duration_quick">Krátká (5–15 min)</option>
+							<option value="medium" data-i18n="duration_medium">Střední (15–30 min)</option>
+							<option value="long" data-i18n="duration_long">Dlouhá (30–60 min)</option>
 						</select>
 					</div>
 
 					<div class="filter-group">
-						<label class="filter-label">Setting</label>
+						<label class="filter-label" data-i18n="setting">Prostředí</label>
 						<div class="setting-toggles">
 							<button class="btn btn-retro btn-toggle active" id="setting-any" onclick="App.Filters.setSetting('any')">
-								<i class="bi bi-globe2"></i> <span>Any</span>
+								<i class="bi bi-globe2"></i> <span data-i18n="setting_all">Vše</span>
 							</button>
 							<button class="btn btn-retro btn-toggle" id="setting-indoor" onclick="App.Filters.setSetting('indoor')">
-								<i class="bi bi-house"></i> <span>Indoor</span>
+								<i class="bi bi-house"></i> <span data-i18n="setting_indoor">Uvnitř</span>
 							</button>
 							<button class="btn btn-retro btn-toggle" id="setting-outdoor" onclick="App.Filters.setSetting('outdoor')">
-								<i class="bi bi-tree"></i> <span>Outdoor</span>
+								<i class="bi bi-tree"></i> <span data-i18n="setting_outdoor">Venku</span>
 							</button>
 						</div>
 					</div>
 
 					<!-- ENERGY LEVEL (all modes) -->
 					<div class="filter-group">
-						<label class="filter-label">Energy level</label>
+						<label class="filter-label" data-i18n="energy">Energie</label>
 						<select id="filter-energy" class="form-select">
-							<option value="">Any</option>
-							<option value="low">Calm</option>
-							<option value="medium">Medium</option>
-							<option value="high">High</option>
+							<option value="" data-i18n="any_option_f">Libovolná</option>
+							<option value="low" data-i18n="energy_low">Klidná</option>
+							<option value="medium" data-i18n="energy_medium">Střední</option>
+							<option value="high" data-i18n="energy_high">Vysoká</option>
 						</select>
 					</div>
 
@@ -257,8 +245,8 @@
 					</div>
 				</div>
 
-				<!-- RVP FILTERS — Czech-specific curriculum mapping, hidden in v1 global launch -->
-				<div class="panel-section" id="rvp-filters-section" style="display:none">
+				<!-- RVP FILTERS (classroom mode primarily, but available always) -->
+				<div class="panel-section" id="rvp-filters-section">
 					<label class="panel-label"><i class="bi bi-mortarboard"></i> <span data-i18n="rvp_filters">RVP Filtry</span></label>
 
 					<div class="filter-group">
@@ -301,29 +289,28 @@
 					</div>
 				</div>
 
-				<!-- GOAL / THEME -->
+				<!-- DESCRIPTION / POPIS -->
 				<div class="panel-section">
-					<label class="panel-label"><i class="bi bi-pencil-square"></i> <span>Goal or theme</span></label>
-					<textarea id="filter-description" class="form-textarea" rows="2" maxlength="200" placeholder="e.g. team alignment for Q3, onboarding icebreaker, creativity warm-up..."></textarea>
+					<label class="panel-label"><i class="bi bi-pencil-square"></i> <span data-i18n="description_label">Popis</span></label>
+					<textarea id="filter-description" class="form-textarea" rows="2" maxlength="200" data-i18n-placeholder="description_placeholder" placeholder="Krátký popis nebo zadání hry..."></textarea>
 				</div>
 
 				<!-- GENERATE BUTTON -->
 				<button class="btn btn-retro btn-generate" id="btn-generate" onclick="App.generate()">
-					<i class="bi bi-magic"></i>
-					<span id="generate-text">GENERATE SESSION</span>
+					<i class="bi bi-dice-5-fill"></i>
+					<span id="generate-text" data-i18n="generate">GENEROVAT HRU</span>
 				</button>
 
 				<button class="btn btn-retro btn-surprise" onclick="App.surprise()">
-					<i class="bi bi-shuffle"></i> <span>Surprise me</span>
+					<i class="bi bi-shuffle"></i> <span data-i18n="surprise">Překvap mě!</span>
 				</button>
 
-				<!-- Live-run session — repositioned for v2, hidden in v1 -->
 				<button id="btn-create-session" class="btn-icon" onclick="Session.create(window.currentGame)"
-				  title="Run live with group" style="display:none">
+				  title="Vytvor hernú session pre skupinu" style="display:none">
 				  🎮
 				</button>
 				<button id="btn-join-session" class="btn-icon" onclick="Session.openJoinDialog()"
-				  title="Join a session" style="display:none">
+				  title="Pripoj sa do session">
 				  🔑
 				</button>
 
@@ -344,14 +331,14 @@
 			<main id="game-viewport">
 				<!-- Welcome screen -->
 				<div id="welcome-screen" class="welcome-screen">
-					<div class="welcome-icon"><i class="bi bi-magic"></i></div>
-					<h2 class="welcome-title">Design a great session in 60 seconds.</h2>
-					<p class="welcome-text">Pick session type, group size, and duration on the left — then tap <strong>GENERATE SESSION</strong> to get a full plan with warm-up, core activity, reflection, and materials.</p>
+					<div class="welcome-icon"><i class="bi bi-controller"></i></div>
+					<h2 class="welcome-title" data-i18n="welcome_title">Připraveni generovat?</h2>
+					<p class="welcome-text" data-i18n="welcome_text">Nastavte filtry a stiskněte <strong>GENEROVAT HRU</strong><br>nebo zkuste <strong>Překvap mě!</strong> pro náhodný výběr.</p>
 					<div class="welcome-hint">
-						<i class="bi bi-arrow-left"></i> <span>Session setup · Results here</span> <i class="bi bi-arrow-right"></i>
+						<i class="bi bi-arrow-left"></i> <span data-i18n="welcome_hint">Filtry vlevo | Výsledky vpravo</span> <i class="bi bi-arrow-right"></i>
 					</div>
 					<button type="button" class="btn btn-retro btn-generate welcome-mobile-cta mobile-only" onclick="App.UI.toggleMobileFilters()">
-						<i class="bi bi-sliders"></i> <span>Set up session</span>
+						<i class="bi bi-sliders"></i> <span data-i18n="filters">Filtry</span>
 					</button>
 				</div>
 
@@ -360,7 +347,7 @@
 					<div class="loading-dice">
 						<div class="dice-face">⚄</div>
 					</div>
-					<p class="loading-text">Designing your session…</p>
+					<p class="loading-text" data-i18n="loading">Generuji vaši hru...</p>
 					<div class="loading-bar"><div class="loading-fill"></div></div>
 				</div>
 
