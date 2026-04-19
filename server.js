@@ -34,6 +34,8 @@ const {
 const { entitlementsForPlan, nextUtcMidnightIso } = require('./lib/plan-entitlements');
 const {
 	getAiGenerationsTodayUtc,
+	getAiGenerationsLast7Days,
+	nextWeeklyResetIso,
 	incrementAiGenerationsSuccess,
 	countRobotChallengesLast24h,
 	countSoloCompletionsLast24h,
@@ -137,10 +139,23 @@ app.get('/favicon.ico', (req, res) => {
 	res.type('image/png').send(icon);
 });
 
-// Root: vždy login — na mobile aj desktop. Hra je na /index.html (redirect po prihlásení)
+// Root: Sessionly landing page (conversion-first).
+// Login moved to /login, app at /app. Existing /index.html still works via static serving.
 const PUBLIC_DIR = path.join(__dirname, 'public');
 app.get('/', (req, res) => {
+	res.sendFile(path.join(PUBLIC_DIR, 'landing.html'));
+});
+app.get('/login', (req, res) => {
 	res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
+});
+app.get('/app', (req, res) => {
+	res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+app.get('/terms', (req, res) => {
+	res.sendFile(path.join(PUBLIC_DIR, 'terms.html'));
+});
+app.get('/privacy', (req, res) => {
+	res.sendFile(path.join(PUBLIC_DIR, 'privacy.html'));
 });
 
 // ─── Billing post-payment pages (Payment Link MVP) ───
@@ -842,12 +857,28 @@ app.post('/api/generate-game', async (req, res, next) => {
 		genPaid = hasPaidAccess(st);
 	}
 	const genEnt = entitlementsForPlan(genPaid);
-	if (genUser && coinsDbPool && genEnt.aiGamesPerUtcDay != null) {
+	if (genUser && coinsDbPool && genEnt.sessionsPerWeek != null) {
+		try {
+			const usedWeek = await getAiGenerationsLast7Days(coinsDbPool, genUser.id);
+			if (usedWeek >= genEnt.sessionsPerWeek) {
+				return res.status(429).json({
+					error: `You've used all ${genEnt.sessionsPerWeek} free sessions this week. Upgrade to Pro for unlimited session generation.`,
+					code: 'PLAN_SESSIONS_WEEKLY_LIMIT',
+					limit: genEnt.sessionsPerWeek,
+					used: usedWeek,
+					resetsAt: nextWeeklyResetIso(),
+					upgradeHint: '/#pricing'
+				});
+			}
+		} catch (e) {
+			console.warn('[GenerateGame] weekly quota check:', e.message);
+		}
+	} else if (genUser && coinsDbPool && genEnt.aiGamesPerUtcDay != null) {
 		try {
 			const usedAi = await getAiGenerationsTodayUtc(coinsDbPool, genUser.id);
 			if (usedAi >= genEnt.aiGamesPerUtcDay) {
 				return res.status(429).json({
-					error: `Denný limit AI hier: ${usedAi}/${genEnt.aiGamesPerUtcDay} (UTC deň). Obnoví sa o polnoci UTC alebo predplaťte Pro učiteľ.`,
+					error: `Daily AI limit: ${usedAi}/${genEnt.aiGamesPerUtcDay}. Upgrade to Pro for unlimited.`,
 					code: 'PLAN_AI_DAILY_LIMIT',
 					limit: genEnt.aiGamesPerUtcDay,
 					used: usedAi,
@@ -1287,12 +1318,18 @@ app.get('/api/billing/state', async (req, res) => {
 		const paid = hasPaidAccess(state);
 		const ent = entitlementsForPlan(paid);
 		let aiUsed = 0;
+		let sessionsWeek = 0;
 		let robotUsed = 0;
 		let soloUsed = 0;
 		try {
 			aiUsed = await getAiGenerationsTodayUtc(coinsDbPool, user.id);
 		} catch (e) {
 			console.warn('[Billing] ai usage:', e.message);
+		}
+		try {
+			sessionsWeek = await getAiGenerationsLast7Days(coinsDbPool, user.id);
+		} catch (e) {
+			console.warn('[Billing] weekly usage:', e.message);
 		}
 		try {
 			robotUsed = await countRobotChallengesLast24h(coinsDbPool, user.id);
@@ -1313,15 +1350,18 @@ app.get('/api/billing/state', async (req, res) => {
 				givemeSocial: ent.givemeSocial,
 				smartaOpenAiAndTts: ent.smartaOpenAiAndTts,
 				aiGamesPerUtcDay: ent.aiGamesPerUtcDay,
+				sessionsPerWeek: ent.sessionsPerWeek,
 				robotCompletionsPer24h: ent.robotCompletionsPer24h,
 				soloCompletionsPer24h: ent.soloCompletionsPer24h,
 				generatePerMinute: ent.generatePerMinute
 			},
 			usage: {
 				aiGenerationsUtcDay: aiUsed,
+				sessionsThisWeek: sessionsWeek,
 				robotCompletions24h: robotUsed,
 				soloCompletions24h: soloUsed,
-				resetsAiUtc: nextUtcMidnightIso()
+				resetsAiUtc: nextUtcMidnightIso(),
+				resetsWeekly: nextWeeklyResetIso()
 			}
 		});
 	} catch (err) {
