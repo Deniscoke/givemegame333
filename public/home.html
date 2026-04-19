@@ -71,6 +71,7 @@
   <nav class="nav-links" aria-label="Hlavná navigácia">
     <a href="#co-to-je">Čo to je</a>
     <a href="#ako">Ako to funguje</a>
+    <a href="#naklikat">Naklikať</a>
     <a href="#rezimy">Režimy</a>
     <a href="#cennik">Cenník</a>
     <a href="#faq">FAQ</a>
@@ -86,11 +87,9 @@
   <div class="hero-bg" aria-hidden="true">
     <div class="pixel-grid"></div>
     <div class="pixel-star" style="top:12%;left:8%"></div>
-    <div class="pixel-star" style="top:28%;left:88%"></div>
-    <div class="pixel-star" style="top:68%;left:14%"></div>
-    <div class="pixel-star" style="top:80%;left:78%"></div>
-    <div class="pixel-coin" style="top:20%;left:78%" aria-hidden="true">🪙</div>
-    <div class="pixel-coin pixel-coin-2" style="top:62%;left:10%" aria-hidden="true">⚡</div>
+    <div class="pixel-star" style="top:28%;left:4%"></div>
+    <div class="pixel-star" style="top:68%;left:6%"></div>
+    <div class="pixel-star" style="top:82%;left:12%"></div>
   </div>
 
   <div class="hero-inner">
@@ -115,19 +114,19 @@
     </ul>
   </div>
 
-  <!-- Preview card (pixel screen) -->
+  <!-- Preview card (pixel screen) — ukážka reálneho výstupu z AI enginu -->
   <aside class="hero-card" aria-label="Ukážka vygenerovanej hry">
     <div class="hc-bar">
       <span class="hc-dot"></span><span class="hc-dot"></span><span class="hc-dot"></span>
-      <span class="hc-title">TEAM · 12 HRÁČOV · 45 MIN</span>
+      <span class="hc-title">TRIEDA · 22 DETÍ · 30 MIN</span>
     </div>
     <div class="hc-screen">
-      <div class="hc-row"><span class="hc-label">TITLE</span><span class="hc-val">Dva pravdy, jedna ambícia</span></div>
-      <div class="hc-row"><span class="hc-label">WARM-UP</span><span class="hc-val">Každý zdieľa 2 minulé úspechy a 1 cieľ. 10 min.</span></div>
-      <div class="hc-row"><span class="hc-label">CORE</span><span class="hc-val">Tichý brainstorm → zhlukovanie → dot voting na 3 bety Q3.</span></div>
-      <div class="hc-row"><span class="hc-label">REFLECT</span><span class="hc-val">Čo ťa prekvapilo? Aký commitment si odnášaš?</span></div>
-      <div class="hc-row"><span class="hc-label">MATERIAL</span><span class="hc-val">Lepíky · fixky · stena · časovač · tlačené karty</span></div>
-      <div class="hc-row hc-ok"><span class="hc-label">STATUS</span><span class="hc-val">✓ HOTOVO · PRINT READY</span></div>
+      <div class="hc-row"><span class="hc-label">NÁZOV</span><span class="hc-val">Meno a pohyb — zoznamovací kruh</span></div>
+      <div class="hc-row"><span class="hc-label">ROZCVIČKA</span><span class="hc-val">Deti stoja v kruhu. Každé povie svoje meno a urobí pohyb. Ostatní zopakujú. (5 min)</span></div>
+      <div class="hc-row"><span class="hc-label">HRA</span><span class="hc-val">Hádžeš loptu kamarátovi, povieš jeho meno. Kto chytí, pokračuje. (15 min)</span></div>
+      <div class="hc-row"><span class="hc-label">REFLEXIA</span><span class="hc-val">Koho meno si si najlepšie zapamätal? Prečo práve toho?</span></div>
+      <div class="hc-row"><span class="hc-label">POMÔCKY</span><span class="hc-val">1 mäkká lopta · voľný priestor</span></div>
+      <div class="hc-row hc-ok"><span class="hc-label">STATUS</span><span class="hc-val">✓ HOTOVÉ · PRIPRAVENÉ NA TLAČ</span></div>
     </div>
   </aside>
 </section>
@@ -186,6 +185,78 @@
       <p>Ulož do knižnice, zdieľaj odkazom, vytlač ako PDF, remixuj variant. Nič neostáva vo vákuu.</p>
     </li>
   </ol>
+</section>
+
+<!-- ═══════════════════ HOW TO USE (filter walkthrough) ═══════════════════ -->
+<section id="naklikat" class="walk">
+  <h2 class="h2 center">Ako si hru naklikáš</h2>
+  <p class="walk-sub">5 krokov v ľavom paneli aplikácie. Pod minútu.</p>
+
+  <ol class="walk-list" role="list">
+    <li class="walk-step">
+      <div class="walk-n">1</div>
+      <div class="walk-body">
+        <h3>Vyber režim</h3>
+        <p>Hore v paneli klikni na jednu z farebných ikon: <strong>Párty · Trieda · Reflexia · Cirkus · Varenie · Meditácia</strong>. Režim mení celý výstup — párty bude hravá, trieda edukačná, reflexia hlboká.</p>
+        <div class="walk-chip-row">
+          <span class="walk-chip chip-party">🎉 PÁRTY</span>
+          <span class="walk-chip chip-classroom">🏫 TRIEDA</span>
+          <span class="walk-chip chip-reflection">💭 REFLEXIA</span>
+          <span class="walk-chip chip-circus">🎪 CIRKUS</span>
+        </div>
+      </div>
+    </li>
+
+    <li class="walk-step">
+      <div class="walk-n">2</div>
+      <div class="walk-body">
+        <h3>Nastav vek a počet hráčov</h3>
+        <p>Dva posuvníky: <strong>vek od–do</strong> (napr. 6–11 pre 1. stupeň, 18+ pre dospelých) a <strong>počet hráčov</strong> (solo · 2–5 · 6–15 · 16–30). AI prispôsobí náročnosť, dĺžku pokynov aj dynamiku.</p>
+        <div class="walk-mini">
+          <div class="mini-row"><span class="mini-l">VEK</span><span class="mini-v">6 — 11</span></div>
+          <div class="mini-row"><span class="mini-l">HRÁČI</span><span class="mini-v">6–15 (malá skupina)</span></div>
+        </div>
+      </div>
+    </li>
+
+    <li class="walk-step">
+      <div class="walk-n">3</div>
+      <div class="walk-body">
+        <h3>Vyber čas, miesto, energiu</h3>
+        <p><strong>Dĺžka</strong> (5–15 min / 15–30 / 30–60), <strong>miesto</strong> (indoor / outdoor / kdekoľvek), <strong>energia</strong> (nízka / stredná / vysoká). Tieto tri rozhodnú, či to bude pohybová hra alebo tichá aktivita pri stole.</p>
+        <div class="walk-chip-row">
+          <span class="walk-chip">⏱ 15–30 MIN</span>
+          <span class="walk-chip">🏠 INDOOR</span>
+          <span class="walk-chip">⚡ STREDNÁ ENERGIA</span>
+        </div>
+      </div>
+    </li>
+
+    <li class="walk-step">
+      <div class="walk-n">4</div>
+      <div class="walk-body">
+        <h3>Voliteľne — napíš, čo chceš</h3>
+        <p>Pole „Popis" je tvoja tajná zbraň. Napíš jednou vetou, o čom má hra byť: <em>„o empatii medzi spolužiakmi"</em>, <em>„ľadolamač pre nový tím"</em>, <em>„reflexia na deň otvorených dverí"</em>. AI to zabudne iba ak mu to nezadáš.</p>
+        <div class="walk-input">
+          <span class="walk-input-label">POPIS</span>
+          <span class="walk-input-val">rozcvička pre novú triedu, aby sa zoznámili mená</span>
+        </div>
+      </div>
+    </li>
+
+    <li class="walk-step">
+      <div class="walk-n">5</div>
+      <div class="walk-body">
+        <h3>Stlač <span class="walk-kbd">GENEROVAŤ</span></h3>
+        <p>Za 20–60 sekúnd dostaneš kompletnú hru v karte vpravo. Ulož do knižnice, vytlač ako PDF, zdieľaj odkazom, alebo stlač <strong>REMIX</strong> pre variant.</p>
+        <div class="walk-gen-btn">► GENEROVAŤ HRU</div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="walk-cta">
+    <a href="#" class="btn btn-primary btn-lg" data-go-app>► SKÚSIŤ ZADARMO</a>
+  </div>
 </section>
 
 <!-- ═══════════════════ MODES ═══════════════════ -->
