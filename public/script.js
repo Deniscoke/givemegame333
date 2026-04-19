@@ -236,8 +236,12 @@ const App = (() => {
 							throw new Error(data.error || 'Chyba servera');
 						}
 					if (xpBoost && data.rpg_xp_gained > 0) Coins.consumePowerup?.('xp_boost');
-					GameUI.toast(t('solo_comp_awarded', '🪙 +{coins} coinov · +{xp} RPG XP')
-						.replace('{coins}', '100').replace('{xp}', String(data.rpg_xp_gained || 0)));
+					const trainedCount = Array.isArray(data.trained_stats) ? data.trained_stats.length : 0;
+					const trainedSuffix = trainedCount > 1 ? ` · trénovaných ${trainedCount} statov` : '';
+					GameUI.toast(t('solo_comp_awarded', '🎮 Hra dokončená! +{coins} 🪙 · +{xp} XP{trained}')
+						.replace('{coins}', '100')
+						.replace('{xp}', String(data.rpg_xp_gained || 0))
+						.replace('{trained}', trainedSuffix));
 					if (window.Coins?.load) window.Coins.load();
 					if (window.RpgTalents?.load) {
 						const td = await RpgTalents.load();
@@ -248,7 +252,7 @@ const App = (() => {
 						GameUI.toast(t('rpg_level_up_toast', '⭐ Nový RPG level: {lv}!').replace('{lv}', String(data.rpg_level)));
 					}
 					if (data.rpg_xp_gained > 0 && window.RpgXpFx) {
-						RpgXpFx.trigger(data.rpg_xp_gained, '📚 Solo hra dokončená');
+						RpgXpFx.trigger(data.rpg_xp_gained, '🎮 Za dokončenie hry');
 					}
 					if (window.RpgScreen?.refresh) await RpgScreen.refresh();
 
@@ -272,10 +276,10 @@ const App = (() => {
 							if (!vRes.ok) {
 								GameUI.toast(`📸 ${vData.error || t('refl_verify_failed', 'Overenie fotky zlyhalo (server). Skús znova alebo menšiu fotku.')}`);
 							} else if (vData.verified) {
-								const bc = vData.bonus_coins > 0 ? ` +${vData.bonus_coins} gIVEMECOIN` : '';
-								GameUI.toast(`📸 ${t('refl_verified', 'Overené!')} +${vData.bonus_xp || 0} XP${bc}! ${vData.feedback || ''}`);
+								const bc = vData.bonus_coins > 0 ? ` +${vData.bonus_coins} 🪙` : '';
+								GameUI.toast(`📸 ${t('refl_verified', 'Foto bonus!')} +${vData.bonus_xp || 0} XP${bc} · ${vData.feedback || ''}`);
 								if (vData.bonus_coins > 0 && window.Coins?.load) await window.Coins.load();
-								if (vData.bonus_xp > 0 && window.RpgXpFx) RpgXpFx.trigger(vData.bonus_xp, '📸 Foto verifikácia');
+								if (vData.bonus_xp > 0 && window.RpgXpFx) RpgXpFx.trigger(vData.bonus_xp, '📸 Bonus za foto');
 								if (vData.rpg_level_up) GameUI.toast(`⭐ Level up: ${vData.rpg_level}!`);
 								if (window.RpgTalents?.load) {
 									const td2 = await RpgTalents.load();

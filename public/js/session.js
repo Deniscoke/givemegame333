@@ -530,8 +530,6 @@ const Session = (() => {
 						onclick="this.select()">
 					<button class="btn btn-retro" style="padding:6px 10px;font-size:12px"
 					        onclick="Session._copyShareLink()" title="${_t('sess_copy_link','Skopírovať odkaz')}">📋</button>
-					<button class="btn btn-retro" style="padding:6px 10px;font-size:12px"
-					        onclick="Session._shareNative()" title="${_t('sess_share','Zdieľať')}">🔗</button>
 				</div>
 				<div id="lobby-status" style="text-align:center;font-size:13px;opacity:0.8;margin-bottom:12px">
 					${_t('sess_status_waiting','⏳ Čakám na hráčov...')}

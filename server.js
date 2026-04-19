@@ -487,7 +487,9 @@ function buildFilterDescription(filters) {
 		constraints.push(`CONSTRAINT rvp.stupen: MUST include "${filters.stupen === 'prvni' ? 'prvni' : 'druhy'}" (${filters.stupen === 'prvni' ? '1st level / grades 1-5' : '2nd level / grades 6-9'}).`);
 	}
 	if (filters.kompetence && filters.kompetence !== 'any') {
-		constraints.push(`CONSTRAINT rvp.kompetence: MUST include "${filters.kompetence}" in the kompetence array.`);
+		constraints.push(`CONSTRAINT rvp.kompetence: MUST include "${filters.kompetence}" AND 1–2 additional keys from [k-uceni, k-reseni-problemu, komunikativni, socialni-personalni, obcanske, pracovni, digitalni] that this activity GENUINELY trains. Total 2–3 keys. Do NOT list competencies the activity does not authentically develop.`);
+	} else {
+		constraints.push(`CONSTRAINT rvp.kompetence: ANALYZE the activity and include 1–3 keys from [k-uceni, k-reseni-problemu, komunikativni, socialni-personalni, obcanske, pracovni, digitalni] that this activity GENUINELY trains. Pick the ones that truly match — DO NOT default to "k-uceni" for every game. Different activities train different competencies: movement games often train socialni-personalni + obcanske; puzzle games train k-reseni-problemu; discussion games train komunikativni; etc.`);
 	}
 	if (filters.oblast && filters.oblast !== 'any') {
 		constraints.push(`CONSTRAINT rvp.oblasti: MUST include "${filters.oblast}" in the oblasti array.`);
@@ -1631,10 +1633,13 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			})]
 		);
 
-		// Award RPG XP — amount depends on activity length; xp_multiplier from shop boosts
+		// Award RPG XP — amount depends on activity length; xp_multiplier from shop boosts.
+		// Multi-competency bonus: games that train multiple competencies get +15% per extra (cap at 150 base).
 		const rawXp = computeSoloXpFromDurationMax(game_json?.duration?.max);
+		const kompBonus = 1 + 0.15 * Math.max(0, validKomps.length - 1);
+		const scaledXp = Math.min(150, Math.round(rawXp * kompBonus));
 		const xpMul = Math.min(5, Math.max(1, parseInt(req.body.xp_multiplier) || 1));
-		const soloXpAward = rawXp * xpMul;
+		const soloXpAward = scaledXp * xpMul;
 		const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
 			soloClient, user.id, soloXpAward, xpMul > 1 ? 'solo_complete_boosted' : 'solo_complete'
 		);
