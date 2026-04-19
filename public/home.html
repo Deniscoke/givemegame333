@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- ═══════════════════ SEO ═══════════════════ -->
+  <title>gIVEMEGAME.IO — AI generátor hier a aktivít pre učiteľov, lektorov a facilitátorov</title>
+  <meta name="description" content="Vygeneruj hru, workshop alebo reflexnú aktivitu za 60 sekúnd. Popíš skupinu, cieľ a čas — dostaneš kompletný plán s rozcvičkou, aktivitou, reflexiou, pomôckami a bezpečnostnými poznámkami. Zadarmo. Bez kreditky.">
+  <meta name="keywords" content="generátor hier, edukačné hry, AI pre učiteľov, workshop plán, reflexná aktivita, teambuilding, školské aktivity, RVP, andragogika, facilitator">
+  <meta name="author" content="gIVEMEGAME.IO">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://givemegame.io/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://givemegame.io/">
+  <meta property="og:title" content="gIVEMEGAME.IO — AI generátor hier a aktivít">
+  <meta property="og:description" content="Kompletný plán hry, workshopu alebo reflexnej aktivity za 60 sekúnd. Zadarmo.">
+  <meta property="og:image" content="https://givemegame.io/og-card.png">
+  <meta property="og:locale" content="sk_SK">
+  <meta property="og:locale:alternate" content="cs_CZ">
+  <meta property="og:locale:alternate" content="en_US">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="gIVEMEGAME.IO — AI generátor hier">
+  <meta name="twitter:description" content="Kompletný plán aktivity za 60 sekúnd.">
+
+  <!-- JSON-LD: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "gIVEMEGAME.IO",
+    "description": "AI generátor hier, workshopov a reflexných aktivít pre učiteľov, lektorov a facilitátorov.",
+    "applicationCategory": "EducationalApplication",
+    "operatingSystem": "Web",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "EUR"
+    },
+    "inLanguage": ["sk", "cs", "en", "de", "es"]
+  }
+  </script>
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23352879'/><text x='16' y='22' font-size='14' fill='%23ffd93d' text-anchor='middle' font-family='monospace' font-weight='700'>G</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/home.css?v=1">
+</head>
+<body>
+
+<!-- ═══════════════════ PORTAL TRANSITION OVERLAY ═══════════════════ -->
+<div class="portal" id="portal" aria-hidden="true">
+  <div class="portal-scanlines"></div>
+  <div class="portal-ring"></div>
+  <div class="portal-ring portal-ring-2"></div>
+  <div class="portal-ring portal-ring-3"></div>
+  <div class="portal-center">
+    <span class="portal-label">LOADING</span>
+    <span class="portal-dots"><span>.</span><span>.</span><span>.</span></span>
+  </div>
+</div>
+
+<!-- ═══════════════════ NAV ═══════════════════ -->
+<header class="nav" role="banner">
+  <a href="/" class="brand" aria-label="gIVEMEGAME.IO home">
+    <span class="brand-give">gIVE</span><span class="brand-me">ME</span><span class="brand-game">GAME</span><span class="brand-io">.IO</span>
+  </a>
+  <nav class="nav-links" aria-label="Hlavná navigácia">
+    <a href="#co-to-je">Čo to je</a>
+    <a href="#ako">Ako to funguje</a>
+    <a href="#rezimy">Režimy</a>
+    <a href="#cennik">Cenník</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <div class="nav-cta">
+    <a href="/login.html" class="btn btn-ghost">Prihlásiť</a>
+    <a href="#" class="btn btn-primary" data-go-app>TRY FREE</a>
+  </div>
+</header>
+
+<!-- ═══════════════════ HERO ═══════════════════ -->
+<section class="hero">
+  <div class="hero-bg" aria-hidden="true">
+    <div class="pixel-grid"></div>
+    <div class="pixel-star" style="top:12%;left:8%"></div>
+    <div class="pixel-star" style="top:28%;left:88%"></div>
+    <div class="pixel-star" style="top:68%;left:14%"></div>
+    <div class="pixel-star" style="top:80%;left:78%"></div>
+    <div class="pixel-coin" style="top:20%;left:78%" aria-hidden="true">🪙</div>
+    <div class="pixel-coin pixel-coin-2" style="top:62%;left:10%" aria-hidden="true">⚡</div>
+  </div>
+
+  <div class="hero-inner">
+    <div class="kicker">▸ AI ENGINE v22 · ONLINE</div>
+    <h1 class="h1">
+      Vygeneruj hru za <span class="hl">60 sekúnd.</span><br>
+      Vstúp do hry. Vstúp do levelu.
+    </h1>
+    <p class="sub">
+      <strong>gIVEMEGAME.IO</strong> je AI generátor hier, workshopov a reflexných aktivít
+      pre učiteľov, lektorov a facilitátorov. Popíš skupinu, cieľ a čas —
+      dostaneš kompletný plán: rozcvička, hlavná aktivita, reflexia, pomôcky aj bezpečnosť.
+    </p>
+    <div class="hero-cta">
+      <a href="#" class="btn btn-primary btn-lg" data-go-app>► TRY FREE</a>
+      <a href="#cennik" class="btn btn-ghost btn-lg">Pozri cenník</a>
+    </div>
+    <ul class="hero-meta" role="list">
+      <li>✓ Bez kreditky</li>
+      <li>✓ 2 AI hry denne zadarmo</li>
+      <li>✓ Slovensky · Česky · English · Deutsch · Español</li>
+    </ul>
+  </div>
+
+  <!-- Preview card (pixel screen) -->
+  <aside class="hero-card" aria-label="Ukážka vygenerovanej hry">
+    <div class="hc-bar">
+      <span class="hc-dot"></span><span class="hc-dot"></span><span class="hc-dot"></span>
+      <span class="hc-title">TEAM · 12 HRÁČOV · 45 MIN</span>
+    </div>
+    <div class="hc-screen">
+      <div class="hc-row"><span class="hc-label">TITLE</span><span class="hc-val">Dva pravdy, jedna ambícia</span></div>
+      <div class="hc-row"><span class="hc-label">WARM-UP</span><span class="hc-val">Každý zdieľa 2 minulé úspechy a 1 cieľ. 10 min.</span></div>
+      <div class="hc-row"><span class="hc-label">CORE</span><span class="hc-val">Tichý brainstorm → zhlukovanie → dot voting na 3 bety Q3.</span></div>
+      <div class="hc-row"><span class="hc-label">REFLECT</span><span class="hc-val">Čo ťa prekvapilo? Aký commitment si odnášaš?</span></div>
+      <div class="hc-row"><span class="hc-label">MATERIAL</span><span class="hc-val">Lepíky · fixky · stena · časovač · tlačené karty</span></div>
+      <div class="hc-row hc-ok"><span class="hc-label">STATUS</span><span class="hc-val">✓ HOTOVO · PRINT READY</span></div>
+    </div>
+  </aside>
+</section>
+
+<!-- ═══════════════════ WHAT IS IT ═══════════════════ -->
+<section id="co-to-je" class="what">
+  <div class="what-inner">
+    <h2 class="h2">Čo je gIVEMEGAME.IO?</h2>
+    <p class="what-lead">
+      Je to <strong>AI dielňa na výrobu hier a aktivít</strong>. Nenahrádza tvoj úsudok — napíše ti prvý plný draft,
+      ktorý vieš rovno spustiť alebo si ho jedným klikom prerobíš. Nezačínaš od prázdnej stránky.
+    </p>
+    <div class="what-grid">
+      <div class="what-card">
+        <div class="what-ico">🎲</div>
+        <h3>Pre učiteľov a školy</h3>
+        <p>Hry k RVP, kompetenciám, ročníkom. Vhodné pre 1. aj 2. stupeň. Pripravené na vytlačenie.</p>
+      </div>
+      <div class="what-card">
+        <div class="what-ico">🎪</div>
+        <h3>Pre lektorov a trénerov</h3>
+        <p>Teambuilding, leadership, onboarding, retrospektívy. Indoor / outdoor / online / hybrid.</p>
+      </div>
+      <div class="what-card">
+        <div class="what-ico">🧘</div>
+        <h3>Pre facilitátorov a kouching</h3>
+        <p>Reflexné kruhy, meditácia, somatika, pohyb. Prispôsobené hĺbke aj energii skupiny.</p>
+      </div>
+      <div class="what-card">
+        <div class="what-ico">🔥</div>
+        <h3>Pre kohokoľvek s izbou plnou ľudí</h3>
+        <p>Párty, svadba, tábor, rodinná oslava — zadáš vek, počet, čas, vibe. Dostaneš plán.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ HOW IT WORKS ═══════════════════ -->
+<section id="ako" class="how">
+  <h2 class="h2 center">Ako to funguje</h2>
+  <p class="how-sub">Tri kroky. Žiadny onboarding. Žiadny tutoriál.</p>
+  <ol class="steps" role="list">
+    <li class="step">
+      <div class="step-n">01</div>
+      <h3>POVIEŠ, PRE KOHO</h3>
+      <p>Počet hráčov, vek, dĺžka, miesto, mood. Voliteľne RVP kompetencie alebo vlastný popis.</p>
+    </li>
+    <li class="step">
+      <div class="step-n">02</div>
+      <h3>AI VYGENERUJE</h3>
+      <p>Kompletná hra s inštrukciami, reflexnými otázkami, pomôckami, variantami a bezpečnosťou. Pod 60 sekúnd.</p>
+    </li>
+    <li class="step">
+      <div class="step-n">03</div>
+      <h3>HRAJ ALEBO EDITUJ</h3>
+      <p>Ulož do knižnice, zdieľaj odkazom, vytlač ako PDF, remixuj variant. Nič neostáva vo vákuu.</p>
+    </li>
+  </ol>
+</section>
+
+<!-- ═══════════════════ MODES ═══════════════════ -->
+<section id="rezimy" class="modes">
+  <h2 class="h2 center">6 režimov. 1 engine.</h2>
+  <div class="mode-grid">
+    <div class="mode mode-party"><span class="mode-ico">🎉</span><h4>PÁRTY</h4><p>Teambuilding, ice-breaker, fun</p></div>
+    <div class="mode mode-classroom"><span class="mode-ico">🏫</span><h4>TRIEDA</h4><p>Edukačné hry s RVP</p></div>
+    <div class="mode mode-reflection"><span class="mode-ico">💭</span><h4>REFLEXIA</h4><p>Hlboké otázky a diskusia</p></div>
+    <div class="mode mode-circus"><span class="mode-ico">🎪</span><h4>CIRKUS</h4><p>Pohyb, akrobacia, telo</p></div>
+    <div class="mode mode-cooking"><span class="mode-ico">🍳</span><h4>VARENIE</h4><p>Kulinárske aktivity</p></div>
+    <div class="mode mode-meditation"><span class="mode-ico">🧘</span><h4>MEDITÁCIA</h4><p>Dych, kľud, uzemnenie</p></div>
+  </div>
+</section>
+
+<!-- ═══════════════════ FEATURES ═══════════════════ -->
+<section class="features">
+  <h2 class="h2 center">Čo ešte dostaneš</h2>
+  <div class="feat-grid">
+    <div class="feat"><div class="feat-ico">🪙</div><h4>gIVEMECOIN ekonomika</h4><p>Hraj, zarábaj coiny, odomkni power-upy.</p></div>
+    <div class="feat"><div class="feat-ico">🤖</div><h4>Robot Challenge</h4><p>Denné výzvy s AI — fotka, text, overenie.</p></div>
+    <div class="feat"><div class="feat-ico">🎤</div><h4>SMARTA hlas</h4><p>AI rozprávač ti hru prečíta nahlas.</p></div>
+    <div class="feat"><div class="feat-ico">📚</div><h4>Knižnica + zdieľanie</h4><p>Ulož, rediguj, zdieľaj, vytlač.</p></div>
+    <div class="feat"><div class="feat-ico">🎭</div><h4>RPG avatar</h4><p>Leveluj postavu — insight, kreativita, resilience.</p></div>
+    <div class="feat"><div class="feat-ico">🔁</div><h4>Remix akejkoľvek hry</h4><p>Nový variant jedným klikom, rovnaká štruktúra.</p></div>
+  </div>
+</section>
+
+<!-- ═══════════════════ PRICING ═══════════════════ -->
+<section id="cennik" class="pricing">
+  <h2 class="h2 center">Cenník</h2>
+  <p class="pricing-sub">Začni zadarmo. Upgraduj keď ti to bude šetriť hodiny týždenne.</p>
+
+  <div class="plans">
+    <div class="plan">
+      <div class="plan-name">ZADARMO</div>
+      <div class="plan-price"><span class="price">€0</span><span class="per">/ navždy</span></div>
+      <ul class="plan-list">
+        <li>2 AI hry denne</li>
+        <li>1 Robot Challenge denne</li>
+        <li>Knižnica na uložené hry</li>
+        <li>Všetkých 6 režimov</li>
+        <li>5 jazykov</li>
+      </ul>
+      <a href="#" class="btn btn-ghost btn-full" data-go-app>► TRY FREE</a>
+    </div>
+
+    <div class="plan plan-featured">
+      <div class="plan-badge">NAJPOPULÁRNEJŠIE</div>
+      <div class="plan-name">PRO UČITEĽ</div>
+      <div class="plan-price"><span class="price">€9</span><span class="per">/ mesiac</span></div>
+      <ul class="plan-list">
+        <li>Neobmedzené AI generovanie</li>
+        <li>Neobmedzené Robot Challenges</li>
+        <li>SMARTA hlasový rozprávač</li>
+        <li>Prioritná podpora</li>
+        <li>PDF export bez vodoznaku</li>
+        <li>Zrušíš kedykoľvek</li>
+      </ul>
+      <a href="/login.html" class="btn btn-primary btn-full">PREJSŤ NA PRO</a>
+      <p class="plan-note">Platba cez Stripe · Po prihlásení.</p>
+    </div>
+
+    <div class="plan">
+      <div class="plan-name">ŠKOLA / TÍM</div>
+      <div class="plan-price"><span class="price">na mieru</span></div>
+      <ul class="plan-list">
+        <li>Viac účtov</li>
+        <li>Zdieľaná školská knižnica</li>
+        <li>Vlastná doména + branding</li>
+        <li>Fakturácia s IČO/DIČ</li>
+        <li>SSO / Google Workspace</li>
+      </ul>
+      <a href="mailto:hello@givemegame.io?subject=Škola%2FTím%20plán" class="btn btn-ghost btn-full">NAPÍŠ NÁM</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ FAQ ═══════════════════ -->
+<section id="faq" class="faq">
+  <h2 class="h2 center">Časté otázky</h2>
+  <details>
+    <summary>Je to iba ChatGPT s promptom?</summary>
+    <p>Nie. gIVEMEGAME má vlastnú štruktúrovanú schému hry — každý výstup má rozcvičku, jadro, reflexiu, pomôcky, bezpečnosť a didaktické poznámky. Dostaneš plán, nie odsek, ktorý musíš prerábať.</p>
+  </details>
+  <details>
+    <summary>Môžem to použiť do školy?</summary>
+    <p>Áno. Podporujeme RVP, kompetencie aj oblasti — pre 1. aj 2. stupeň. Existuje aj samostatné gIVEMEEDU rozhranie pre učiteľov.</p>
+  </details>
+  <details>
+    <summary>Funguje to offline?</summary>
+    <p>AI generovanie potrebuje internet (beží cez náš AI engine). Vygenerovaná hra sa dá uložiť a vytlačiť — na hodine potom už internet nepotrebuješ.</p>
+  </details>
+  <details>
+    <summary>V akých jazykoch to funguje?</summary>
+    <p>Slovensky, česky, anglicky, nemecky, španielsky. Vygenerovaný obsah bude celý v jazyku, ktorý zvolíš.</p>
+  </details>
+  <details>
+    <summary>Môžem zrušiť predplatné?</summary>
+    <p>Áno, kedykoľvek. Zostáva ti aktívne do konca zaplateného mesiaca. Bez otázok.</p>
+  </details>
+</section>
+
+<!-- ═══════════════════ FINAL CTA ═══════════════════ -->
+<section class="final-cta">
+  <h2>Pripravený vstúpiť do hry?</h2>
+  <p>Vygeneruj prvú hru pod minútu. Bez kreditky. Zadarmo.</p>
+  <a href="#" class="btn btn-primary btn-lg" data-go-app>► TRY FREE</a>
+</section>
+
+<!-- ═══════════════════ FOOTER ═══════════════════ -->
+<footer class="footer" role="contentinfo">
+  <div class="footer-col">
+    <div class="brand small">
+      <span class="brand-give">gIVE</span><span class="brand-me">ME</span><span class="brand-game">GAME</span><span class="brand-io">.IO</span>
+    </div>
+    <p class="small-text">AI generátor hier a aktivít. Postavené s láskou pre ľudí, ktorí vedú miestnosti.</p>
+  </div>
+  <div class="footer-col">
+    <h5>Produkt</h5>
+    <a href="#ako">Ako to funguje</a>
+    <a href="#rezimy">Režimy</a>
+    <a href="#cennik">Cenník</a>
+    <a href="#" data-go-app>Spustiť aplikáciu</a>
+  </div>
+  <div class="footer-col">
+    <h5>Pre školy</h5>
+    <a href="/edu/index.html">gIVEMEEDU</a>
+    <a href="mailto:hello@givemegame.io">Napíš nám</a>
+  </div>
+  <div class="footer-col">
+    <h5>Legal</h5>
+    <a href="mailto:hello@givemegame.io">Kontakt</a>
+    <span class="small-text">© gIVEMEGAME.IO</span>
+  </div>
+</footer>
+
+<script>
+  // ── Portal transition: click anything with [data-go-app] → animate → /index.html ──
+  (function(){
+    const portal = document.getElementById('portal');
+    const TRANSITION_MS = 1200;
+    document.querySelectorAll('[data-go-app]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        portal.classList.add('portal-active');
+        // respect prefers-reduced-motion
+        const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const delay = mq.matches ? 200 : TRANSITION_MS;
+        setTimeout(() => { window.location.href = '/index.html'; }, delay);
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

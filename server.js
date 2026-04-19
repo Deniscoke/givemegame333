@@ -137,9 +137,13 @@ app.get('/favicon.ico', (req, res) => {
 	res.type('image/png').send(icon);
 });
 
-// Root: vždy login — na mobile aj desktop. Hra je na /index.html (redirect po prihlásení)
+// Root: SEO landing (home.html). /login.html ostáva pre prihlasovanie,
+// /index.html je samotná aplikácia. Landing má „Try free" CTA s prechodom na /index.html.
 const PUBLIC_DIR = path.join(__dirname, 'public');
 app.get('/', (req, res) => {
+	res.sendFile(path.join(PUBLIC_DIR, 'home.html'));
+});
+app.get('/login', (req, res) => {
 	res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
 });
 
