@@ -141,6 +141,35 @@
 
     .empty-state { text-align: center; padding: 40px; color: #64748b; font-family: 'VT323', monospace; font-size: 22px; }
     .empty-state-icon { font-size: 40px; margin-bottom: 8px; }
+
+    .btn-expand {
+      padding: 6px 10px; background: #1e1b4b; color: #e9d5ff;
+      border: 2px solid #000; font-family: 'VT323', monospace; font-size: 16px;
+      cursor: pointer; box-shadow: 2px 2px 0 #000;
+    }
+    .btn-expand:hover { background: #312e81; }
+    .btn-expand.open { background: #4c1d95; }
+
+    .rpg-inline {
+      padding: 14px; margin: 0 0 10px 0;
+      background: #0a0a1a;
+      border: 2px solid #000; border-left: 4px solid #7c3aed;
+      border-radius: 0 4px 4px 0;
+      box-shadow: 3px 3px 0 #000;
+      font-family: 'VT323', monospace; font-size: 18px; color: #cbd5e1;
+    }
+    .rpg-inline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; }
+    .rpg-inline-tile { background: rgba(124,58,237,0.08); border: 1px solid #2d2d6b; padding: 8px; border-radius: 4px; }
+    .rpg-inline-tile-label { font-family: 'Press Start 2P', monospace; font-size: 8px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; }
+    .rpg-inline-tile-val { font-family: 'VT323', monospace; font-size: 22px; color: #e9d5ff; }
+    .rpg-inline-title { font-family: 'Press Start 2P', monospace; font-size: 10px; color: #a855f7; margin: 12px 0 6px 0; }
+    .rpg-inline-perks { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
+    .rpg-inline-perk { text-align: center; padding: 6px; background: rgba(255,255,255,0.04); border: 1px solid #2d2d6b; border-radius: 4px; font-size: 22px; position: relative; }
+    .rpg-inline-perk.locked { opacity: 0.3; }
+    .rpg-inline-perk.used::after { content: '•'; position: absolute; top: -2px; right: 4px; color: #4ade80; font-size: 18px; }
+    .rpg-inline-perk-level { font-family: 'Press Start 2P', monospace; font-size: 6px; color: #94a3b8; display: block; margin-top: 2px; }
+    .rpg-xp-bar { height: 10px; background: #1e1b4b; border: 1px solid #000; border-radius: 2px; overflow: hidden; margin-top: 4px; }
+    .rpg-xp-bar-fill { height: 100%; background: linear-gradient(90deg, #7c3aed, #a855f7); }
   </style>
 </head>
 <body>

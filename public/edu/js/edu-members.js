@@ -109,6 +109,10 @@ const EduMembers = (() => {
            data-member-name="${esc(name)}">Odstr\u00e1ni\u0165</button>`
       : '';
 
+    const expandBtn = m.role === 'student'
+      ? `<button class="btn-expand" data-action="expand" data-user-id="${esc(m.user_id)}" data-member-id="${esc(m.id)}">RPG &#9662;</button>`
+      : '';
+
     return `
       <div class="member-row" id="member-row-${m.id}">
         ${avatarHtml}
@@ -117,10 +121,12 @@ const EduMembers = (() => {
           <div class="member-uid">${esc(m.user_id)}</div>
         </div>
         <div class="member-actions">
+          ${expandBtn}
           ${roleSelectHtml}
           ${removeBtn}
         </div>
-      </div>`;
+      </div>
+      <div class="rpg-inline" id="rpg-inline-${esc(m.id)}" style="display:none"></div>`;
   }
 
   // ─── Attach event listeners after rendering ──────────────────
@@ -138,6 +144,85 @@ const EduMembers = (() => {
         changeRole(sel.dataset.memberId, sel.value);
       });
     });
+    list.querySelectorAll('[data-action="expand"]').forEach(btn => {
+      btn.addEventListener('click', () => toggleRpg(btn));
+    });
+  }
+
+  // ─── Inline RPG detail (teacher view of student progress) ─────
+  const _rpgCache = new Map();
+
+  async function toggleRpg(btn) {
+    const memberId = btn.dataset.memberId;
+    const userId = btn.dataset.userId;
+    const panel = document.getElementById(`rpg-inline-${memberId}`);
+    if (!panel) return;
+    const isOpen = panel.style.display !== 'none';
+    if (isOpen) {
+      panel.style.display = 'none';
+      btn.classList.remove('open');
+      btn.innerHTML = 'RPG \u25BE';
+      return;
+    }
+    btn.classList.add('open');
+    btn.innerHTML = 'RPG \u25B4';
+    panel.style.display = 'block';
+    if (_rpgCache.has(userId)) {
+      renderRpgInline(panel, _rpgCache.get(userId));
+      return;
+    }
+    panel.innerHTML = '<div class="edu-loading"><div class="edu-spinner"></div></div>';
+    try {
+      const data = await EduAuth.apiFetch(`/students/${encodeURIComponent(userId)}/rpg`);
+      _rpgCache.set(userId, data);
+      renderRpgInline(panel, data);
+    } catch (err) {
+      panel.innerHTML = `<div style="color:#fca5a5">Chyba: ${esc(err.message)}</div>`;
+    }
+  }
+
+  function renderRpgInline(panel, data) {
+    const p = data.progression || {};
+    const s = data.student || {};
+    const stats = data.stats || {};
+    const talents = data.talents || [];
+    const perks = data.perks || [];
+    const xpPct = p.xp_to_next > 0
+      ? Math.min(100, Math.round(((p.xp_in_level || 0) / (p.xp_to_next || 1)) * 100))
+      : 100;
+
+    const statsHtml = Object.entries(stats).map(([k, v]) => `
+      <div class="rpg-inline-tile">
+        <div class="rpg-inline-tile-label">${esc(k)}</div>
+        <div class="rpg-inline-tile-val">${esc(v)}</div>
+      </div>`).join('');
+
+    const perksHtml = perks.map(pk => {
+      const cls = ['rpg-inline-perk'];
+      if (!pk.unlocked) cls.push('locked');
+      if (pk.last_status === 'approved' || pk.last_status === 'auto_approved') cls.push('used');
+      const title = `Lv${pk.level} · ${pk.title}${pk.last_status ? ' (' + pk.last_status + ')' : ''}`;
+      return `<div class="${cls.join(' ')}" title="${esc(title)}">${esc(pk.icon || '🎁')}<span class="rpg-inline-perk-level">Lv${esc(pk.level)}</span></div>`;
+    }).join('');
+
+    const talentsLine = talents.length
+      ? talents.map(t => esc(t.title)).join(' · ')
+      : 'Ziadne odomknute talenty';
+
+    panel.innerHTML = `
+      <div><strong style="color:#e9d5ff">Level ${esc(p.level || 1)}</strong> · ${esc(p.xp || 0)} XP · Class: ${esc(s.class_id || '—')} · Hry: ${esc(s.games_generated || 0)}</div>
+      <div class="rpg-xp-bar"><div class="rpg-xp-bar-fill" style="width:${xpPct}%"></div></div>
+      <div style="font-size:14px;color:#94a3b8;margin-top:2px">${esc(p.xp_in_level || 0)} / ${esc(p.xp_to_next || 0)} do Lv ${esc((p.level || 1) + 1)}</div>
+
+      <div class="rpg-inline-title">Staty</div>
+      <div class="rpg-inline-grid">${statsHtml || '<div style="color:#64748b">—</div>'}</div>
+
+      <div class="rpg-inline-title">Talenty</div>
+      <div>${talentsLine}</div>
+
+      <div class="rpg-inline-title">Odmeny (🎁)</div>
+      <div class="rpg-inline-perks">${perksHtml}</div>
+    `;
   }
 
   // ─── Filter by role ──────────────────────────────────────────

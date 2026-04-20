@@ -3080,6 +3080,83 @@ app.post('/api/edu/perk-requests/:id/decide', async (req, res) => {
 	}
 });
 
+// GET /api/edu/students/:userId/rpg — teacher views a student's RPG profile
+// Gated: caller must be teacher/admin in the SAME school as the student.
+app.get('/api/edu/students/:userId/rpg', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const studentId = String(req.params.userId || '').trim();
+	if (!studentId) return res.status(400).json({ error: 'userId required', code: 'BAD_INPUT' });
+
+	try {
+		const membership = await getUserSchoolMembership(user.id);
+		if (!membership || !['teacher', 'admin'].includes(membership.role)) {
+			return res.status(403).json({ error: 'Len učiteľ/admin', code: 'NOT_TEACHER' });
+		}
+
+		const { rows: studentMem } = await queryCoinsDb(
+			`SELECT role FROM public.edu_school_memberships
+			 WHERE user_id = $1 AND school_id = $2 LIMIT 1`,
+			[studentId, membership.school_id]
+		);
+		if (!studentMem.length) {
+			return res.status(404).json({ error: 'Žiak nie je v tvojej škole', code: 'NOT_IN_SCHOOL' });
+		}
+
+		const { rows: profRows } = await queryCoinsDb(
+			`SELECT COALESCE(rpg_xp,0)::int AS rpg_xp,
+			        rpg_avatar_id,
+			        COALESCE(games_generated,0)::int AS games_generated,
+			        display_name, email, avatar_url
+			 FROM public.profiles WHERE id = $1`,
+			[studentId]
+		);
+		const prof = profRows[0] || {};
+		const progression = computeRpgLevel(prof.rpg_xp || 0);
+
+		const { rows: talentRows } = await queryCoinsDb(
+			`SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1`, [studentId]
+		);
+		const unlocked = talentRows.map(r => r.talent_id);
+		const talentManifest = getTalentManifest();
+		const unlockedTalents = unlocked.map(id => talentManifest.find(t => t.id === id)).filter(Boolean);
+		const stats = getEffectiveStats(prof.rpg_avatar_id || null, unlockedTalents);
+
+		const { rows: perkRows } = await queryCoinsDb(
+			`SELECT p.level, p.perk_key, p.icon, p.title, p.description,
+			        (p.level <= $2) AS unlocked,
+			        (SELECT status FROM public.rpg_perk_uses
+			           WHERE user_id = $1 AND perk_key = p.perk_key
+			           ORDER BY claimed_at DESC LIMIT 1) AS last_status,
+			        (SELECT claimed_at FROM public.rpg_perk_uses
+			           WHERE user_id = $1 AND perk_key = p.perk_key
+			           ORDER BY claimed_at DESC LIMIT 1) AS last_claimed_at
+			 FROM public.rpg_level_perks p ORDER BY p.level ASC`,
+			[studentId, progression.level]
+		);
+
+		res.json({
+			student: {
+				id: studentId,
+				display_name: prof.display_name,
+				email: prof.email,
+				avatar_url: prof.avatar_url,
+				class_id: prof.rpg_avatar_id || null,
+				games_generated: prof.games_generated || 0
+			},
+			progression,
+			stats,
+			talents: unlockedTalents.map(t => ({ id: t.id, title: t.title, branch: t.branch })),
+			perks: perkRows
+		});
+	} catch (err) {
+		console.error('[EDU] student RPG fetch failed:', err.message);
+		res.status(500).json({ error: 'Načítanie zlyhalo', code: 'FETCH_ERROR' });
+	}
+});
+
 // ─── Pripravené zaujímavosti pre vypraváča ───
 let narratorFacts = { sk: [], cs: [], de: [], en: [], es: [] };
 try {
