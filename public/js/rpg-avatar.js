@@ -127,6 +127,7 @@ const RpgAvatar = (() => {
     container.style.display = 'block';
 
     if (!_data || !_data.eligible) {
+      // Nie si prihlásený / sieť zlyhala — ticho nič nerobíme, aby nebol spam CTA.
       container.innerHTML = `
         <div class="rpg-avatar-section rpg-avatar-empty">
           <div class="rpg-avatar-display rpg-avatar-placeholder">
@@ -135,9 +136,8 @@ const RpgAvatar = (() => {
           <div class="rpg-avatar-content-col">
             <div class="rpg-avatar-info">
               <span style="font-family:'Press Start 2P',cursive;font-size:9px;display:block;margin-bottom:4px">RPG Avatar</span>
-              <span style="font-size:11px;opacity:0.65">Zapoj sa do školy cez gIVEMEEDU a vyber si svojho hrdinu.</span>
+              <span style="font-size:11px;opacity:0.65">Prihl\u00e1s sa a vyber si svojho hrdinu.</span>
             </div>
-            <a href="/edu/index.html" class="btn btn-retro rpg-avatar-change-btn" style="text-decoration:none;font-size:10px !important">&#127982; gIVEMEEDU</a>
           </div>
         </div>`;
       return;

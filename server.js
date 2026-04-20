@@ -1347,7 +1347,7 @@ app.get('/api/billing/upgrade-url', async (req, res) => {
 // ─── Mode-click coin award — server-authoritative with daily cap ───
 // Client calls this instead of awarding locally; server checks daily total and
 // atomically logs + credits. Returns 429 when cap is reached (no award).
-const MODE_CLICK_DAILY_CAP = 1000;
+const MODE_CLICK_DAILY_CAP = 200;
 const MODE_CLICK_AMOUNT    = 1;
 
 app.post('/api/coins/award-mode-click', async (req, res) => {
@@ -2550,8 +2550,9 @@ app.get('/api/rpg/avatar', async (req, res) => {
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
   try {
+    // Permisívne: každý prihlásený užívateľ má prístup k RPG avataru.
+    // School membership je len bonusový kontext (rola + meno školy).
     const membership = await _rpgGetMembership(user.id);
-    const eligible = membership !== null;
     const { rows: profileRows } = await queryCoinsDb(
       `SELECT rpg_avatar_id, COALESCE(coins, 0)::int AS coins FROM public.profiles WHERE id = $1`,
       [user.id]
@@ -2559,9 +2560,9 @@ app.get('/api/rpg/avatar', async (req, res) => {
     const currentAvatarId = profileRows[0]?.rpg_avatar_id || null;
     const coins = profileRows[0]?.coins ?? 0;
     res.json({
-      eligible,
-      role: eligible ? membership.role : null,
-      school_name: eligible ? membership.school_name : null,
+      eligible: true,
+      role: membership ? membership.role : 'player',
+      school_name: membership ? membership.school_name : null,
       current_avatar_id: currentAvatarId,
       coins,
       avatar_switch_cost: RPG_AVATAR_SWITCH_COST,
@@ -2578,10 +2579,7 @@ app.patch('/api/rpg/avatar', async (req, res) => {
   const user = await requireSupabaseUser(req, res);
   if (!user) return;
   try {
-    const membership = await _rpgGetMembership(user.id);
-    if (!membership) {
-      return res.status(403).json({ error: 'Musíš byť členom školy pre výber avatara.' });
-    }
+    // Permisívne: avatar môže zmeniť každý prihlásený (nevyžadujeme EDU členstvo).
     // Rate limit: 10 avatar changes per 15 minutes per user
     if (!rpgRateLimit(user.id, 10, 15 * 60 * 1000)) {
       return res.status(429).json({ error: 'Príliš veľa zmien avatara. Skúste neskôr.' });
@@ -2721,9 +2719,9 @@ app.get('/api/rpg/talents', async (req, res) => {
     const stats = getEffectiveStats(class_id, unlockedTalents);
 
     res.json({
-      eligible:    membership !== null,
+      eligible:    true,
       class_id,
-      role:        membership?.role        || null,
+      role:        membership?.role        || 'player',
       school_name: membership?.school_name || null,
       coins:       profile.coins || 0,
       avatar_meta,
