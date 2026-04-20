@@ -48,6 +48,7 @@ const RpgScreen = (() => {
   const PANELS = [
     { id: 'talents',      label: '⚔️  Talenты',    ready: true  },
     { id: 'stats',        label: '📊 Štatistiky',  ready: true  },
+    { id: 'perks',        label: '🎁 Odmeny',       ready: true  },
     { id: 'quests',       label: '📜 Úlohy',       ready: false },
     { id: 'achievements', label: '🏆 Úspechy',     ready: false },
   ];
@@ -229,6 +230,120 @@ const RpgScreen = (() => {
     if (panelId === 'stats') {
       _renderStatsPanel();
     }
+    if (panelId === 'perks') {
+      _renderPerksPanel();
+    }
+  }
+
+  // ─── Perks Panel (IRL rewards unlocked by level) ─────────────────
+  async function _renderPerksPanel() {
+    const el = document.getElementById('rpg-panel-perks');
+    if (!el) return;
+    el.innerHTML = '<div class="rpg-coming-soon">🎁<br>Načítavam odmeny…</div>';
+
+    try {
+      const token = await _token();
+      if (!token) {
+        el.innerHTML = '<div class="rpg-coming-soon">🔒<br>Prihlás sa pre zobrazenie odmien.</div>';
+        return;
+      }
+      const res = await fetch('/api/rpg/perks', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) { el.innerHTML = '<div class="rpg-coming-soon">⚠️<br>Odmeny sa nepodarilo načítať.</div>'; return; }
+      const data = await res.json();
+
+      const userLevel = data.user_level || 1;
+      const rows = (data.perks || []).map(p => {
+        const cooldownLeftH = Math.ceil(p.cooldown_left_ms / 3600000);
+        let statusBadge = '';
+        let actionBtn = '';
+        if (!p.unlocked) {
+          statusBadge = `<span class="rpg-perk-badge rpg-perk-locked">🔒 Level ${p.level}</span>`;
+          actionBtn = `<button class="btn btn-retro rpg-perk-btn" disabled>Zamknuté</button>`;
+        } else if (p.pending) {
+          statusBadge = `<span class="rpg-perk-badge rpg-perk-pending">⏳ Čaká na učiteľa</span>`;
+          actionBtn = `<button class="btn btn-retro rpg-perk-btn" disabled>Rozhoduje sa</button>`;
+        } else if (p.cooldown_left_ms > 0) {
+          statusBadge = `<span class="rpg-perk-badge rpg-perk-cooldown">⏱ ${cooldownLeftH} h</span>`;
+          actionBtn = `<button class="btn btn-retro rpg-perk-btn" disabled>Cooldown</button>`;
+        } else {
+          actionBtn = `<button class="btn btn-retro rpg-perk-btn rpg-perk-btn--go" data-perk="${p.perk_key}">Použiť</button>`;
+        }
+        const durLabel = p.duration_minutes ? ` · ${p.duration_minutes} min` : '';
+        const noteLine = p.teacher_note ? `<p class="rpg-perk-note">📝 ${_esc(p.teacher_note)}</p>` : '';
+        return `
+          <div class="rpg-perk-card ${p.unlocked ? '' : 'rpg-perk-card--locked'}">
+            <div class="rpg-perk-icon">${p.icon}</div>
+            <div class="rpg-perk-body">
+              <div class="rpg-perk-header">
+                <h4 class="rpg-perk-title">${_esc(p.title)}</h4>
+                <span class="rpg-perk-level">Lv ${p.level}${durLabel}</span>
+              </div>
+              <p class="rpg-perk-desc">${_esc(p.description)}</p>
+              ${noteLine}
+              <div class="rpg-perk-footer">
+                ${statusBadge}
+                ${actionBtn}
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="rpg-perks-panel">
+          <section class="rpg-stats-section">
+            <h3 class="rpg-stats-heading">🎁 Odmeny zo života</h3>
+            <p class="rpg-perks-intro">
+              Každý level ti odomkne jeden reálny benefit v škole. Klikni <b>Použiť</b> — ak si v škole
+              registrovaný v gIVEMEGAMEEDU, žiadosť pôjde učiteľovi na schválenie. Mimo EDU sa uplatní hneď.
+              <br><span style="opacity:.7">Tvoj level: <b>Lv ${userLevel}</b></span>
+            </p>
+            <div class="rpg-perks-grid">${rows}</div>
+          </section>
+        </div>`;
+
+      el.querySelectorAll('.rpg-perk-btn--go').forEach(btn => {
+        btn.addEventListener('click', () => _claimPerk(btn.dataset.perk, btn));
+      });
+    } catch (e) {
+      el.innerHTML = '<div class="rpg-coming-soon">⚠️<br>Chyba pri načítaní odmien.</div>';
+    }
+  }
+
+  async function _claimPerk(perkKey, btn) {
+    if (!perkKey) return;
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    try {
+      const token = await _token();
+      if (!token) { btn.disabled = false; btn.textContent = 'Použiť'; return; }
+      const res = await fetch(`/api/rpg/perks/${encodeURIComponent(perkKey)}/use`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        (window.GameUI?.toast || alert)(`❌ ${data.error || 'Nepodarilo sa použiť perk'}`);
+      } else if (data.needs_approval) {
+        (window.GameUI?.toast || alert)(`⏳ Žiadosť odoslaná učiteľovi: ${data.perk_title}`);
+      } else {
+        (window.GameUI?.toast || alert)(`✅ Uplatnené: ${data.perk_title}`);
+      }
+    } catch (e) {
+      (window.GameUI?.toast || alert)(`❌ ${e.message}`);
+    } finally {
+      _renderPerksPanel();
+    }
+  }
+
+  async function _token() {
+    try {
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      return session?.access_token || null;
+    } catch { return null; }
+  }
+
+  function _esc(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
   // ─── Stats Panel ────────────────────────────────────────────────

@@ -2855,6 +2855,231 @@ app.post('/api/rpg/talents/unlock', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// Level-based IRL perks (see migration 025)
+// Student side: list perks with unlock/cooldown status, claim a perk.
+// Teacher side: see pending requests in own school, approve/reject.
+// ═══════════════════════════════════════════════════════════════════
+
+async function getUserSchoolMembership(userId) {
+	try {
+		const { rows } = await queryCoinsDb(
+			`SELECT school_id, role FROM public.edu_school_memberships
+			 WHERE user_id = $1 AND archived_at IS NULL
+			 ORDER BY joined_at ASC LIMIT 1`,
+			[userId]
+		);
+		return rows[0] || null;
+	} catch { return null; }
+}
+
+// GET /api/rpg/perks — list perks with per-user unlock + cooldown status
+app.get('/api/rpg/perks', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	try {
+		const { rows: profRows } = await queryCoinsDb(
+			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
+		);
+		const { level } = computeRpgLevel(profRows[0]?.rpg_xp || 0);
+
+		const { rows: perks } = await queryCoinsDb(
+			`SELECT level, perk_key, icon, title, description, cooldown_hours, duration_minutes
+			 FROM public.rpg_level_perks ORDER BY level ASC`
+		);
+
+		const { rows: recentUses } = await queryCoinsDb(
+			`SELECT DISTINCT ON (perk_key) perk_key, status, claimed_at, decided_at, teacher_note
+			 FROM public.rpg_perk_uses
+			 WHERE user_id = $1 AND status IN ('pending','approved','auto_approved')
+			 ORDER BY perk_key, claimed_at DESC`,
+			[user.id]
+		);
+		const useByKey = Object.fromEntries(recentUses.map(u => [u.perk_key, u]));
+
+		const now = Date.now();
+		const items = perks.map(p => {
+			const u = useByKey[p.perk_key];
+			let cooldownLeftMs = 0;
+			if (u && (u.status === 'approved' || u.status === 'auto_approved')) {
+				const base = new Date(u.decided_at || u.claimed_at).getTime();
+				cooldownLeftMs = Math.max(0, base + p.cooldown_hours * 3600000 - now);
+			}
+			return {
+				level: p.level,
+				perk_key: p.perk_key,
+				icon: p.icon,
+				title: p.title,
+				description: p.description,
+				cooldown_hours: p.cooldown_hours,
+				duration_minutes: p.duration_minutes,
+				unlocked: level >= p.level,
+				pending: u?.status === 'pending',
+				cooldown_left_ms: cooldownLeftMs,
+				last_used_at: u?.decided_at || u?.claimed_at || null,
+				teacher_note: u?.teacher_note || null,
+			};
+		});
+
+		res.json({ user_level: level, perks: items });
+	} catch (err) {
+		console.error('[Perks] GET failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa načítať odmeny', code: 'PERKS_FETCH_ERROR' });
+	}
+});
+
+// POST /api/rpg/perks/:key/use — student claims a perk
+app.post('/api/rpg/perks/:key/use', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const perkKey = String(req.params.key || '').trim();
+	if (!perkKey) return res.status(400).json({ error: 'Chýba perk_key', code: 'MISSING_KEY' });
+
+	try {
+		const { rows: perkRows } = await queryCoinsDb(
+			`SELECT level, perk_key, title, cooldown_hours FROM public.rpg_level_perks WHERE perk_key = $1`,
+			[perkKey]
+		);
+		if (!perkRows.length) return res.status(404).json({ error: 'Perk neexistuje', code: 'PERK_NOT_FOUND' });
+		const perk = perkRows[0];
+
+		const { rows: profRows } = await queryCoinsDb(
+			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
+		);
+		const { level } = computeRpgLevel(profRows[0]?.rpg_xp || 0);
+		if (level < perk.level) {
+			return res.status(403).json({
+				error: `Perk sa odomkne na leveli ${perk.level}. Máš ${level}.`,
+				code: 'LEVEL_TOO_LOW'
+			});
+		}
+
+		// Block if there's already a pending request OR active cooldown
+		const { rows: existing } = await queryCoinsDb(
+			`SELECT status, claimed_at, decided_at
+			 FROM public.rpg_perk_uses
+			 WHERE user_id = $1 AND perk_key = $2
+			 ORDER BY claimed_at DESC LIMIT 1`,
+			[user.id, perkKey]
+		);
+		if (existing.length) {
+			const last = existing[0];
+			if (last.status === 'pending') {
+				return res.status(409).json({
+					error: 'Žiadosť o tento perk ešte čaká na učiteľa.',
+					code: 'ALREADY_PENDING'
+				});
+			}
+			if (last.status === 'approved' || last.status === 'auto_approved') {
+				const base = new Date(last.decided_at || last.claimed_at).getTime();
+				const left = base + perk.cooldown_hours * 3600000 - Date.now();
+				if (left > 0) {
+					return res.status(429).json({
+						error: `Cooldown beží — skús to znova za ${Math.ceil(left / 3600000)} h.`,
+						code: 'COOLDOWN_ACTIVE',
+						cooldown_left_ms: left
+					});
+				}
+			}
+		}
+
+		const membership = await getUserSchoolMembership(user.id);
+		const inEduSchool = !!membership && membership.role === 'student';
+		const initialStatus = inEduSchool ? 'pending' : 'auto_approved';
+		const schoolId = membership?.school_id || null;
+
+		const { rows: insRows } = await queryCoinsDb(
+			`INSERT INTO public.rpg_perk_uses (user_id, perk_key, status, school_id, decided_at)
+			 VALUES ($1, $2, $3, $4, CASE WHEN $3 = 'auto_approved' THEN now() ELSE NULL END)
+			 RETURNING id, status, claimed_at, decided_at`,
+			[user.id, perkKey, initialStatus, schoolId]
+		);
+
+		res.json({
+			ok: true,
+			claim_id: insRows[0].id,
+			status: insRows[0].status,
+			needs_approval: initialStatus === 'pending',
+			perk_title: perk.title
+		});
+	} catch (err) {
+		console.error('[Perks] POST use failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa uplatniť perk', code: 'PERK_USE_ERROR' });
+	}
+});
+
+// GET /api/edu/perk-requests — teachers see pending claims from their school
+app.get('/api/edu/perk-requests', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	try {
+		const membership = await getUserSchoolMembership(user.id);
+		if (!membership || !['teacher', 'admin'].includes(membership.role)) {
+			return res.status(403).json({ error: 'Len učiteľ/admin môže vidieť žiadosti', code: 'NOT_TEACHER' });
+		}
+
+		const { rows } = await queryCoinsDb(
+			`SELECT pu.id, pu.user_id, pu.perk_key, pu.claimed_at, pu.status,
+			        p.title AS perk_title, p.icon AS perk_icon, p.description AS perk_description,
+			        p.duration_minutes, p.level AS perk_level,
+			        pr.display_name AS student_name, pr.email AS student_email
+			 FROM public.rpg_perk_uses pu
+			 JOIN public.rpg_level_perks p ON p.perk_key = pu.perk_key
+			 LEFT JOIN public.profiles pr ON pr.id = pu.user_id
+			 WHERE pu.school_id = $1 AND pu.status = 'pending'
+			 ORDER BY pu.claimed_at ASC`,
+			[membership.school_id]
+		);
+		res.json({ requests: rows });
+	} catch (err) {
+		console.error('[Perks] teacher GET failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa načítať žiadosti', code: 'FETCH_ERROR' });
+	}
+});
+
+// POST /api/edu/perk-requests/:id/decide — teacher approves or rejects
+app.post('/api/edu/perk-requests/:id/decide', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const claimId = String(req.params.id || '').trim();
+	const { decision, note } = req.body || {};
+	if (!['approve', 'reject'].includes(decision)) {
+		return res.status(400).json({ error: 'decision musí byť approve alebo reject', code: 'BAD_DECISION' });
+	}
+	const teacherNote = typeof note === 'string' ? note.slice(0, 300) : null;
+
+	try {
+		const membership = await getUserSchoolMembership(user.id);
+		if (!membership || !['teacher', 'admin'].includes(membership.role)) {
+			return res.status(403).json({ error: 'Len učiteľ/admin môže rozhodovať', code: 'NOT_TEACHER' });
+		}
+
+		const newStatus = decision === 'approve' ? 'approved' : 'rejected';
+		const { rows } = await queryCoinsDb(
+			`UPDATE public.rpg_perk_uses
+			    SET status = $1, decided_by = $2, decided_at = now(), teacher_note = $3
+			  WHERE id = $4 AND school_id = $5 AND status = 'pending'
+			  RETURNING id, user_id, perk_key, status, decided_at`,
+			[newStatus, user.id, teacherNote, claimId, membership.school_id]
+		);
+		if (!rows.length) {
+			return res.status(404).json({ error: 'Žiadosť nenájdená alebo už rozhodnutá', code: 'NOT_FOUND' });
+		}
+		res.json({ ok: true, claim: rows[0] });
+	} catch (err) {
+		console.error('[Perks] teacher decide failed:', err.message);
+		res.status(500).json({ error: 'Rozhodnutie zlyhalo', code: 'DECIDE_ERROR' });
+	}
+});
+
 // ─── Pripravené zaujímavosti pre vypraváča ───
 let narratorFacts = { sk: [], cs: [], de: [], en: [], es: [] };
 try {

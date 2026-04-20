@@ -4243,6 +4243,126 @@ body.light-mode #levelup-feedback {
 }
 #rpg-panel-talents .rpg-talent-branch-label { color: #a855f7; }
 
+/* ─── RPG Perks panel (🎁 Odmeny) ────────────────────────────────── */
+.rpg-perks-intro {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 10px;
+	line-height: 1.8;
+	color: #cbd5e1;
+	padding: 14px 16px;
+	margin: 0 0 16px 0;
+	background: rgba(124,58,237,0.08);
+	border: 1px solid #2d2d6b;
+	border-radius: 8px;
+}
+.rpg-perks-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 12px;
+	padding: 0 4px;
+}
+.rpg-perk-card {
+	display: flex;
+	gap: 12px;
+	padding: 14px;
+	background: rgba(255,255,255,0.04);
+	border: 1px solid #2d2d6b;
+	border-radius: 10px;
+	transition: all 0.2s;
+}
+.rpg-perk-card:hover:not(.rpg-perk-card--locked) {
+	border-color: #7c3aed;
+	background: rgba(124,58,237,0.08);
+}
+.rpg-perk-card--locked { opacity: 0.45; }
+.rpg-perk-icon {
+	font-size: 32px;
+	line-height: 1;
+	flex-shrink: 0;
+	width: 48px;
+	height: 48px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0,0,0,0.3);
+	border-radius: 8px;
+}
+.rpg-perk-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.rpg-perk-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 8px;
+}
+.rpg-perk-title {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 11px;
+	color: #f1f5f9;
+	margin: 0;
+	line-height: 1.4;
+}
+.rpg-perk-level {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 8px;
+	color: #a855f7;
+	white-space: nowrap;
+}
+.rpg-perk-desc {
+	font-size: 12px;
+	color: #cbd5e1;
+	line-height: 1.5;
+	margin: 0;
+}
+.rpg-perk-note {
+	font-size: 11px;
+	color: #fbbf24;
+	background: rgba(251,191,36,0.08);
+	border-left: 2px solid #fbbf24;
+	padding: 6px 8px;
+	border-radius: 4px;
+	margin: 2px 0;
+}
+.rpg-perk-footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	margin-top: 4px;
+}
+.rpg-perk-badge {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 8px;
+	padding: 5px 8px;
+	border-radius: 4px;
+	background: rgba(255,255,255,0.06);
+	color: #94a3b8;
+}
+.rpg-perk-badge.rpg-perk-locked { color: #64748b; }
+.rpg-perk-badge.rpg-perk-pending { color: #fbbf24; background: rgba(251,191,36,0.12); }
+.rpg-perk-badge.rpg-perk-cooldown { color: #38bdf8; background: rgba(56,189,248,0.12); }
+.rpg-perk-badge.rpg-perk-available { color: #4ade80; background: rgba(74,222,128,0.12); }
+.rpg-perk-btn {
+	font-family: 'Press Start 2P', cursive;
+	font-size: 9px;
+	padding: 8px 12px;
+	border: 1px solid #2d2d6b;
+	background: rgba(255,255,255,0.04);
+	color: #cbd5e1;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+.rpg-perk-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.rpg-perk-btn--go {
+	background: linear-gradient(135deg, #7c3aed, #a855f7);
+	border-color: #a855f7;
+	color: #fff;
+}
+.rpg-perk-btn--go:hover:not(:disabled) {
+	box-shadow: 0 0 16px rgba(168,85,247,0.45);
+	transform: translateY(-1px);
+}
+
 /* ─── RPG header + flavor + picker cost ─────────────────────────── */
 .rpg-screen-header-left {
 	display: flex;
