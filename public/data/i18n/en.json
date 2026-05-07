@@ -307,5 +307,17 @@
   "rpg_stat_creativity":   "Creativity",
   "rpg_stat_resilience":   "Resilience",
   "rpg_stat_communication":"Communication",
-  "rpg_stat_strategy":     "Strategy"
+  "rpg_stat_strategy":     "Strategy",
+
+  "sess_starting":          "Starting...",
+  "sess_quit":              "Leave session",
+  "sess_quit_confirm":      "Leave the session? The game keeps running for the others.",
+  "sess_quit_done":         "👋 You left the session",
+  "sess_open_lobby":        "Open lobby",
+  "sess_you_host":          "You (Host)",
+  "sess_count_label":       "Players",
+
+  "platform_intro_title":   "Adaptable educational framework",
+  "platform_intro_text":    "Built for educators. Currently mapped to the Czech RVP curriculum and designed to evolve from teacher feedback — ready to adapt as educational frameworks change in different countries.",
+  "platform_intro_more":    "Got a curriculum or idea we should add next? Let us know."
 }

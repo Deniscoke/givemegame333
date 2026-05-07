@@ -301,5 +301,17 @@
   "rpg_stat_creativity":   "Kreativita",
   "rpg_stat_resilience":   "Odolnosť",
   "rpg_stat_communication":"Komunikácia",
-  "rpg_stat_strategy":     "Stratégia"
+  "rpg_stat_strategy":     "Stratégia",
+
+  "sess_starting":          "Štartujem...",
+  "sess_quit":              "Opustiť session",
+  "sess_quit_confirm":      "Opustiť session? Hra zostane bežať pre ostatných.",
+  "sess_quit_done":         "👋 Opustil si session",
+  "sess_open_lobby":        "Otvoriť lobby",
+  "sess_you_host":          "Ty (Host)",
+  "sess_count_label":       "Hráči",
+
+  "platform_intro_title":   "Adaptabilný vzdelávací rámec",
+  "platform_intro_text":    "Vyrobené pre pedagógov. Aktuálne mapované na český RVP, navrhnuté tak, aby sa rozvíjalo na základe spätnej väzby učiteľov — pripravené prispôsobiť sa zmenám vzdelávacieho smerovania v rôznych krajinách.",
+  "platform_intro_more":    "Máš nápad alebo kurikulum, ktoré by sme mali pridať? Daj nám vedieť."
 }

@@ -138,15 +138,38 @@ const Session = (() => {
 		if (!_isHost || !_code) return;
 		const token = await _token();
 		if (!token) return;
+
+		// Disable button immediately so mobile users don't double-tap
+		const startBtn = document.getElementById('btn-lobby-start');
+		if (startBtn) { startBtn.disabled = true; startBtn.textContent = '⏳ ' + _t('sess_starting', 'Štartujem...'); }
+
 		try {
 			const res = await fetchApi(`/api/sessions/${_code}/start`, {
 				method: 'POST',
 				headers: { 'Authorization': `Bearer ${token}` }
 			});
 			const data = await res.json();
-			if (!res.ok) { GameUI.toast(`❌ ${data.error}${data.detail ? ': ' + data.detail : ''}`); return; }
-			// Realtime will handle status transition to 'active'
+			if (!res.ok) {
+				if (startBtn) { startBtn.disabled = false; startBtn.textContent = _t('sess_btn_start','▶️ Štart — odráta {cost} 🪙 každému').replace('{cost}', JOIN_COST); }
+				GameUI.toast(`❌ ${data.error}${data.detail ? ': ' + data.detail : ''}`);
+				return;
+			}
+			// Mobile-safe: realtime websockets are unreliable on phones (background tabs,
+			// throttled radio). Force-fetch the full session and trigger _onSessionUpdate
+			// locally so the host's lobby closes and game UI loads immediately — without
+			// waiting for the realtime subscription that may never fire.
+			try {
+				const fullRes = await fetchApi(`/api/sessions/${_code}`, {
+					headers: { 'Authorization': `Bearer ${token}` }
+				});
+				if (fullRes.ok) {
+					const full = await fullRes.json();
+					_lastKnownStatus = full.status;
+					_onSessionUpdate(full);
+				}
+			} catch { /* fall back to realtime/polling */ }
 		} catch (err) {
+			if (startBtn) { startBtn.disabled = false; startBtn.textContent = _t('sess_btn_start','▶️ Štart — odráta {cost} 🪙 každému').replace('{cost}', JOIN_COST); }
 			GameUI.toast(`❌ ${err.message}`);
 		}
 	}
@@ -287,14 +310,26 @@ const Session = (() => {
 	function _onActive(session) {
 		_stopPoll(); // session started, no need to poll lobby anymore
 
-		// For participants: load and render the game from session data
-		if (!_isHost && session.game_json && window.GameUI?.renderGame) {
-			window.currentGame = session.game_json;
-			GameUI.renderGame(session.game_json);
+		// Load and render the game for everyone (host + participants).
+		// Host already has currentGame loaded in most cases, but on mobile
+		// the JS engine can drop window.currentGame after a long lobby wait
+		// (background tab, low memory). Falling back to session.game_json
+		// guarantees the host's screen is never blank after start.
+		if (session.game_json && window.GameUI?.renderGame) {
+			if (!window.currentGame) {
+				window.currentGame = session.game_json;
+				GameUI.renderGame(session.game_json);
+			} else if (!_isHost) {
+				window.currentGame = session.game_json;
+				GameUI.renderGame(session.game_json);
+			}
 		}
 
 		// Close the lobby modal so the game is visible
 		_closeLobby();
+		// Show the in-game session badge so the host can re-open the lobby
+		// or quit the session at any moment (critical for mobile UX).
+		_showSessionBadge();
 
 		// Show notes block
 		const notesBlock = document.getElementById('session-notes-block');
@@ -345,6 +380,7 @@ const Session = (() => {
 		_loadAndRenderRpgHud();
 		_fetchAndShowMyReward();
 		_closeLobby();
+		_hideSessionBadge();
 		_channel?.unsubscribe();
 		_channel = null;
 		_clearPersist();
@@ -502,10 +538,86 @@ const Session = (() => {
 			modal = document.createElement('div');
 			modal.id = 'session-lobby-modal';
 			modal.className = 'modal-overlay';
+			// Backdrop click closes the lobby — important on mobile where the
+			// ✕ button can be hard to hit with a thumb. Stop propagation on the
+			// inner box so clicks inside the dialog don't dismiss it.
+			modal.addEventListener('click', (e) => {
+				if (e.target === modal) _closeLobby();
+			});
 			document.body.appendChild(modal);
 		}
 		modal.style.display = 'flex';
 		_renderLobby();
+	}
+
+	// In-game floating badge: lets the host re-open the lobby (or quit the session)
+	// after the game has started. Without this on mobile, the host has no exit path.
+	function _showSessionBadge() {
+		let badge = document.getElementById('session-badge');
+		if (!badge) {
+			badge = document.createElement('div');
+			badge.id = 'session-badge';
+			badge.style.cssText = [
+				'position:fixed',
+				'top:12px',
+				'right:12px',
+				'z-index:9000',
+				'display:flex',
+				'gap:6px',
+				'align-items:center',
+				'padding:8px 12px',
+				'border-radius:999px',
+				'background:rgba(0,0,0,0.78)',
+				'color:#fff',
+				'font-size:13px',
+				'font-weight:600',
+				'box-shadow:0 4px 14px rgba(0,0,0,0.35)',
+				'backdrop-filter:blur(8px)',
+				'-webkit-backdrop-filter:blur(8px)',
+				'cursor:pointer',
+				'min-height:40px'  // touch target ≥ 40px
+			].join(';');
+			document.body.appendChild(badge);
+		}
+		badge.innerHTML = `
+			<span>🎮 ${_code}</span>
+			<button onclick="event.stopPropagation();Session._openLobbyFromBadge()"
+			        style="background:rgba(255,255,255,0.15);border:0;color:#fff;border-radius:999px;
+			               padding:6px 10px;font-size:12px;cursor:pointer;min-height:32px"
+			        aria-label="${_t('sess_open_lobby','Otvoriť lobby')}">📋</button>
+			<button onclick="event.stopPropagation();Session._quitSession()"
+			        style="background:rgba(248,113,113,0.85);border:0;color:#fff;border-radius:999px;
+			               padding:6px 10px;font-size:12px;cursor:pointer;min-height:32px"
+			        aria-label="${_t('sess_quit','Opustiť session')}">✕</button>
+		`;
+		badge.style.display = 'flex';
+	}
+
+	function _hideSessionBadge() {
+		const badge = document.getElementById('session-badge');
+		if (badge) badge.style.display = 'none';
+	}
+
+	function _openLobbyFromBadge() {
+		if (!_code) return;
+		_openLobby();
+		_refreshParticipants();
+	}
+
+	// Quit the session locally without ending it server-side. The session
+	// stays alive so other participants can keep playing or the host can
+	// rejoin via persisted code. This is the safety valve for mobile users
+	// who feel "stuck" — they can always tap ✕ on the badge.
+	function _quitSession() {
+		if (!confirm(_t('sess_quit_confirm', 'Opustiť session? Hra zostane bežať pre ostatných.'))) return;
+		_stopPoll();
+		try { _channel?.unsubscribe(); } catch {}
+		_channel = null;
+		_clearPersist();
+		_closeLobby();
+		_hideSessionBadge();
+		_code = null; _sessionId = null; _isHost = false; _lastKnownStatus = 'waiting';
+		GameUI.toast(_t('sess_quit_done', '👋 Opustil si session'));
 	}
 
 	function _renderLobby() {
@@ -513,10 +625,11 @@ const Session = (() => {
 		if (!modal) return;
 
 		modal.innerHTML = `
-			<div class="modal-box" style="max-width:480px">
+			<div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
 				<div class="modal-header">
 					<h3>🎮 Session Lobby</h3>
-					<button class="modal-close" onclick="Session._closeLobby()" aria-label="${_t('close','Zavrieť')}">✕</button>
+					<button class="modal-close" onclick="Session._closeLobby()" aria-label="${_t('close','Zavrieť')}"
+					        style="min-width:44px;min-height:44px;font-size:20px;line-height:1;cursor:pointer">✕</button>
 				</div>
 				<div style="text-align:center;font-size:36px;letter-spacing:10px;padding:16px 0;
 				            font-weight:700;color:var(--accent,#633cff)">${_code}</div>
@@ -587,18 +700,45 @@ const Session = (() => {
 	function _renderParticipants(list) {
 		const el = document.getElementById('lobby-participants');
 		if (!el) return;
-		if (!list.length) {
-			el.innerHTML = `<p style="opacity:0.4;text-align:center;font-size:12px">${_t('sess_no_players','Žiadni hráči ešte...')}</p>`;
-			return;
-		}
 		const nameFb   = _t('sess_player_fallback', 'Hráč');
 		const reflLabel = _t('sess_refl_label', 'reflexia');
-		el.innerHTML = list.map(p => `
+		const hostLabel = _t('sess_you_host', 'Ty (Host)');
+		const countLbl  = _t('sess_count_label', 'Hráči');
+
+		// Defensive HTML escape — usernames come from Supabase profile.display_name
+		// and have historically been rendered raw, which is an XSS vector. Fix in place.
+		const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+			'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+		}[c]));
+
+		// Always show a host row on top so the host immediately knows the lobby is live,
+		// even before any players join. This was the "wrong participant display" bug.
+		const rows = [];
+		if (_isHost) {
+			rows.push(`
+				<div style="display:flex;justify-content:space-between;align-items:center;
+				            padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px">
+					<span>👑 ${esc(hostLabel)}</span>
+					<span style="opacity:0.5">🎮</span>
+				</div>`);
+		}
+		rows.push(...list.map(p => `
 			<div style="display:flex;justify-content:space-between;align-items:center;
 			            padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px">
-				<span>${p.display_name || nameFb}</span>
-				<span style="opacity:0.5">${p.reflection_done ? `✅ ${reflLabel}` : '⏳'}</span>
-			</div>`).join('');
+				<span>${esc(p.display_name || nameFb)}</span>
+				<span style="opacity:0.5">${p.reflection_done ? `✅ ${esc(reflLabel)}` : '⏳'}</span>
+			</div>`));
+
+		if (rows.length === 0) {
+			el.innerHTML = `<p style="opacity:0.4;text-align:center;font-size:12px">${esc(_t('sess_no_players','Žiadni hráči ešte...'))}</p>`;
+			return;
+		}
+
+		const header = `<div style="opacity:0.6;font-size:11px;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">
+			${esc(countLbl)} · ${list.length}${_isHost ? ` (+ ${esc(hostLabel.toLowerCase())})` : ''}
+		</div>`;
+
+		el.innerHTML = header + rows.join('');
 	}
 
 	function _showCompleteButton() {
@@ -614,8 +754,20 @@ const Session = (() => {
 
 	function _startPoll() {
 		_stopPoll();
-		// Poll every 4s as fallback in case Realtime subscription misses events
-		_pollTimer = setInterval(() => _refreshParticipants(), 4000);
+		// Mobile-friendly polling: fast for the first ~6s (1.5s ticks) so the
+		// host sees players appear quickly, then settles into a 4s steady-state.
+		// Realtime websockets are unreliable on phones, so polling carries the
+		// load until the WS connection (if any) catches up.
+		let burst = 0;
+		const fastTick = () => {
+			_refreshParticipants();
+			burst++;
+			if (burst >= 4) {
+				clearInterval(_pollTimer);
+				_pollTimer = setInterval(() => _refreshParticipants(), 4000);
+			}
+		};
+		_pollTimer = setInterval(fastTick, 1500);
 	}
 
 	function _stopPoll() {
@@ -667,6 +819,7 @@ const Session = (() => {
 		create, join, start, complete, openJoinDialog,
 		_closeLobby, _submitJoin, _closeJoinModal,
 		_copyShareLink, _shareNative,
+		_openLobbyFromBadge, _quitSession,
 		restoreFromUrlOrStorage, isInSession
 	};
 })();

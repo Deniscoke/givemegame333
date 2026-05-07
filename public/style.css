@@ -1127,6 +1127,32 @@ body.light-mode .welcome-screen { box-shadow: 4px 4px 0px #999; }
 	padding-top: 12px;
 }
 
+/* Adaptable platform info — neutral, framework-agnostic block. The product
+   currently aligns with Czech RVP but is designed to evolve from teacher feedback,
+   so the copy stays generic on the welcome screen. */
+.platform-intro {
+	margin-top: 28px;
+	padding: 14px 16px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: rgba(99, 60, 255, 0.06);
+	text-align: left;
+	max-width: 520px;
+	margin-left: auto;
+	margin-right: auto;
+}
+.platform-intro-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+	font-size: 14px;
+	margin-bottom: 6px;
+	letter-spacing: 0.4px;
+}
+.platform-intro-text { font-size: 13px; line-height: 1.5; opacity: 0.85; margin: 0 0 6px 0; }
+.platform-intro-more { font-size: 11px; opacity: 0.55; display: block; }
+
 /* ===================================================
    LOADING SCREEN
    =================================================== */

@@ -308,5 +308,17 @@
   "rpg_stat_creativity":   "Kreativität",
   "rpg_stat_resilience":   "Widerstandskraft",
   "rpg_stat_communication":"Kommunikation",
-  "rpg_stat_strategy":     "Strategie"
+  "rpg_stat_strategy":     "Strategie",
+
+  "sess_starting":          "Starte...",
+  "sess_quit":              "Session verlassen",
+  "sess_quit_confirm":      "Session verlassen? Das Spiel läuft für die anderen weiter.",
+  "sess_quit_done":         "👋 Du hast die Session verlassen",
+  "sess_open_lobby":        "Lobby öffnen",
+  "sess_you_host":          "Du (Host)",
+  "sess_count_label":       "Spieler",
+
+  "platform_intro_title":   "Anpassbarer Bildungsrahmen",
+  "platform_intro_text":    "Für Pädagogen entwickelt. Derzeit am tschechischen RVP-Lehrplan ausgerichtet und so konzipiert, dass es auf Basis von Lehrer-Feedback wächst — bereit, sich an Lehrplanänderungen verschiedener Länder anzupassen.",
+  "platform_intro_more":    "Hast du einen Lehrplan oder eine Idee, die wir hinzufügen sollen? Lass es uns wissen."
 }
