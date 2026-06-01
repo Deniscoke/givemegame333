@@ -157,6 +157,14 @@ gIVEMEGAME.IO-OPENCLAW/
   - frontend `public/edu/assessments.html` + `js/assessments.js`
   - i18n kľúče (SK + EN)
   - 44 unit testov passing
+- [x] **T1.1 — Assessment security hardening** (HOTOVO)
+  - migrácia `029_assessment_security.sql` (RLS + helper `fn_is_educator`)
+  - access-control helpery v `lib/assessment.js` (canCreateAssessment, canSeeCorrectAnswer, canSubmitAttempt, canStartAttempt, canViewAttempt)
+  - role guard na `POST /api/assessments` (iba teacher/admin v `edu_school_memberships`)
+  - rate limit: 20 create/h, 60 start/h, 60 submit/h (per user)
+  - `is_active` guard na start
+  - 29 nových testov (73 v assess súbore, 218 celkom)
+  - i18n `assess_*` doplnené do CS
 - [ ] **Fáza 1 / Týždeň 2**: Inštitucionálny dashboard
 - [ ] **Fáza 1 / Týždeň 3**: WCAG audit
 - [ ] **Fáza 1 / Týždeň 4**: Knižnica oficiálnych modulov
@@ -171,9 +179,9 @@ gIVEMEGAME.IO-OPENCLAW/
 - ⚠️ Žiadne video lekcie / media player
 - ⚠️ Inštitucionálny dashboard chýba
 - ⚠️ GDPR pre maloletých žiakov (súhlas zákonných zástupcov UI flow)
-- ⚠️ Assessment i18n: kľúče `assess_*` chýbajú v CS/DE/ES/TR (fallback na key/EN funguje, ale lokalizácia neúplná)
-- ⚠️ Assessment: žiadne RLS policies — application enforces ownership; pridať RLS analogicky k `edu_classes` v ďalšom sprinte
-- ⚠️ Assessment: žiaden rate limit na `POST /api/assessments` (učiteľ môže spamnúť tvorbu) — pridať v ďalšej iterácii
+- ⚠️ Assessment i18n: kľúče `assess_*` chýbajú v DE/ES/TR (SK/CS/EN hotové; fallback na key/EN funguje)
+- ⚠️ Assessment rate limiter je in-memory — na Vercel Fluid Compute multi-instance je to soft cap (každá inštancia má svoj counter). Pre hard caps presunúť na Redis/Vercel KV
+- ⚠️ Assessment teacher class-scoped reporting zatiaľ nie je (creator-scoped only) — príde v T2 (Inštitucionálny dashboard) cez `edu_school_memberships` + `edu_class_enrollments`
 
 ---
 
@@ -238,6 +246,10 @@ INVOK pokryje 1. rok pre 10 škôl. Potom prechádzajú na School License.
 - **2026-06-01**: Assessment scoring je deterministický súčet bodov (žiadne IRT v MVP) — IRT v Fáze 2
 - **2026-06-01**: Text otázky → 0 bodov + `needs_manual_review` flag — žiadny AI autoscoring v MVP
 - **2026-06-01**: Assessment router je samostatný `lib/assessment-routes.js` (nie integrovaný do `edu-routes.js`) — izolovaný surface area pre INVOK certifikáciu
+- **2026-06-01**: T1.1 — Assessment access model = **creator-scoped** v MVP. Class/institution scope ide do T2. Teacher v škole nevidí cudzie assessmenty ani ich výsledky, ak ich sám nevytvoril.
+- **2026-06-01**: T1.1 — RLS na 4 assessment tabuľkách je **defense-in-depth** (backend používa service-role pool ktorý RLS obchádza). Aktivuje sa keď/ak pridáme direct supabase-js client access.
+- **2026-06-01**: T1.1 — Rate limit je **in-memory per-process** (mirror pattern z `lib/edu-routes.js`). Soft cap na Vercel multi-instance — vedome akceptovaný kompromis pre MVP.
+- **2026-06-01**: T1.1 — Role guard `canCreateAssessment` vyžaduje **non-archived membership** s rolou `teacher` alebo `admin`. Žiaci nemôžu vytvárať assessmenty.
 
 ---
 

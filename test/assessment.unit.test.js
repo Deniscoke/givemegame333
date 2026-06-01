@@ -11,6 +11,7 @@ const {
   MODULE_KEYS,
   ASSESSMENT_TYPES,
   QUESTION_TYPES,
+  EDUCATOR_ROLES,
   isValidModuleKey,
   isValidAssessmentType,
   isValidQuestionType,
@@ -18,7 +19,13 @@ const {
   computeAttemptScore,
   computeDelta,
   validateAnswerShape,
+  canCreateAssessment,
+  canSeeCorrectAnswer,
+  canSubmitAttempt,
+  canStartAttempt,
+  canViewAttempt,
 } = require('../lib/assessment');
+const { _testHelpers } = require('../lib/assessment-routes');
 
 // ─── Validators ──────────────────────────────────────────────────────
 describe('validators', () => {
@@ -316,6 +323,191 @@ describe('validateAnswerShape', () => {
   test('unknown type throws', () => {
     const q = { question_type: 'video_upload' };
     assert.throws(() => validateAnswerShape(q, { value: 'x' }), /UNKNOWN_QUESTION_TYPE/);
+  });
+});
+
+// ─── Access control helpers ─────────────────────────────────────────
+describe('canCreateAssessment', () => {
+  test('teacher with active membership → true', () => {
+    const m = [{ role: 'teacher', school_id: 'A', archived_at: null }];
+    assert.ok(canCreateAssessment(m));
+  });
+
+  test('admin with active membership → true', () => {
+    const m = [{ role: 'admin', school_id: 'A', archived_at: null }];
+    assert.ok(canCreateAssessment(m));
+  });
+
+  test('student-only → false', () => {
+    const m = [{ role: 'student', school_id: 'A', archived_at: null }];
+    assert.ok(!canCreateAssessment(m));
+  });
+
+  test('no memberships → false', () => {
+    assert.ok(!canCreateAssessment([]));
+  });
+
+  test('archived teacher membership → false', () => {
+    const m = [{ role: 'teacher', school_id: 'A', archived_at: new Date() }];
+    assert.ok(!canCreateAssessment(m));
+  });
+
+  test('mixed: archived teacher + active student → false', () => {
+    const m = [
+      { role: 'teacher', school_id: 'A', archived_at: new Date() },
+      { role: 'student', school_id: 'B', archived_at: null },
+    ];
+    assert.ok(!canCreateAssessment(m));
+  });
+
+  test('mixed: active teacher in one school + student in another → true', () => {
+    const m = [
+      { role: 'teacher', school_id: 'A', archived_at: null },
+      { role: 'student', school_id: 'B', archived_at: null },
+    ];
+    assert.ok(canCreateAssessment(m));
+  });
+
+  test('null / undefined / non-array → false', () => {
+    assert.ok(!canCreateAssessment(null));
+    assert.ok(!canCreateAssessment(undefined));
+    assert.ok(!canCreateAssessment('teacher'));
+    assert.ok(!canCreateAssessment({ role: 'teacher' }));
+  });
+
+  test('EDUCATOR_ROLES is frozen', () => {
+    assert.throws(() => { EDUCATOR_ROLES.push('foo'); });
+    assert.deepStrictEqual([...EDUCATOR_ROLES], ['admin', 'teacher']);
+  });
+});
+
+describe('canSeeCorrectAnswer', () => {
+  test('owner sees correct_answer', () => {
+    assert.ok(canSeeCorrectAnswer({ created_by: 'u1' }, 'u1'));
+  });
+
+  test('non-owner does not', () => {
+    assert.ok(!canSeeCorrectAnswer({ created_by: 'u1' }, 'u2'));
+  });
+
+  test('missing inputs → false', () => {
+    assert.ok(!canSeeCorrectAnswer(null, 'u1'));
+    assert.ok(!canSeeCorrectAnswer({ created_by: 'u1' }, null));
+  });
+});
+
+describe('canSubmitAttempt', () => {
+  test('owner with in_progress attempt → ok', () => {
+    const a = { user_id: 'u1', status: 'in_progress' };
+    const r = canSubmitAttempt(a, 'u1');
+    assert.strictEqual(r.ok, true);
+  });
+
+  test('non-owner → NOT_OWNER', () => {
+    const a = { user_id: 'u1', status: 'in_progress' };
+    const r = canSubmitAttempt(a, 'u2');
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.reason, 'NOT_OWNER');
+  });
+
+  test('already submitted → ALREADY_SUBMITTED', () => {
+    const a = { user_id: 'u1', status: 'submitted' };
+    const r = canSubmitAttempt(a, 'u1');
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.reason, 'ALREADY_SUBMITTED');
+  });
+
+  test('abandoned → ALREADY_SUBMITTED (cannot resubmit)', () => {
+    const a = { user_id: 'u1', status: 'abandoned' };
+    const r = canSubmitAttempt(a, 'u1');
+    assert.strictEqual(r.reason, 'ALREADY_SUBMITTED');
+  });
+
+  test('null attempt → NOT_FOUND', () => {
+    const r = canSubmitAttempt(null, 'u1');
+    assert.strictEqual(r.reason, 'NOT_FOUND');
+  });
+
+  test('null userId → NOT_FOUND', () => {
+    const r = canSubmitAttempt({ user_id: 'u1', status: 'in_progress' }, null);
+    assert.strictEqual(r.reason, 'NOT_FOUND');
+  });
+});
+
+describe('canStartAttempt', () => {
+  test('active assessment → ok', () => {
+    const r = canStartAttempt({ id: 'a1', is_active: true });
+    assert.strictEqual(r.ok, true);
+  });
+
+  test('inactive assessment → NOT_ACTIVE', () => {
+    const r = canStartAttempt({ id: 'a1', is_active: false });
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.reason, 'NOT_ACTIVE');
+  });
+
+  test('null assessment → NOT_FOUND', () => {
+    const r = canStartAttempt(null);
+    assert.strictEqual(r.reason, 'NOT_FOUND');
+  });
+});
+
+describe('canViewAttempt', () => {
+  test('owner can view own attempt', () => {
+    const att = { user_id: 'u1', assessment_id: 'a1' };
+    assert.ok(canViewAttempt(att, { created_by: 'u9' }, 'u1'));
+  });
+
+  test('assessment creator can view student attempt', () => {
+    const att = { user_id: 'student1', assessment_id: 'a1' };
+    assert.ok(canViewAttempt(att, { created_by: 'teacher1' }, 'teacher1'));
+  });
+
+  test('random user cannot view someone elseʼs attempt', () => {
+    const att = { user_id: 'student1', assessment_id: 'a1' };
+    assert.ok(!canViewAttempt(att, { created_by: 'teacher1' }, 'random_user'));
+  });
+
+  test('no assessment context, non-owner → false', () => {
+    const att = { user_id: 'u1', assessment_id: 'a1' };
+    assert.ok(!canViewAttempt(att, null, 'u2'));
+  });
+});
+
+// ─── Rate limiter (in-process MVP) ───────────────────────────────────
+describe('rateLimit helper', () => {
+  test('allows up to maxRequests in window', () => {
+    const rl = _testHelpers.rateLimit;
+    const key = 'unit:rl:test:' + Math.random();
+    for (let i = 0; i < 3; i++) {
+      assert.strictEqual(rl(key, 3, 60000), true, 'request ' + (i + 1));
+    }
+  });
+
+  test('blocks when over the cap', () => {
+    const rl = _testHelpers.rateLimit;
+    const key = 'unit:rl:cap:' + Math.random();
+    rl(key, 2, 60000);
+    rl(key, 2, 60000);
+    assert.strictEqual(rl(key, 2, 60000), false);
+  });
+
+  test('refills after window', async () => {
+    const rl = _testHelpers.rateLimit;
+    const key = 'unit:rl:refill:' + Math.random();
+    rl(key, 1, 50);     // 50 ms window
+    assert.strictEqual(rl(key, 1, 50), false);
+    await new Promise((r) => setTimeout(r, 70));
+    assert.strictEqual(rl(key, 1, 50), true);
+  });
+
+  test('separate keys are independent (per-user isolation)', () => {
+    const rl = _testHelpers.rateLimit;
+    const k1 = 'unit:rl:userA:' + Math.random();
+    const k2 = 'unit:rl:userB:' + Math.random();
+    rl(k1, 1, 60000);
+    assert.strictEqual(rl(k1, 1, 60000), false); // userA capped
+    assert.strictEqual(rl(k2, 1, 60000), true);  // userB independent
   });
 });
 
