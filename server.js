@@ -15,6 +15,7 @@ const fs = require('fs');
 const { Pool } = require('pg');
 const { validateDurationGate, validateParticipantGate, validateHostCooldownGate } = require('./lib/reward-validation');
 const { createEduRouter } = require('./lib/edu-routes');
+const { createAssessmentRouter } = require('./lib/assessment-routes');
 const {
 	VALID_AVATAR_IDS,
 	RPG_ELIGIBLE_ROLES,
@@ -345,6 +346,25 @@ if (coinsDbPool) {
 	console.log('[EDU] gIVEMEEDU API mounted at /api/edu/*');
 } else {
 	console.warn('[EDU] gIVEMEEDU API disabled — SUPABASE_DB_URL not set.');
+}
+
+// ─── INVOK Pre/Post Assessment routes ───
+// Mounted at /api/* (specific paths, not /api/assessments/* alone, because the
+// router also owns /api/assessment-attempts/* and /api/assessment-results/*).
+// Body size capped — assessment payloads (questions + answers) can be larger
+// than EDU but still bounded.
+if (coinsDbPool) {
+	const assessmentRouter = createAssessmentRouter({
+		pool: coinsDbPool,
+		requireSupabaseUser
+	});
+	// 200kb covers up to ~100 questions with text bodies; bigger would be abuse.
+	app.use(['/api/assessments', '/api/assessment-attempts', '/api/assessment-results'],
+		express.json({ limit: '200kb' }));
+	app.use('/api', assessmentRouter);
+	console.log('[Assess] INVOK assessment API mounted at /api/assessments/*');
+} else {
+	console.warn('[Assess] Assessment API disabled — SUPABASE_DB_URL not set.');
 }
 
 // ─── OpenAI klient ───

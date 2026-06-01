@@ -150,7 +150,13 @@ gIVEMEGAME.IO-OPENCLAW/
 
 > Aktualizuj túto sekciu po každej dokončenej úlohe.
 
-- [ ] **Fáza 1 / Týždeň 1**: Pre/post test modul (NEZAČATÉ)
+- [x] **Fáza 1 / Týždeň 1**: Pre/post test modul (HOTOVO — MVP)
+  - migrácia `028_assessments.sql` (4 tabuľky)
+  - `lib/assessment.js` (pure scoring)
+  - `lib/assessment-routes.js` (Express router)
+  - frontend `public/edu/assessments.html` + `js/assessments.js`
+  - i18n kľúče (SK + EN)
+  - 44 unit testov passing
 - [ ] **Fáza 1 / Týždeň 2**: Inštitucionálny dashboard
 - [ ] **Fáza 1 / Týždeň 3**: WCAG audit
 - [ ] **Fáza 1 / Týždeň 4**: Knižnica oficiálnych modulov
@@ -162,10 +168,12 @@ gIVEMEGAME.IO-OPENCLAW/
 - ⚠️ CSP header nie je nastavený (inline `<script>` bloky)
 - ⚠️ Žiadny rate limit na `/api/coins/log` (možnosť spamovať robot_challenge XP)
 - ⚠️ Pixel-art dizajn nie je WCAG-friendly (kontrast)
-- ⚠️ Žiadny formálny pre/post test framework
 - ⚠️ Žiadne video lekcie / media player
 - ⚠️ Inštitucionálny dashboard chýba
 - ⚠️ GDPR pre maloletých žiakov (súhlas zákonných zástupcov UI flow)
+- ⚠️ Assessment i18n: kľúče `assess_*` chýbajú v CS/DE/ES/TR (fallback na key/EN funguje, ale lokalizácia neúplná)
+- ⚠️ Assessment: žiadne RLS policies — application enforces ownership; pridať RLS analogicky k `edu_classes` v ďalšom sprinte
+- ⚠️ Assessment: žiaden rate limit na `POST /api/assessments` (učiteľ môže spamnúť tvorbu) — pridať v ďalšej iterácii
 
 ---
 
@@ -227,6 +235,9 @@ INVOK pokryje 1. rok pre 10 škôl. Potom prechádzajú na School License.
 - **2026-06-01**: Tech stack zostáva vanilla JS / Express / Supabase (žiadny rewrite na Next.js / TypeScript)
 - **2026-06-01**: 4 INVOK moduly budú hybridné — kurátorovaný obsah + AI bonus generátor
 - **2026-06-01**: Pixel-art dizajn zostáva ako default, "Classroom mode" pridá neutrálnu alternatívu
+- **2026-06-01**: Assessment scoring je deterministický súčet bodov (žiadne IRT v MVP) — IRT v Fáze 2
+- **2026-06-01**: Text otázky → 0 bodov + `needs_manual_review` flag — žiadny AI autoscoring v MVP
+- **2026-06-01**: Assessment router je samostatný `lib/assessment-routes.js` (nie integrovaný do `edu-routes.js`) — izolovaný surface area pre INVOK certifikáciu
 
 ---
 
