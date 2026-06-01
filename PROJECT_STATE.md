@@ -165,7 +165,12 @@ gIVEMEGAME.IO-OPENCLAW/
   - `is_active` guard na start
   - 29 nových testov (73 v assess súbore, 218 celkom)
   - i18n `assess_*` doplnené do CS
-- [ ] **Fáza 1 / Týždeň 2**: Inštitucionálny dashboard
+- [x] **T2a — Inštitucionálne API** (HOTOVO)
+  - `lib/institution.js` (pure helpery: access rules + filters + delta summary + export sanitizer)
+  - `lib/institution-routes.js` (Express router, 7 endpointov)
+  - wiring v `server.js` (mounted na `/api/institution/*`)
+  - 54 unit testov passing
+- [ ] **Fáza 1 / Týždeň 2 / T2b**: Inštitucionálny Dashboard UI (`public/institution/`)
 - [ ] **Fáza 1 / Týždeň 3**: WCAG audit
 - [ ] **Fáza 1 / Týždeň 4**: Knižnica oficiálnych modulov
 
@@ -181,7 +186,8 @@ gIVEMEGAME.IO-OPENCLAW/
 - ⚠️ GDPR pre maloletých žiakov (súhlas zákonných zástupcov UI flow)
 - ⚠️ Assessment i18n: kľúče `assess_*` chýbajú v DE/ES/TR (SK/CS/EN hotové; fallback na key/EN funguje)
 - ⚠️ Assessment rate limiter je in-memory — na Vercel Fluid Compute multi-instance je to soft cap (každá inštancia má svoj counter). Pre hard caps presunúť na Redis/Vercel KV
-- ⚠️ Assessment teacher class-scoped reporting zatiaľ nie je (creator-scoped only) — príde v T2 (Inštitucionálny dashboard) cez `edu_school_memberships` + `edu_class_enrollments`
+- ⚠️ Institution export pseudonymizácia: `user_id` (UUID) je v CSV — dostatočné pre INVOK reporting, ale pri požiadavke na úplnú anonymizáciu treba sequence number (Student 1, 2...) namiesto UUID
+- ⚠️ T2b Dashboard UI (`public/institution/`) — ešte nie je, API je hotové
 
 ---
 
@@ -250,6 +256,9 @@ INVOK pokryje 1. rok pre 10 škôl. Potom prechádzajú na School License.
 - **2026-06-01**: T1.1 — RLS na 4 assessment tabuľkách je **defense-in-depth** (backend používa service-role pool ktorý RLS obchádza). Aktivuje sa keď/ak pridáme direct supabase-js client access.
 - **2026-06-01**: T1.1 — Rate limit je **in-memory per-process** (mirror pattern z `lib/edu-routes.js`). Soft cap na Vercel multi-instance — vedome akceptovaný kompromis pre MVP.
 - **2026-06-01**: T1.1 — Role guard `canCreateAssessment` vyžaduje **non-archived membership** s rolou `teacher` alebo `admin`. Žiaci nemôžu vytvárať assessmenty.
+- **2026-06-01**: T2a — **API-first dashboard approach**: institution reporting API je kompletné pred UI. T2b (dashboard UI) bude len konzumovať tieto endpointy.
+- **2026-06-01**: T2a — **Pre/post delta pairing rule**: najskorší submitted `pre` + najnovší submitted `post` (per user_id + module_key). DISTINCT ON v Postgres bez subquery.
+- **2026-06-01**: T2a — **Export minimalizuje osobné údaje**: CSV obsahuje len `user_id` (UUID = pseudonymizovaný identifikátor). Žiadne mená, emaily, telefóny. `sanitizeDeltaForExport()` vynucuje whitelist polí.
 
 ---
 

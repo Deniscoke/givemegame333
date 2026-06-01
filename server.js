@@ -16,6 +16,7 @@ const { Pool } = require('pg');
 const { validateDurationGate, validateParticipantGate, validateHostCooldownGate } = require('./lib/reward-validation');
 const { createEduRouter } = require('./lib/edu-routes');
 const { createAssessmentRouter } = require('./lib/assessment-routes');
+const { createInstitutionRouter } = require('./lib/institution-routes');
 const {
 	VALID_AVATAR_IDS,
 	RPG_ELIGIBLE_ROLES,
@@ -365,6 +366,20 @@ if (coinsDbPool) {
 	console.log('[Assess] INVOK assessment API mounted at /api/assessments/*');
 } else {
 	console.warn('[Assess] Assessment API disabled — SUPABASE_DB_URL not set.');
+}
+
+// ─── INVOK Institution reporting routes ───────────────────────────────
+if (coinsDbPool) {
+	const institutionRouter = createInstitutionRouter({
+		pool: coinsDbPool,
+		requireSupabaseUser
+	});
+	// Institution responses are JSON-only (no file uploads); cap at 20kb.
+	app.use('/api/institution', express.json({ limit: '20kb' }));
+	app.use('/api/institution', institutionRouter);
+	console.log('[Inst] INVOK institution API mounted at /api/institution/*');
+} else {
+	console.warn('[Inst] Institution API disabled — SUPABASE_DB_URL not set.');
 }
 
 // ─── OpenAI klient ───
