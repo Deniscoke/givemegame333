@@ -31,7 +31,20 @@ const {
 	getUserBillingState,
 	hasPaidAccess,
 	getUserPlan,
-	PLAN_PRO
+	PLAN_PRO,
+	billingConfiguration,
+	billingReady,
+	billingWebhookAvailable,
+	billingEventUserId,
+	getStripe,
+	FREE_LIMITS,
+	hasIntegrationOwnershipEvidence,
+	ensureCustomer,
+	normalizeConsentIp,
+	persistBillingConsent,
+	withSubscriptionAdvisoryLock,
+	processSubscriptionEvent,
+	getEffectiveTier
 } = require('./lib/billing');
 const { entitlementsForPlan, nextUtcMidnightIso } = require('./lib/plan-entitlements');
 const {
@@ -40,6 +53,16 @@ const {
 	countRobotChallengesLast24h,
 	countSoloCompletionsLast24h,
 } = require('./lib/plan-usage');
+
+// Free-tier soft cap: level grows from XP, but is displayed/enforced at FREE_LIMITS.maxLevel.
+// Talents/perks gated by level will therefore remain locked past the cap until user upgrades.
+function applyLevelCap(progression, tier) {
+	if (!progression) return progression;
+	if (tier && tier !== 'free') return progression;
+	const cap = FREE_LIMITS.maxLevel;
+	if ((progression.level || 0) <= cap) return progression;
+	return { ...progression, level: cap, capped: true, capReason: 'free_tier' };
+}
 
 const SESSION_JOIN_COST = 100;
 const COMPLETION_BONUS  = 100;
@@ -97,6 +120,10 @@ app.use(cors({
     : '*',
   credentials: false,
 }));
+
+// Stripe webhook — RAW body parser scoped iba na webhook path (PRED express.json).
+// Handler route je definovaný nižšie v súbore; tu len presmerujeme body na Buffer.
+app.use('/api/billing/stripe-webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 
@@ -820,7 +847,8 @@ function cleanupRateLimitMap() {
 		if (data.resetAt < now) generateGameRateMap.delete(key);
 	}
 }
-setInterval(cleanupRateLimitMap, 60 * 1000);
+const generateGameRateLimitCleanupTimer = setInterval(cleanupRateLimitMap, 60 * 1000);
+generateGameRateLimitCleanupTimer.unref();
 
 function checkGenerateGameRateLimit(key, limit) {
 	const now = Date.now();
@@ -1303,18 +1331,37 @@ app.post('/api/coins/log', async (req, res) => {
 	}
 });
 
-// ─── Billing API (Payment Link MVP — manual provisioning) ───
-// Čítaj STRIPE_PAYMENT_LINK_PRO_MONTHLY pri každom requeste (serverless + aktuálne env z Vercelu).
+// ─── Billing API ───
+
+function billingCheckoutAvailable() {
+	return coinApiReady() && billingReady();
+}
 
 /** Verejný endpoint — žiadne tajomstvá; UI vie či je platba zapnutá a kontakt na podporu. */
 app.get('/api/billing/public-config', (req, res) => {
 	res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-	const link = (process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '').trim();
 	const support = (process.env.BILLING_SUPPORT_EMAIL || '').trim();
+	const config = billingConfiguration();
+	const checkoutAvailable = billingCheckoutAvailable();
 	res.json({
-		upgradeAvailable: Boolean(link),
+		// Compatibility field now describes the supported secure Checkout path.
+		// The legacy Payment Link endpoint remains retired.
+		upgradeAvailable: checkoutAvailable,
+		legacyPaymentLinkRetired: true,
+		checkoutPath: '/pricing.html',
+		subscriptionBillingEnabled: checkoutAvailable,
+		billingMessage: checkoutAvailable
+			? null
+			: 'Online platby jsou dočasně nedostupné. Zkuste to prosím později nebo kontaktujte podporu.',
 		supportEmail: support || null,
-		proPlanLabel: 'Pro Teacher Monthly'
+		proPlanLabel: 'Pro Teacher Monthly',
+		legal: {
+			termsUrl: config.legal.termsUrl,
+			privacyUrl: config.legal.privacyUrl,
+			contactUrl: config.legal.contactUrl,
+			tosVersion: config.legal.tosVersion,
+			privacyVersion: config.legal.privacyVersion,
+		}
 	});
 });
 
@@ -1372,11 +1419,423 @@ app.get('/api/billing/state', async (req, res) => {
 });
 
 app.get('/api/billing/upgrade-url', async (req, res) => {
+	res.status(410).json({
+		error: 'Tento způsob platby už není podporován. Použijte zabezpečený výběr plánu.',
+		code: 'LEGACY_PAYMENT_LINK_RETIRED',
+		checkoutPath: '/pricing.html'
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Subscription-based billing (tier system, Stripe Checkout + Webhooks)
+// ═══════════════════════════════════════════════════════════════════
+
+// GET /api/billing/tier — aktuálny efektívny tier + detaily subscription
+app.get('/api/billing/tier', async (req, res) => {
+	if (!coinApiReady()) return res.status(503).json({ error: 'Service unavailable' });
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
-	const url = (process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '').trim();
-	if (!url) return res.status(503).json({ error: 'Upgrade not configured', code: 'BILLING_DISABLED' });
-	res.json({ url }); // Payment Link URL — no secret, safe to expose
+	try {
+		const tier = await getEffectiveTier(coinsDbPool, user.id);
+		const { rows } = await coinsDbPool.query(
+			`SELECT tier AS sub_tier, status, current_period_end, cancel_at_period_end, trial_end
+			 FROM public.billing_subscriptions
+			 WHERE user_id = $1
+			 ORDER BY
+			   CASE WHEN status IN ('active', 'trialing') THEN 0 ELSE 1 END,
+			   CASE tier WHEN 'school' THEN 2 WHEN 'teacher' THEN 1 ELSE 0 END DESC,
+			   updated_at DESC
+			 LIMIT 1`,
+			[user.id]
+		);
+		res.json({
+			tier,
+			subscription: rows[0] || null,
+			free_limits: FREE_LIMITS,
+			billing_configured: billingCheckoutAvailable()
+		});
+	} catch (err) {
+		console.error('[Billing] tier fetch failed:', err.message);
+		res.status(500).json({ error: 'Tier fetch failed' });
+	}
+});
+
+// POST /api/billing/checkout — vytvorí Stripe Checkout Session
+// Body: {
+//   plan: 'teacher_monthly' | 'teacher_yearly',
+//   withdrawalConsent: true   // povinné — používateľ súhlasí s okamžitým plnením
+// }
+app.post('/api/billing/checkout', async (req, res) => {
+	const config = billingConfiguration();
+	if (!billingCheckoutAvailable()) {
+		console.error('[Billing] checkout disabled; missing or invalid configuration:', config.missing.join(', '));
+		return res.status(503).json({
+			error: 'Online platby jsou dočasně nedostupné.',
+			code: 'BILLING_DISABLED'
+		});
+	}
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const { plan, withdrawalConsent } = req.body || {};
+	if (!['teacher_monthly', 'teacher_yearly'].includes(plan)) {
+		return res.status(400).json({ error: 'Neplatný plán.', code: 'BAD_PLAN' });
+	}
+	const priceId = config.prices[plan];
+	if (!priceId) return res.status(400).json({ error: 'Neplatný plán.', code: 'BAD_PLAN' });
+	const requestId = req.get('Idempotency-Key');
+	if (!requestId || !/^[A-Za-z0-9_-]{8,100}$/.test(requestId)) {
+		return res.status(400).json({ error: 'Neplatný požadavek na platbu.', code: 'INVALID_REQUEST_ID' });
+	}
+
+	// § 1837 OZ — bez výslovného súhlasu nepustíme platbu
+	if (withdrawalConsent !== true) {
+		return res.status(400).json({
+			error: 'Pro pokračování je nutné potvrdit souhlas se zahájením plnění před uplynutím lhůty pro odstoupení.',
+			code: 'WITHDRAWAL_CONSENT_REQUIRED'
+		});
+	}
+
+	try {
+		// Ulož consent PRED vytvorením Checkout session (audit trail)
+		const ip = normalizeConsentIp(req.ip);
+		await persistBillingConsent(coinsDbPool, user.id, ip);
+
+		const customerId = await ensureCustomer(coinsDbPool, user);
+		const origin = config.origin;
+		const session = await getStripe().checkout.sessions.create({
+			mode: 'subscription',
+			customer: customerId,
+			line_items: [{ price: priceId, quantity: 1 }],
+			subscription_data: {
+				metadata: {
+					supabase_user_id: user.id,
+					plan,
+					tos_version: config.legal.tosVersion,
+					privacy_version: config.legal.privacyVersion
+				}
+			},
+			allow_promotion_codes: true,
+			billing_address_collection: 'auto',
+			automatic_tax: { enabled: true },
+			success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+			cancel_url:  `${origin}/pricing.html?canceled=1`,
+			client_reference_id: user.id,
+			metadata: {
+				supabase_user_id: user.id,
+				plan,
+				tos_version: config.legal.tosVersion,
+				privacy_version: config.legal.privacyVersion,
+				withdrawal_consent: 'true'
+			}
+		}, { idempotencyKey: `checkout_${user.id}_${requestId}` });
+		res.json({ url: session.url });
+	} catch (err) {
+		console.error('[Billing] checkout failed:', err.message);
+		res.status(500).json({ error: 'Platbu se nepodařilo zahájit.', code: 'CHECKOUT_ERROR' });
+	}
+});
+
+// GET /api/billing/legal-versions — frontend zobrazí aktuálne verzie v consent modale
+app.get('/api/billing/legal-versions', (req, res) => {
+	const config = billingConfiguration();
+	res.json({
+		tos_version: config.legal.tosVersion,
+		privacy_version: config.legal.privacyVersion,
+		withdrawal_text: config.legal.withdrawalText,
+		terms_url: config.legal.termsUrl,
+		privacy_url: config.legal.privacyUrl,
+		contact_url: config.legal.contactUrl,
+		billing_enabled: billingCheckoutAvailable(),
+	});
+});
+
+// POST /api/billing/portal — Customer Portal (manage subscription, cancel, update card)
+app.post('/api/billing/portal', async (req, res) => {
+	if (!coinApiReady()) {
+		return res.status(503).json({ error: 'Správa předplatného je dočasně nedostupná.', code: 'DB_UNAVAILABLE' });
+	}
+	const config = billingConfiguration();
+	if (!billingReady()) {
+		console.error('[Billing] portal disabled; missing or invalid configuration:', config.missing.join(', '));
+		return res.status(503).json({ error: 'Správa předplatného je dočasně nedostupná.', code: 'BILLING_DISABLED' });
+	}
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	try {
+		const { rows } = await coinsDbPool.query(
+			`SELECT stripe_customer_id FROM public.billing_subscriptions
+			 WHERE user_id = $1 LIMIT 1`,
+			[user.id]
+		);
+		if (!rows[0]?.stripe_customer_id) {
+			return res.status(404).json({ error: 'Nemáš aktívne predplatné', code: 'NO_CUSTOMER' });
+		}
+		const portal = await getStripe().billingPortal.sessions.create({
+			customer: rows[0].stripe_customer_id,
+			return_url: `${config.origin}/account.html`
+		});
+		res.json({ url: portal.url });
+	} catch (err) {
+		console.error('[Billing] portal failed:', err.message);
+		res.status(500).json({ error: 'Správu předplatného se nepodařilo otevřít.', code: 'PORTAL_ERROR' });
+	}
+});
+
+function stripeObjectId(value) {
+	return typeof value === 'string' ? value : value?.id || null;
+}
+
+async function billingCustomerOwner(customerId, queryable = coinsDbPool) {
+	if (!customerId) return null;
+	const { rows } = await queryable.query(
+		`SELECT user_id FROM public.billing_subscriptions
+		 WHERE stripe_customer_id = $1
+		 GROUP BY user_id
+		 LIMIT 2`,
+		[customerId]
+	);
+	if (rows.length > 1) {
+		const error = new Error('Conflicting billing ownership signals');
+		error.code = 'BILLING_OWNERSHIP_CONFLICT';
+		throw error;
+	}
+	return rows[0]?.user_id || null;
+}
+
+async function durableBillingSubscription(subscriptionId, queryable = coinsDbPool) {
+	if (!subscriptionId) return null;
+	const { rows } = await queryable.query(
+		`SELECT user_id, tier, stripe_customer_id, stripe_subscription_id, stripe_price_id,
+		        EXTRACT(EPOCH FROM current_period_start)::double precision AS current_period_start,
+		        EXTRACT(EPOCH FROM current_period_end)::double precision AS current_period_end,
+		        cancel_at_period_end,
+		        EXTRACT(EPOCH FROM trial_end)::double precision AS trial_end
+		 FROM public.billing_subscriptions
+		 WHERE stripe_subscription_id = $1
+		 LIMIT 1`,
+		[subscriptionId]
+	);
+	return rows[0] || null;
+}
+
+function billingOwnershipConflict(message = 'Conflicting billing ownership signals') {
+	const error = new Error(message);
+	error.code = 'BILLING_OWNERSHIP_CONFLICT';
+	return error;
+}
+
+function reconcileDurableOwner(userId, durableSubscription) {
+	if (!durableSubscription) return userId;
+	const durableUserId = billingEventUserId(
+		{ metadata: { supabase_user_id: durableSubscription.user_id } },
+		'customer.subscription.updated',
+		true
+	);
+	if (!durableUserId) {
+		const error = new Error('Durable billing subscription has no valid owner');
+		error.code = 'UNRESOLVED_BILLING_USER';
+		throw error;
+	}
+	if (userId && userId !== durableUserId) throw billingOwnershipConflict();
+	return userId || durableUserId;
+}
+
+function canceledDurableSubscription(durableSubscription) {
+	return {
+		id: durableSubscription.stripe_subscription_id,
+		object: 'subscription',
+		customer: durableSubscription.stripe_customer_id,
+		status: 'canceled',
+		metadata: { supabase_user_id: durableSubscription.user_id },
+		cancel_at_period_end: false,
+		trial_end: durableSubscription.trial_end ?? null,
+		items: {
+			data: [{
+				price: { id: durableSubscription.stripe_price_id },
+				current_period_start: durableSubscription.current_period_start ?? null,
+				current_period_end: durableSubscription.current_period_end ?? null,
+			}],
+		},
+	};
+}
+
+function billingMutationSubscriptionId(eventType, object) {
+	if (eventType === 'checkout.session.completed') return stripeObjectId(object?.subscription);
+	if (
+		eventType === 'customer.subscription.created'
+		|| eventType === 'customer.subscription.updated'
+		|| eventType === 'customer.subscription.deleted'
+	) return stripeObjectId(object?.id);
+	return null;
+}
+
+function isMissingStripeSubscription(error) {
+	return error?.code === 'resource_missing'
+		&& (error?.statusCode === undefined || error.statusCode === 404);
+}
+
+async function retrieveCanonicalSubscription(stripe, subscriptionId, eventType, deletedSnapshot) {
+	try {
+		const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+		if (!subscription || subscription.id !== subscriptionId) {
+			const error = new Error('Stripe returned an invalid subscription snapshot');
+			error.code = 'INVALID_STRIPE_SUBSCRIPTION';
+			throw error;
+		}
+		return subscription;
+	} catch (error) {
+		if (eventType === 'customer.subscription.deleted' && isMissingStripeSubscription(error)) {
+			return deletedSnapshot;
+		}
+		throw error;
+	}
+}
+
+// POST /api/billing/stripe-webhook — spracuje Stripe udalosti
+// Raw body parser je aplikovaný vyššie na /api/billing/stripe-webhook
+app.post('/api/billing/stripe-webhook', async (req, res) => {
+	const config = billingConfiguration();
+	if (!billingWebhookAvailable(coinsDbPool)) {
+		console.error(
+			'[Billing] webhook disabled; database ready:',
+			Boolean(coinsDbPool),
+			'missing or invalid runtime configuration:',
+			config.webhookMissing.join(', ')
+		);
+		return res.status(503).json({ error: 'Billing unavailable' });
+	}
+	const stripe = getStripe();
+	const sig = req.headers['stripe-signature'];
+
+	let event;
+	try {
+		event = stripe.webhooks.constructEvent(req.body, sig, config.webhookSecret);
+	} catch (err) {
+		console.error('[Billing] webhook signature failed:', err.message);
+		return res.status(400).json({ error: 'Invalid webhook signature' });
+	}
+
+	try {
+		const obj = event.data.object;
+		const eventCustomerId = stripeObjectId(obj?.customer);
+		const subscriptionId = billingMutationSubscriptionId(event.type, obj);
+		const isMutationEvent = event.type === 'checkout.session.completed'
+			|| event.type === 'customer.subscription.created'
+			|| event.type === 'customer.subscription.updated'
+			|| event.type === 'customer.subscription.deleted';
+		const knownCustomerUserId = await billingCustomerOwner(eventCustomerId);
+		const durableSubscription = isMutationEvent && subscriptionId
+			? await durableBillingSubscription(subscriptionId)
+			: null;
+		const integrationOwned = hasIntegrationOwnershipEvidence(obj, Boolean(knownCustomerUserId))
+			|| Boolean(durableSubscription);
+		let userId = billingEventUserId(obj, event.type, integrationOwned, knownCustomerUserId);
+		userId = reconcileDurableOwner(userId, durableSubscription);
+		if (
+			durableSubscription?.stripe_customer_id
+			&& eventCustomerId
+			&& durableSubscription.stripe_customer_id !== eventCustomerId
+		) throw billingOwnershipConflict('Conflicting billing customer signals');
+
+		if (isMutationEvent && integrationOwned && !subscriptionId) {
+			const error = new Error('Integration billing event has no subscription');
+			error.code = 'MISSING_STRIPE_SUBSCRIPTION';
+			throw error;
+		}
+
+		let result;
+		if (isMutationEvent && integrationOwned) {
+			result = await withSubscriptionAdvisoryLock(coinsDbPool, subscriptionId, async (client) => {
+				// Ownership and local state may have changed while this request waited.
+				const lockedDurableSubscription = await durableBillingSubscription(subscriptionId, client);
+				let lockedKnownCustomerUserId = await billingCustomerOwner(eventCustomerId, client);
+				let lockedIntegrationOwned = hasIntegrationOwnershipEvidence(obj, Boolean(lockedKnownCustomerUserId))
+					|| Boolean(lockedDurableSubscription);
+				let lockedUserId = billingEventUserId(
+					obj,
+					event.type,
+					lockedIntegrationOwned,
+					lockedKnownCustomerUserId
+				);
+				lockedUserId = reconcileDurableOwner(lockedUserId, lockedDurableSubscription);
+				if (
+					lockedDurableSubscription?.stripe_customer_id
+					&& eventCustomerId
+					&& lockedDurableSubscription.stripe_customer_id !== eventCustomerId
+				) throw billingOwnershipConflict('Conflicting billing customer signals');
+
+				let subscription = null;
+				let trustedTier;
+				try {
+					subscription = await retrieveCanonicalSubscription(
+						stripe,
+						subscriptionId,
+						event.type,
+						event.type === 'customer.subscription.deleted' ? obj : null
+					);
+				} catch (error) {
+					const reconcileMissing = isMissingStripeSubscription(error)
+						&& (event.type === 'customer.subscription.updated' || event.type === 'checkout.session.completed');
+					if (!reconcileMissing) throw error;
+					if (lockedDurableSubscription) {
+						subscription = canceledDurableSubscription(lockedDurableSubscription);
+						trustedTier = lockedDurableSubscription.tier;
+					}
+				}
+
+				if (subscription) {
+					const canonicalCustomerId = stripeObjectId(subscription.customer);
+					if (eventCustomerId && canonicalCustomerId && eventCustomerId !== canonicalCustomerId) {
+						throw billingOwnershipConflict('Conflicting billing customer signals');
+					}
+					const canonicalKnownCustomerUserId = canonicalCustomerId === eventCustomerId
+						? lockedKnownCustomerUserId
+						: await billingCustomerOwner(canonicalCustomerId, client);
+					lockedIntegrationOwned = hasIntegrationOwnershipEvidence(
+						subscription,
+						Boolean(canonicalKnownCustomerUserId)
+					) || Boolean(lockedDurableSubscription);
+					const canonicalUserId = billingEventUserId(
+						subscription,
+						'customer.subscription.updated',
+						lockedIntegrationOwned,
+						canonicalKnownCustomerUserId
+					);
+					if (lockedUserId && canonicalUserId && lockedUserId !== canonicalUserId) {
+						throw billingOwnershipConflict();
+					}
+					lockedUserId = lockedUserId || canonicalUserId;
+				}
+
+				return processSubscriptionEvent(
+					coinsDbPool,
+					event,
+					subscription,
+					lockedUserId,
+					process.env,
+					{ client, integrationOwned: lockedIntegrationOwned, trustedTier }
+				);
+			});
+		} else {
+			if (event.type === 'invoice.payment_failed') {
+				// A subscription update is authoritative for entitlement changes.
+				console.log(`[Billing] payment_failed for user ${userId} sub ${obj.subscription}`);
+			}
+			result = await processSubscriptionEvent(
+				coinsDbPool,
+				event,
+				null,
+				userId,
+				process.env,
+				{ integrationOwned }
+			);
+		}
+		res.json({ received: true, duplicate: result.duplicate });
+	} catch (err) {
+		console.error('[Billing] webhook handler failed:', err.message);
+		res.status(500).json({ error: 'Webhook processing failed' });
+	}
 });
 
 // ─── Mode-click coin award — server-authoritative with daily cap ───
@@ -2746,7 +3205,8 @@ app.get('/api/rpg/talents', async (req, res) => {
     const unlocked = unlockedRows.map(r => r.talent_id);
 
     // Compute RPG progression and effective stats from unlocked talents
-    const progression = computeRpgLevel(profile.rpg_xp || 0);
+    const tier = await getEffectiveTier(coinsDbPool, user.id).catch(() => 'free');
+    const progression = applyLevelCap(computeRpgLevel(profile.rpg_xp || 0), tier);
     const talentManifest = getTalentManifest();
     const unlockedTalents = unlocked
       .map(id => talentManifest.find(t => t.id === id))
@@ -2916,7 +3376,8 @@ app.get('/api/rpg/perks', async (req, res) => {
 		const { rows: profRows } = await queryCoinsDb(
 			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
 		);
-		const { level } = computeRpgLevel(profRows[0]?.rpg_xp || 0);
+		const tier = await getEffectiveTier(coinsDbPool, user.id).catch(() => 'free');
+		const { level } = applyLevelCap(computeRpgLevel(profRows[0]?.rpg_xp || 0), tier);
 
 		const { rows: perks } = await queryCoinsDb(
 			`SELECT level, perk_key, icon, title, description, cooldown_hours, duration_minutes
@@ -2983,7 +3444,8 @@ app.post('/api/rpg/perks/:key/use', async (req, res) => {
 		const { rows: profRows } = await queryCoinsDb(
 			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
 		);
-		const { level } = computeRpgLevel(profRows[0]?.rpg_xp || 0);
+		const tier = await getEffectiveTier(coinsDbPool, user.id).catch(() => 'free');
+		const { level } = applyLevelCap(computeRpgLevel(profRows[0]?.rpg_xp || 0), tier);
 		if (level < perk.level) {
 			return res.status(403).json({
 				error: `Perk sa odomkne na leveli ${perk.level}. Máš ${level}.`,
@@ -3527,6 +3989,10 @@ app.get('/edu/classes.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'e
 app.get('/edu/gradebook.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'gradebook.html')));
 app.get('/edu/attendance.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'attendance.html')));
 app.get('/edu/members.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'members.html')));
+
+// ─── INVOK institution dashboard ───
+app.get('/institution', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'institution', 'index.html')));
+app.get('/institution/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'institution', 'index.html')));
 
 // ─── Shareable game page — serves game.html for any valid UUID path ───
 app.get('/game/:id', (req, res) => {

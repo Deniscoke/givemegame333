@@ -1,4 +1,15 @@
 node_modules/
 .env
+.env.local
+.env.*
+!.env.example
 .claude/
 .vercel
+
+# Local credential exports and key dumps. Existing tracked files remain tracked;
+# the repository owner must rotate exposed credentials and remove them from history.
+VERCEL_KEYS.md
+*_KEYS.md
+*_KEYS.txt
+*key-dump*
+*secret-dump*

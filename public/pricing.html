@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Ceník — gIVEMEGAME.IO</title>
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23633cff'/><text x='16' y='22' font-size='14' fill='white' text-anchor='middle' font-family='sans-serif'>G</text></svg>">
+	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="style.css?v=1">
+	<style>
+		.pricing-page { max-width: 1000px; margin: 40px auto; padding: 24px; }
+		.pricing-page h1 { font-family: 'Press Start 2P', monospace; font-size: 20px; text-align: center; margin-bottom: 8px; }
+		.pricing-page .lead { text-align: center; font-size: 16px; opacity: .8; margin-bottom: 32px; }
+		.plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+		.plan-card { background: rgba(0,0,0,.25); border: 2px solid var(--border, #333); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; }
+		.plan-card.featured { border-color: #4ade80; box-shadow: 0 0 0 2px rgba(74,222,128,.2); }
+		.plan-card h2 { font-family: 'Press Start 2P', monospace; font-size: 14px; margin: 0 0 8px; }
+		.plan-card .price { font-family: 'VT323', monospace; font-size: 40px; line-height: 1; margin: 12px 0; }
+		.plan-card .price small { font-size: 18px; opacity: .7; }
+		.plan-card ul { list-style: none; padding: 0; margin: 0 0 20px; flex: 1; }
+		.plan-card li { padding: 6px 0; font-size: 15px; border-bottom: 1px dashed rgba(255,255,255,.1); }
+		.plan-card li::before { content: '✓ '; color: #4ade80; }
+		.plan-card button { width: 100%; padding: 14px; font-family: 'Press Start 2P', monospace; font-size: 11px; cursor: pointer; border: 2px solid #633cff; background: #633cff; color: white; border-radius: 8px; }
+		.plan-card button:hover { background: #7c5dff; }
+		.plan-card button:disabled { opacity: .5; cursor: not-allowed; }
+		.plan-card button.school-contact { background: transparent; border-color: #60a5fa; }
+		.plan-card button.school-contact:hover { background: rgba(96,165,250,.14); }
+		.plan-card.free button { background: transparent; color: inherit; }
+		.legal-note { margin-top: 32px; text-align: center; font-size: 13px; opacity: .7; }
+		.legal-note a { color: #7c5dff; }
+		.billing-notice { display: none; max-width: 760px; margin: 0 auto 22px; padding: 14px; border: 1px solid #f59e0b; border-radius: 8px; background: rgba(245,158,11,.15); text-align: center; }
+
+		/* Consent modal */
+		.consent-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+		.consent-overlay.open { display: flex; }
+		.consent-modal { background: #1a1a2e; border: 2px solid #633cff; border-radius: 12px; padding: 28px; max-width: 540px; width: 100%; }
+		.consent-modal h3 { font-family: 'Press Start 2P', monospace; font-size: 13px; margin: 0 0 16px; }
+		.consent-modal p { font-size: 14px; line-height: 1.6; margin: 0 0 12px; opacity: .9; }
+		.consent-modal label { display: flex; gap: 10px; align-items: flex-start; padding: 12px; background: rgba(255,255,255,.05); border-radius: 8px; cursor: pointer; margin: 14px 0; }
+		.consent-modal input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+		.consent-modal .buttons { display: flex; gap: 10px; margin-top: 18px; }
+		.consent-modal button { flex: 1; padding: 12px; font-family: 'Press Start 2P', monospace; font-size: 10px; cursor: pointer; border-radius: 6px; }
+		.consent-modal .cancel { background: transparent; border: 2px solid #666; color: inherit; }
+		.consent-modal .confirm { background: #4ade80; border: 2px solid #4ade80; color: #000; }
+		.consent-modal .confirm:disabled { background: #2a2a3e; border-color: #2a2a3e; color: #666; cursor: not-allowed; }
+		.consent-modal .error { color: #f87171; font-size: 13px; margin-top: 10px; display: none; }
+		.consent-modal .error.show { display: block; }
+	</style>
+</head>
+<body class="mode-party">
+	<div class="pricing-page">
+		<h1>Ceník</h1>
+		<p class="lead">Začněte zdarma. Platí se, až když chcete víc.</p>
+		<div class="billing-notice" id="billing-notice" role="status"></div>
+
+		<div class="plans">
+			<div class="plan-card free">
+				<h2>Free</h2>
+				<div class="price">0 Kč<small> / měsíc</small></div>
+				<ul>
+					<li>3 generované hry / den</li>
+					<li>Úroveň postavy do 5</li>
+					<li>1 souběžná lobby</li>
+					<li>Základní kompetence RVP</li>
+				</ul>
+				<button disabled>Už máte</button>
+			</div>
+
+			<div class="plan-card featured">
+				<h2>Teacher měsíční</h2>
+				<div class="price">299 Kč<small> / měsíc</small></div>
+				<ul>
+					<li>Neomezené generování</li>
+					<li>Bez limitu úrovně</li>
+					<li>Přístup ke všem perkům</li>
+					<li>Třídní nástěnka a přehledy</li>
+				</ul>
+				<button data-plan="teacher_monthly">Vybrat plán</button>
+			</div>
+
+			<div class="plan-card">
+				<h2>Teacher roční</h2>
+				<div class="price">2 990 Kč<small> / rok</small></div>
+				<ul>
+					<li>Vše z měsíčního plánu</li>
+					<li>Ušetříte 2 měsíce</li>
+					<li>Fakturace jednorázově</li>
+				</ul>
+				<button data-plan="teacher_yearly">Vybrat plán</button>
+			</div>
+
+			<div class="plan-card">
+				<h2>School pilotní</h2>
+				<div class="price">od 14 990 Kč<small> / rok</small></div>
+				<ul>
+					<li>Pilot podle dohodnutého rozsahu</li>
+					<li>Individuální onboarding</li>
+					<li>Fakturace podle dohody</li>
+					<li>DPA pro ochranu osobních údajů</li>
+					<li>Prioritní podpora</li>
+				</ul>
+				<button class="school-contact" id="school-contact" type="button">Kontaktovat nás</button>
+			</div>
+		</div>
+
+		<p class="legal-note">
+			Ceny uvedeny v Kč.
+			<a href="#" data-legal-link="terms">Obchodní podmínky</a> ·
+			<a href="#" data-legal-link="privacy">Zásady ochrany osobních údajů</a> ·
+			<a href="#" data-legal-link="contact">Kontakt</a>
+		</p>
+	</div>
+
+	<!-- Consent modal (§ 1837 OZ) -->
+	<div class="consent-overlay" id="consent-overlay" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+		<div class="consent-modal">
+			<h3 id="consent-title">Potvrzení před platbou</h3>
+			<p>Před přesměrováním na platební bránu potřebujeme váš výslovný souhlas, protože digitální služba se vám zpřístupní okamžitě po zaplacení.</p>
+			<label>
+				<input type="checkbox" id="consent-check">
+				<span id="consent-text">Načítá se…</span>
+			</label>
+			<p style="font-size: 12px; opacity: .7;">
+				Souhlasem zároveň potvrzujete, že jste si přečetli
+				<a href="#" data-legal-link="terms" target="_blank" rel="noopener">Obchodní podmínky</a> a
+				<a href="#" data-legal-link="privacy" target="_blank" rel="noopener">Zásady ochrany osobních údajů</a>.
+			</p>
+			<div class="error" id="consent-error"></div>
+			<div class="buttons">
+				<button class="cancel" id="consent-cancel">Zrušit</button>
+				<button class="confirm" id="consent-confirm" disabled>Pokračovat na platbu</button>
+			</div>
+		</div>
+	</div>
+
+	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+	<script>
+	(function () {
+		const SUPABASE_URL = 'https://vhpkkbixshfyytohkruv.supabase.co';
+		const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
+		const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+			auth: { detectSessionInUrl: true, persistSession: true }
+		});
+
+		const overlay = document.getElementById('consent-overlay');
+		const checkEl = document.getElementById('consent-check');
+		const confirmBtn = document.getElementById('consent-confirm');
+		const cancelBtn = document.getElementById('consent-cancel');
+		const errorEl = document.getElementById('consent-error');
+		const consentTextEl = document.getElementById('consent-text');
+		const billingNotice = document.getElementById('billing-notice');
+		const schoolContactBtn = document.getElementById('school-contact');
+
+		let selectedPlan = null;
+		let publicConfig = null;
+
+		function applyLegalLinks(legal) {
+			const urls = { terms: legal?.termsUrl, privacy: legal?.privacyUrl, contact: legal?.contactUrl };
+			document.querySelectorAll('[data-legal-link]').forEach((link) => {
+				const url = urls[link.dataset.legalLink];
+				if (url) {
+					link.href = url;
+				} else {
+					link.removeAttribute('href');
+					link.setAttribute('aria-disabled', 'true');
+					link.title = 'Odkaz zatím není nakonfigurován';
+				}
+			});
+		}
+
+		Promise.all([
+			fetch('/api/billing/public-config').then((r) => r.json()),
+			fetch('/api/billing/legal-versions').then((r) => r.json()),
+		]).then(([config, legal]) => {
+			publicConfig = config;
+			applyLegalLinks(config.legal);
+			consentTextEl.textContent = legal.withdrawal_text || 'Online platba není dostupná.';
+			if (!config.subscriptionBillingEnabled) {
+				billingNotice.textContent = config.billingMessage || 'Online platby jsou dočasně nedostupné.';
+				billingNotice.style.display = 'block';
+				document.querySelectorAll('.plan-card button[data-plan]').forEach((button) => { button.disabled = true; });
+			}
+		}).catch(() => {
+			billingNotice.textContent = 'Stav online plateb se nepodařilo ověřit. Zkuste to prosím později.';
+			billingNotice.style.display = 'block';
+			document.querySelectorAll('.plan-card button[data-plan]').forEach((button) => { button.disabled = true; });
+			consentTextEl.textContent = 'Online platba není dostupná.';
+		});
+
+		checkEl.addEventListener('change', () => {
+			confirmBtn.disabled = !checkEl.checked;
+			if (checkEl.checked) errorEl.classList.remove('show');
+		});
+
+		document.querySelectorAll('.plan-card button[data-plan]').forEach(btn => {
+			btn.addEventListener('click', () => {
+				if (!publicConfig?.subscriptionBillingEnabled) return;
+				const plan = btn.getAttribute('data-plan');
+				selectedPlan = plan;
+				checkEl.checked = false;
+				confirmBtn.disabled = true;
+				errorEl.classList.remove('show');
+				overlay.classList.add('open');
+			});
+		});
+
+		schoolContactBtn.addEventListener('click', () => {
+			const contactUrl = publicConfig?.legal?.contactUrl;
+			if (contactUrl) window.location.href = contactUrl;
+			else {
+				billingNotice.textContent = 'Kontaktní stránka zatím není nakonfigurována.';
+				billingNotice.style.display = 'block';
+			}
+		});
+
+		cancelBtn.addEventListener('click', () => overlay.classList.remove('open'));
+		overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
+
+		confirmBtn.addEventListener('click', async () => {
+			if (!checkEl.checked || !selectedPlan) return;
+			confirmBtn.disabled = true;
+			confirmBtn.textContent = 'Přesměrování…';
+			try {
+				const { data: { session } } = await sb.auth.getSession();
+				if (!session) {
+					window.location.href = '/login.html?redirect=/pricing.html';
+					return;
+				}
+				const res = await fetch('/api/billing/checkout', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'Authorization': `Bearer ${session.access_token}`,
+						'Idempotency-Key': crypto.randomUUID()
+					},
+					body: JSON.stringify({ plan: selectedPlan, withdrawalConsent: true })
+				});
+				const json = await res.json();
+				if (!res.ok || !json.url) throw new Error(json.error || 'Checkout selhal');
+				window.location.href = json.url;
+			} catch (err) {
+				errorEl.textContent = err.message;
+				errorEl.classList.add('show');
+				confirmBtn.disabled = false;
+				confirmBtn.textContent = 'Pokračovat na platbu';
+			}
+		});
+
+		if (new URLSearchParams(location.search).get('canceled') === '1') {
+			const n = document.createElement('div');
+			n.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#000;padding:10px 16px;border-radius:8px;font-size:14px;z-index:500;';
+			n.textContent = 'Platba byla zrušena. Můžete to kdykoli zkusit znovu.';
+			document.body.appendChild(n);
+			setTimeout(() => n.remove(), 4000);
+		}
+	</script>
+</body>
+</html>

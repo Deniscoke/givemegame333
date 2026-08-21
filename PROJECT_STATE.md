@@ -1,8 +1,8 @@
 # PROJECT_STATE.md
 
 > Single source of truth pre gIVEMEGAME.IO → INVOK transformáciu.
-> Posledná aktualizácia: 2026-06-01
-> Verzia: 1.0
+> Posledná aktualizácia: 2026-08-21
+> Verzia: 1.1
 
 ---
 
@@ -20,7 +20,7 @@ Pripraviť **gIVEMEGAME.IO** (existujúca AI-powered vzdelávacia platforma) na 
 | Backend | Node.js + Express monolit (`server.js`) + moduly v `lib/` |
 | Databáza | Supabase Postgres cez raw `pg.Pool` (service role) |
 | Auth | Supabase JWT, helper `requireSupabaseUser(req, res)` |
-| Platby | Stripe Payment Link + webhook signature verifikácia |
+| Platby | Stripe Checkout + podpisovo verifikovaný webhook (legacy Payment Link vyradený) |
 | Hosting | Vercel |
 | AI | OpenAI API (game generation) |
 | Realtime | Supabase Realtime + polling fallback |
@@ -58,7 +58,7 @@ gIVEMEGAME.IO-OPENCLAW/
 │  │  └─ narrator.js           # AI vypravec
 │  ├─ data/i18n/               # SK, CS, EN, DE, ES, TR
 │  └─ edu/                     # EDU portal scaffold (members, classes, ...)
-├─ supabase/migrations/        # SQL migrácie (číslované 001–027)
+├─ supabase/migrations/        # SQL migrácie po 032 (historicky duplicitné 018, chýba 023)
 ├─ test/rpg/                   # Unit testy (137 passing)
 └─ Avatars/                    # Static avatar assets (1–8)
 ```
@@ -75,12 +75,12 @@ gIVEMEGAME.IO-OPENCLAW/
 - ✅ Coin economy (gIVEMECOIN) + daily caps + server-authoritative
 - ✅ Robot challenge (mini cognitive tasks)
 - ✅ Multi-language: SK, CS, EN, DE, ES, TR
-- ✅ Stripe billing (Free vs Pro plán)
+- ✅ Stripe subscription billing hardening (Checkout, consent, ownership validation, canonical Stripe reconciliation a advisory serialization)
 - ✅ Security baseline (HSTS, CORS allowlist, parameterized SQL, JWT auth)
 - ✅ XSS escape v session participant rendering
 - ✅ Mobile host UX fixes (badge, backdrop dismiss, fast polling)
 - ✅ EDU portal scaffold (`/edu/`) — members, classes, attendance, gradebook
-- ✅ 137 unit testov passing, 0 failures
+- ✅ Stabilizovaný testovací baseline: plný suite green (543 testov pri verifikácii 2026-08-21)
 
 ---
 
@@ -113,15 +113,15 @@ gIVEMEGAME.IO-OPENCLAW/
 |---|---|---|
 | LMS | 🟡 čiastočne (EDU scaffold) | Rozšíriť |
 | 4 moduly obsahovo | 🟢 AI vie generovať | Kurátorovať |
-| Pre/post testy | 🔴 chýba | **Postaviť** (P0) |
-| Inštitucionálny dashboard | 🔴 chýba | **Postaviť** (P0) |
+| Pre/post testy | 🟢 MVP hotové | Pilotný obsah + smoke test (P0) |
+| Inštitucionálny dashboard | 🟢 API + UI hotové | Pilotný reporting smoke test (P0) |
 | WCAG 2.1 AA | 🔴 audit potrebný | **Audit + opraviť** (P0) |
 | Video lekcie | 🔴 chýba | Postaviť (P1) |
 | Asynchrónne submissions | 🟡 perk-requests | Rozšíriť (P1) |
 | Učiteľské metodiky | 🟡 AI generuje | Knižnica + export (P1) |
 | Reflexie | 🟢 hotové | – |
 | Multi-language | 🟢 6 jazykov | – |
-| Stripe sustainability | 🟢 hotové | Doplniť pricing tiers |
+| Stripe sustainability | 🟢 hotové | Teacher self-service + School contact-led |
 
 ---
 
@@ -129,13 +129,13 @@ gIVEMEGAME.IO-OPENCLAW/
 
 ### FÁZA 1 (deň 1–30): INVOK-Ready MVP
 - **T1**: Pre/post test modul (`lib/assessment.js`, migrácia `028_assessments.sql`)
-- **T2**: Inštitucionálny dashboard (`/public/institution/`, migrácia `029_institutions.sql`)
+- **T2**: Inštitucionálny dashboard (`/public/institution/`; bez novej institutions migrácie)
 - **T3**: WCAG 2.1 AA audit + opravy (vrátane "Classroom mode" neutrálneho dizajnu)
-- **T4**: Knižnica oficiálnych modulov (`lib/official-curricula.js`, migrácia `030_curated_modules.sql`)
+- **T4**: Knižnica oficiálnych modulov (`lib/official-curricula.js`; číslo budúcej migrácie TBD, pretože `030` je billing security)
 
 ### FÁZA 2 (deň 31–60): Diferenciátory
 - **T5**: Peer feedback v sessions
-- **T6**: Adaptívne obťažnosti (`lib/adaptive.js`, migrácia `031_adaptive_state.sql`)
+- **T6**: Adaptívne obťažnosti (`lib/adaptive.js`, budúca migrácia `033_adaptive_state.sql` alebo vyššia)
 - **T7**: Učiteľská metodika builder s PDF/DOCX exportom
 - **T8**: Open data export API
 
@@ -158,7 +158,7 @@ gIVEMEGAME.IO-OPENCLAW/
   - i18n kľúče (SK + EN)
   - 44 unit testov passing
 - [x] **T1.1 — Assessment security hardening** (HOTOVO)
-  - migrácia `029_assessment_security.sql` (RLS + helper `fn_is_educator`)
+  - publikovaná migrácia `029_assessment_security.sql` (RLS + helper `fn_is_educator`), additive `031_assessment_scope_security.sql` (scope helper/policies) a `032_assessment_scope_evidence.sql` (nemenný DB-stamped dôkaz scope pokusu)
   - access-control helpery v `lib/assessment.js` (canCreateAssessment, canSeeCorrectAnswer, canSubmitAttempt, canStartAttempt, canViewAttempt)
   - role guard na `POST /api/assessments` (iba teacher/admin v `edu_school_memberships`)
   - rate limit: 20 create/h, 60 start/h, 60 submit/h (per user)
@@ -170,7 +170,15 @@ gIVEMEGAME.IO-OPENCLAW/
   - `lib/institution-routes.js` (Express router, 7 endpointov)
   - wiring v `server.js` (mounted na `/api/institution/*`)
   - 54 unit testov passing
-- [ ] **Fáza 1 / Týždeň 2 / T2b**: Inštitucionálny Dashboard UI (`public/institution/`)
+- [x] **Task 1 — Billing security hardening** (HOTOVO, runtime stabilizovaný cez `cb64736`)
+  - Stripe Checkout je explicitne feature-flagged a vyžaduje dve oddelené Teacher ceny a právne consent údaje; School mapping je voliteľný a contact-led bez self-service School Checkoutu.
+  - Webhook overuje Stripe podpis a vlastníctvo, načíta canonical subscription a serializuje reconciliation per subscription advisory lockom; legacy Payment Link upgrade route je vyradená.
+  - Migrácia `030_billing_security.sql` chráni billing profilové polia a obmedzuje prístup k billing dátam na service role.
+- [x] **Task 2 — Stabilný testovací baseline** (HOTOVO)
+  - Plný suite green: 543 testov pri verifikácii 2026-08-21 po oprave spoľahlivého životného cyklu procesu.
+- [x] **Fáza 1 / Týždeň 2 / T2b**: Inštitucionálny Dashboard UI (HOTOVO — Task 4)
+  - `/institution/` dashboard, školské/triedne filtre, Impact Trail, summary/module pre-post pohľady a CSV export.
+  - Konzumuje existujúcich sedem `/api/institution/*` endpointov; nepridáva `029_institutions.sql`.
 - [ ] **Fáza 1 / Týždeň 3**: WCAG audit
 - [ ] **Fáza 1 / Týždeň 4**: Knižnica oficiálnych modulov
 
@@ -182,12 +190,12 @@ gIVEMEGAME.IO-OPENCLAW/
 - ⚠️ Žiadny rate limit na `/api/coins/log` (možnosť spamovať robot_challenge XP)
 - ⚠️ Pixel-art dizajn nie je WCAG-friendly (kontrast)
 - ⚠️ Žiadne video lekcie / media player
-- ⚠️ Inštitucionálny dashboard chýba
 - ⚠️ GDPR pre maloletých žiakov (súhlas zákonných zástupcov UI flow)
 - ⚠️ Assessment i18n: kľúče `assess_*` chýbajú v DE/ES/TR (SK/CS/EN hotové; fallback na key/EN funguje)
 - ⚠️ Assessment rate limiter je in-memory — na Vercel Fluid Compute multi-instance je to soft cap (každá inštancia má svoj counter). Pre hard caps presunúť na Redis/Vercel KV
 - ⚠️ Institution export pseudonymizácia: `user_id` (UUID) je v CSV — dostatočné pre INVOK reporting, ale pri požiadavke na úplnú anonymizáciu treba sequence number (Student 1, 2...) namiesto UUID
-- ⚠️ T2b Dashboard UI (`public/institution/`) — ešte nie je, API je hotové
+- ⚠️ Deployment credential exposure: ignore pravidlá nezbavia už trackovaných súborov ani Git histórie. Repository owner musí zrotovať existujúce credentials a vyčistiť históriu podľa incident procesu.
+- ⚠️ Externé DB migrácie zostávajú owner-operated: podporovaný runner aplikuje billing/assessment release ako `026_billing.sql` → `027_billing_consent.sql` → `028_assessments.sql` → `029_assessment_security.sql` → `030_billing_security.sql` → `031_assessment_scope_security.sql` → `032_assessment_scope_evidence.sql`, najprv na staging. Eviduje plný názov + SHA-256 iba za migrácie, ktoré sám úspešne vykonal. Jeho bootstrap preflight najprv iba číta stav trackeru a schémy; prázdny tracker nad existujúcou non-legacy schémou fail-closed bez DB zápisu vyžaduje kontrolovaný DBA baseline/manuálnu reconciliáciu mimo runnera. Jedinou automatickou výnimkou je explicitne overený legacy-016 upgrade. Obe `018` ostávajú aktívne, `019` je disabled a `023` chýba.
 
 ---
 
@@ -259,6 +267,13 @@ INVOK pokryje 1. rok pre 10 škôl. Potom prechádzajú na School License.
 - **2026-06-01**: T2a — **API-first dashboard approach**: institution reporting API je kompletné pred UI. T2b (dashboard UI) bude len konzumovať tieto endpointy.
 - **2026-06-01**: T2a — **Pre/post delta pairing rule**: najskorší submitted `pre` + najnovší submitted `post` (per user_id + module_key). DISTINCT ON v Postgres bez subquery.
 - **2026-06-01**: T2a — **Export minimalizuje osobné údaje**: CSV obsahuje len `user_id` (UUID = pseudonymizovaný identifikátor). Žiadne mená, emaily, telefóny. `sanitizeDeltaForExport()` vynucuje whitelist polí.
+- **2026-08-21**: **Task 1 billing hardening** — produkčný billing flow je Stripe Checkout + podpisovo verifikovaný webhook; Payment Link/manual-provisioning upgrade flow ostáva vyradený. Paid access neudeľuje success redirect.
+- **2026-08-21**: **Billing product scope** — self-service predaj vyžaduje iba dve Teacher ceny (monthly/yearly). School mapping je voliteľný pre externe provisionovaný contact-led produkt; School tier nemá self-service Checkout.
+- **2026-08-21**: **Billing reconciliation** — subscription mutation načíta canonical Stripe subscription a pred lokálnou mutáciou sa serializuje per subscription PostgreSQL advisory lockom; timestamp ostáva audit/monotonic defense, nie jediný zdroj pravdy.
+- **2026-08-21**: **Billing/assessment release order** — migrácie `026_billing.sql`, `027_billing_consent.sql`, `028_assessments.sql`, publikovaná nemenná `029_assessment_security.sql`, `030_billing_security.sql`, additive `031_assessment_scope_security.sql` a immutable-evidence `032_assessment_scope_evidence.sql` sa aplikujú v tomto poradí. `032` databázou potvrdzuje historický membership/enrollment scope assessment pokusu a chráni ho pred neskoršou zmenou. Historické duplicitné `018` a chýbajúce `023` sú ponechané bez premenovania už vydaných súborov; budúce roadmap migrácie začnú najskôr číslom `033`.
+- **2026-08-21**: **Task 2 baseline** — plný testovací suite je green: 543 testov pri finálnej verifikácii; presný počet sa môže zvyšovať s ďalšími regresnými testami.
+- **2026-08-21**: **Task 4 dashboard** — INVOK institution dashboard UI je hotové nad existujúcim reporting API. Migrácia `029_assessment_security.sql` patrí assessment RLS hardeningu; žiadna `029_institutions.sql` neexistuje ani nie je potrebná.
+- **2026-08-21**: **Migration runner** — poradie je explicitné podľa plných názvov (vrátane oboch `018`), disabled `019` sa neaplikuje a chýbajúce `023` sa nedopĺňa premenovaním. Úspešné transakcie sa evidujú plným názvom + SHA-256. Fresh DB môže použiť celý katalóg a tracked DB release selector; existujúca non-legacy schéma s prázdnym trackerom sa odmietne bez zapisovania checksumov a vyžaduje owner/DBA baseline alebo manuálnu reconciliáciu mimo runnera. Explicitný overený legacy-016 upgrade ostáva podporovaný. Release sa vždy skúša najprv na staging.
 
 ---
 

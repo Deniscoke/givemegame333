@@ -8,9 +8,11 @@
     "dev": "node server.js",
     "tunnel": "npx localtunnel --port 3000",
     "db:migrate": "node scripts/run-supabase-migrations.js",
-    "test": "node --test test/",
+    "db:migrate:list": "node scripts/run-supabase-migrations.js --list",
+    "db:migrate:release:dry-run": "node scripts/run-supabase-migrations.js --dry-run --from 026",
+    "test": "node --test",
     "test:unit": "node --test test/reward-validation.test.js",
-    "test:integration": "node --test test/integration/"
+    "test:integration": "node --test test/integration/billing.test.js test/integration/rate-limit.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -18,6 +20,7 @@
     "express": "^4.21.2",
     "firebase": "^12.10.0",
     "openai": "^4.82.0",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "stripe": "^22.0.2"
   }
 }

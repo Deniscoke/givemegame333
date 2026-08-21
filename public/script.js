@@ -1666,7 +1666,7 @@ const App = (() => {
 		return { open, switchTab, onGivemeLoad, syncGivemeIframe, logout, startPhoneVibrate, stopPhoneVibrate };
 	})();
 
-	// ─── Billing (Payment Link MVP — manual provisioning) ───
+	// ─── Billing (secure Stripe Checkout) ───
 	const Billing = (() => {
 		async function getToken() {
 			try {
@@ -1710,7 +1710,7 @@ const App = (() => {
 					usage,
 					planCode: data.planCode || 'free'
 				};
-				const canPay = cfg.upgradeAvailable === true;
+				const canPay = cfg.upgradeAvailable === true && typeof cfg.checkoutPath === 'string';
 				if (upgradeBtn) upgradeBtn.style.display = paid ? 'none' : 'block';
 				if (upgradeBtn) upgradeBtn.disabled = !paid && !canPay;
 				if (hintEl) {
@@ -1727,7 +1727,7 @@ const App = (() => {
 				if (warnEl) {
 					if (!paid && !canPay) {
 						warnEl.style.display = 'block';
-						warnEl.textContent = 'Platobný odkaz nie je nastavený na serveri. Ak si prevádzkovateľ, nastav STRIPE_PAYMENT_LINK_PRO_MONTHLY na Verceli.';
+						warnEl.textContent = cfg.billingMessage || 'Online platby sú dočasne nedostupné.';
 					} else {
 						warnEl.style.display = 'none';
 						warnEl.textContent = '';
@@ -1746,18 +1746,12 @@ const App = (() => {
 			try {
 				const cfgRes = await fetch('/api/billing/public-config', { headers: { ...ngrokHeaders() } });
 				const cfg = cfgRes.ok ? await cfgRes.json() : {};
-				if (!cfg.upgradeAvailable) {
+				if (!cfg.upgradeAvailable || typeof cfg.checkoutPath !== 'string') {
 					const em = cfg.supportEmail ? ` Kontakt: ${cfg.supportEmail}` : '';
 					GameUI.toast('Platba nie je nastavená.' + em);
 					return;
 				}
-				const res = await fetch('/api/billing/upgrade-url', {
-					headers: { ...ngrokHeaders(), 'Authorization': `Bearer ${token}` }
-				});
-				const data = await res.json();
-				if (!res.ok) throw new Error(data.error || 'Upgrade not configured');
-				if (data.url) window.location.href = data.url;
-				else throw new Error('No payment link');
+				window.location.href = cfg.checkoutPath;
 			} catch (e) {
 				GameUI.toast('❌ ' + (e.message || 'Chyba pri otvorení platby'));
 			}
