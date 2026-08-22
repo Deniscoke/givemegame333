@@ -45,7 +45,7 @@ test('dashboard response exposes the accessible evidence-review landmarks', asyn
   const response = await fetch(`${origin}/institution/`);
   const html = await response.text();
 
-  assert.match(html, /<nav\b[^>]*aria-label=/i);
+  assert.match(html, /\bdata-edu-shell(?:\s|=|>)/i);
   assert.match(html, /<main\b/i);
   assert.match(html, /<form\b[^>]*aria-label=/i);
   assert.match(html, /<label\b[^>]*for="school-filter"/i);
@@ -59,6 +59,7 @@ test('dashboard response exposes the accessible evidence-review landmarks', asyn
   assert.match(html, /<caption\b/i);
   assert.match(html, /<link\b[^>]*href="\/institution\/institution\.css"/i);
   assert.match(html, /<script\b[^>]*src="\/edu\/js\/edu-auth\.js"/i);
+  assert.match(html, /<script\b[^>]*src="\/edu\/js\/edu-shell\.js"/i);
   assert.match(html, /<script\b[^>]*src="\/institution\/institution\.js"/i);
 });
 
@@ -74,11 +75,15 @@ test('serves the institution stylesheet and dashboard script', async () => {
   assert.match(js.headers.get('content-type') || '', /javascript/);
 });
 
-test('EDU dashboard links educators to institution evidence', async () => {
-  const response = await fetch(`${origin}/edu/`);
-  const html = await response.text();
+test('shared educator navigation links teachers to institution evidence', () => {
+  const shell = require('../public/edu/js/edu-shell.js');
+  const evidence = shell.itemsForRole('teacher').find((item) => item.label === 'Výsledky INVOK');
 
-  assert.match(html, /<a\b[^>]*href="\/institution\/"[^>]*>[^<]*<span[^>]*>[^<]*<\/span>\s*Dopad INVOK\s*<\/a>/i);
+  assert.deepEqual(evidence, {
+    href: '/institution/',
+    label: 'Výsledky INVOK',
+    group: 'primary',
+  });
 });
 
 test('institution API helper maps all seven reporting endpoints and keeps their schemas intact', async () => {
@@ -346,7 +351,7 @@ test('contrast-critical violet tokens meet WCAG AA in their actual text usages',
 
   assert.ok(contrast(token('signal-text'), token('archive')) >= 4.5);
   assert.ok(contrast('#ffffff', token('signal-action')) >= 4.5);
-  assert.match(css, /\.brand strong\s*\{[^}]*color:\s*var\(--signal-text\)/i);
+  assert.match(css, /\.edu-sidebar-brand \.brand-badge\s*\{[^}]*color:\s*var\(--signal-text\)/i);
   assert.match(css, /\.eyebrow\s*\{[^}]*color:\s*var\(--signal-text\)/i);
   assert.match(css, /\nbutton\s*\{[^}]*background:\s*var\(--signal-action\)[^}]*color:\s*#fff/i);
 });

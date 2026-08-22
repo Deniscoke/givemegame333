@@ -6,6 +6,17 @@ const router = require('../public/js/post-login-router.js');
 
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 
+const educatorPages = [
+  ['public/edu/index.html', '/edu/css/edu.css'],
+  ['public/edu/classes.html', '/edu/css/edu.css'],
+  ['public/edu/gradebook.html', '/edu/css/edu.css'],
+  ['public/edu/attendance.html', '/edu/css/edu.css'],
+  ['public/edu/members.html', '/edu/css/edu.css'],
+  ['public/edu/perk-requests.html', '/edu/css/edu.css'],
+  ['public/edu/assessments.html', '/edu/css/edu.css'],
+  ['public/institution/index.html', '/institution/institution.css'],
+];
+
 const voidElements = new Set([
   'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr',
 ]);
@@ -132,6 +143,81 @@ test('shell helper exports deterministic menu helpers', () => {
   const shell = require('../public/ui/shell.js');
   assert.equal(typeof shell.setActiveNavigation, 'function');
   assert.equal(typeof shell.toggleMenu, 'function');
+});
+
+test('educator shell exposes one role-filtered navigation vocabulary', () => {
+  const shell = require('../public/edu/js/edu-shell.js');
+  const studentLabels = shell.itemsForRole('student').map((item) => item.label);
+  const teacherLabels = shell.itemsForRole('teacher').map((item) => item.label);
+
+  assert.deepEqual(studentLabels, ['Prehľad', 'Moje aktivity', 'Pokrok']);
+  assert.ok(teacherLabels.includes('Vytvoriť aktivitu'));
+  assert.ok(teacherLabels.includes('Assessmenty'));
+  assert.ok(teacherLabels.includes('Výsledky INVOK'));
+  assert.equal(teacherLabels.includes('Členovia'), true);
+  assert.equal(
+    shell.itemsForRole('teacher').find((item) => item.label === 'Knižnica a živé hry').href,
+    '/index.html',
+  );
+});
+
+test('educator shell mounts DOM nodes and marks only the current route active', () => {
+  class TestNode {
+    constructor(tagName, ownerDocument) {
+      this.tagName = tagName;
+      this.ownerDocument = ownerDocument;
+      this.children = [];
+      this.attributes = new Map();
+      this.className = '';
+      this.textContent = '';
+    }
+
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = [...children]; }
+    setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  }
+
+  const ownerDocument = { createElement: (tagName) => new TestNode(tagName, ownerDocument) };
+  const root = new TestNode('div', ownerDocument);
+  const shell = require('../public/edu/js/edu-shell.js');
+
+  shell.mount({ root, role: 'teacher', pathname: '/edu/assessments.html' });
+
+  const descendants = [];
+  const visit = (node) => {
+    descendants.push(node);
+    node.children.forEach(visit);
+  };
+  root.children.forEach(visit);
+  const currentLinks = descendants.filter((node) => node.attributes.get('aria-current') === 'page');
+
+  assert.equal(root.children[0].tagName, 'nav');
+  assert.equal(currentLinks.length, 1);
+  assert.equal(currentLinks[0].textContent, 'Assessmenty');
+  assert.equal(currentLinks[0].attributes.get('href'), '/edu/assessments.html');
+});
+
+test('every educator surface loads the shared shell once in stable asset order', () => {
+  for (const [file, pageStylesheet] of educatorPages) {
+    const html = read(file);
+    const mountPoints = html.match(/\bdata-edu-shell(?:\s|=|>)/gi) || [];
+    const tokensIndex = html.indexOf('href="/ui/tokens.css"');
+    const shellStylesIndex = html.indexOf('href="/ui/shell.css"');
+    const pageStylesIndex = html.indexOf(`href="${pageStylesheet}`);
+    const supabaseIndex = html.indexOf('src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"');
+    const authIndex = html.indexOf('src="/edu/js/edu-auth.js"');
+    const educatorShellIndex = html.indexOf('src="/edu/js/edu-shell.js"');
+
+    assert.equal(mountPoints.length, 1, `${file} should contain one educator shell mount point`);
+    assert.ok(tokensIndex >= 0, `${file} should load tokens.css`);
+    assert.ok(shellStylesIndex > tokensIndex, `${file} should load shell.css after tokens.css`);
+    assert.ok(pageStylesIndex > shellStylesIndex, `${file} should load its page stylesheet after shell.css`);
+    assert.ok(supabaseIndex > pageStylesIndex, `${file} should load Supabase after styles`);
+    assert.ok(authIndex > supabaseIndex, `${file} should load EduAuth after Supabase`);
+    assert.ok(educatorShellIndex > authIndex, `${file} should load EduShell after EduAuth`);
+    assert.doesNotMatch(html, /<ul\b[^>]*class="[^"]*edu-sidebar-nav/i,
+      `${file} should not copy the educator navigation list`);
+  }
 });
 
 test('pending lobby wins over role routing', () => {

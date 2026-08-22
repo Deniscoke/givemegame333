@@ -4,14 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>gIVEMEEDU — Clenovia a role</title>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/edu/css/edu.css?v=2">
+  <link rel="stylesheet" href="/ui/tokens.css">
+  <link rel="stylesheet" href="/ui/shell.css">
+  <link rel="stylesheet" href="/edu/css/edu.css?v=3">
   <style>
     .role-badge {
       display: inline-block;
       padding: 4px 10px;
       border-radius: 2px;
-      font-family: 'Press Start 2P', monospace;
+      font-family: var(--edu-font-data);
       font-size: 6px;
       border: 2px solid #000;
       text-transform: uppercase;
@@ -34,7 +35,7 @@
       border: 2px solid #000;
       background: #0f0f24;
       color: #94a3b8;
-      font-family: 'VT323', monospace;
+      font-family: var(--edu-font-body);
       font-size: 18px;
       cursor: pointer;
       transition: color 0.15s, background 0.15s, box-shadow 0.15s;
@@ -79,8 +80,8 @@
       flex-shrink: 0;
     }
     .member-info { flex: 1; min-width: 0; }
-    .member-name { font-family: 'VT323', monospace; font-weight: 600; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e2e8f0; }
-    .member-uid  { font-size: 16px; color: #94a3b8; font-family: 'VT323', monospace; }
+    .member-name { font-family: var(--edu-font-body); font-weight: 600; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e2e8f0; }
+    .member-uid  { font-size: 16px; color: #94a3b8; font-family: var(--edu-font-data); }
     .member-actions { display: flex; gap: 6px; align-items: center; }
 
     .role-select {
@@ -89,7 +90,7 @@
       border: 2px solid #000;
       background: #0f0f24;
       color: #e2e8f0;
-      font-family: 'VT323', monospace;
+      font-family: var(--edu-font-body);
       font-size: 18px;
       cursor: pointer;
     }
@@ -101,7 +102,7 @@
       background: #450a0a;
       color: #fecaca;
       border: 2px solid #000;
-      font-family: 'VT323', monospace;
+      font-family: var(--edu-font-body);
       font-size: 18px;
       cursor: pointer;
       box-shadow: 2px 2px 0 #000;
@@ -133,18 +134,18 @@
       text-align: center;
       box-shadow: 0 0 0 1px rgba(168,85,247,0.2), 4px 4px 0 #000;
     }
-    .stat-number { font-family: 'Press Start 2P', monospace; font-size: 14px; font-weight: 400; line-height: 1.5; }
-    .stat-label  { font-family: 'VT323', monospace; font-size: 16px; color: #94a3b8; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-number { font-family: var(--edu-font-data); font-size: 14px; font-weight: 600; line-height: 1.5; }
+    .stat-label  { font-family: var(--edu-font-body); font-size: 16px; color: #94a3b8; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
     .stat-card.admin-card    .stat-number { color: #fcd34d; }
     .stat-card.teacher-card  .stat-number { color: #93c5fd; }
     .stat-card.student-card  .stat-number { color: #6ee7b7; }
 
-    .empty-state { text-align: center; padding: 40px; color: #64748b; font-family: 'VT323', monospace; font-size: 22px; }
+    .empty-state { text-align: center; padding: 40px; color: #64748b; font-family: var(--edu-font-body); font-size: 22px; }
     .empty-state-icon { font-size: 40px; margin-bottom: 8px; }
 
     .btn-expand {
       padding: 6px 10px; background: #1e1b4b; color: #e9d5ff;
-      border: 2px solid #000; font-family: 'VT323', monospace; font-size: 16px;
+      border: 2px solid #000; font-family: var(--edu-font-body); font-size: 16px;
       cursor: pointer; box-shadow: 2px 2px 0 #000;
     }
     .btn-expand:hover { background: #312e81; }
@@ -156,12 +157,12 @@
       border: 2px solid #000; border-left: 4px solid #7c3aed;
       border-radius: 0 4px 4px 0;
       box-shadow: 3px 3px 0 #000;
-      font-family: 'VT323', monospace; font-size: 18px; color: #cbd5e1;
+      font-family: var(--edu-font-body); font-size: 18px; color: #cbd5e1;
     }
     .rpg-inline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; }
     .rpg-inline-tile { background: rgba(124,58,237,0.08); border: 1px solid #2d2d6b; padding: 8px; border-radius: 4px; }
     .rpg-inline-tile-label { font-family: 'Press Start 2P', monospace; font-size: 8px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; }
-    .rpg-inline-tile-val { font-family: 'VT323', monospace; font-size: 22px; color: #e9d5ff; }
+    .rpg-inline-tile-val { font-family: var(--edu-font-data); font-size: 22px; color: #e9d5ff; }
     .rpg-inline-title { font-family: 'Press Start 2P', monospace; font-size: 10px; color: #a855f7; margin: 12px 0 6px 0; }
     .rpg-inline-perks { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
     .rpg-inline-perk { text-align: center; padding: 6px; background: rgba(255,255,255,0.04); border: 1px solid #2d2d6b; border-radius: 4px; font-size: 22px; position: relative; }
@@ -173,24 +174,11 @@
   </style>
 </head>
 <body>
-  <nav class="edu-sidebar">
-    <div class="edu-sidebar-brand"><h1>gIVEME</h1><span class="brand-badge">EDU</span></div>
-    <ul class="edu-sidebar-nav">
-      <li><a href="/edu/index.html"><span class="nav-icon">&#9632;</span> Dashboard</a></li>
-      <li><a href="/edu/classes.html"><span class="nav-icon">&#9733;</span> Triedy</a></li>
-      <li><a href="/edu/gradebook.html"><span class="nav-icon">&#9998;</span> Klasifikacia</a></li>
-      <li><a href="/edu/attendance.html"><span class="nav-icon">&#10003;</span> Dochadzka</a></li>
-      <li><a href="/edu/members.html" class="active"><span class="nav-icon">&#128100;</span> Clenovia</a></li>
-      <li><a href="/edu/perk-requests.html"><span class="nav-icon">&#127873;</span> Odmeny</a></li>
-      <li><a href="/institution/"><span class="nav-icon">&#8599;</span> Dopad INVOK</a></li>
-    </ul>
-    <div class="edu-sidebar-footer"><a href="/index.html">&larr; gIVEMEGAME</a></div>
-  </nav>
+  <div data-edu-shell></div>
 
   <div class="edu-main">
     <header class="edu-topbar">
       <div style="display:flex;align-items:center;gap:12px">
-        <button class="edu-menu-toggle" onclick="EduApp.toggleSidebar()">&#9776;</button>
         <h2>Clenovia a role</h2>
       </div>
       <div id="edu-topbar-user" class="edu-topbar-user"></div>
@@ -263,11 +251,13 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="/edu/js/edu-auth.js"></script>
+  <script src="/edu/js/edu-shell.js"></script>
   <script src="/edu/js/edu-app.js"></script>
   <script src="/edu/js/edu-members.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
-      await EduApp.init();
+      const profile = await EduApp.init();
+      EduShell.mount({ root: document.querySelector('[data-edu-shell]'), role: profile?.school?.role, pathname: window.location.pathname });
       await EduMembers.init();
     });
   </script>

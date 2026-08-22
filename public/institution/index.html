@@ -5,25 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#090A18">
   <title>INVOK — dopad vzdelávania</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/tokens.css">
+  <link rel="stylesheet" href="/ui/shell.css">
   <link rel="stylesheet" href="/institution/institution.css">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Preskočiť na obsah</a>
   <div class="app-shell">
-    <nav class="side-nav" aria-label="Navigácia EDU">
-      <a class="brand" href="/edu/" aria-label="gIVEME EDU domov">
-        <span>gIVEME</span><strong>INVOK</strong>
-      </a>
-      <ul>
-        <li><a href="/edu/"><span aria-hidden="true">■</span> EDU dashboard</a></li>
-        <li><a href="/edu/classes.html"><span aria-hidden="true">★</span> Triedy</a></li>
-        <li><a href="/institution/" aria-current="page"><span aria-hidden="true">↗</span> Dopad INVOK</a></li>
-      </ul>
-      <a class="back-link" href="/index.html">← gIVEMEGAME</a>
-    </nav>
+    <div data-edu-shell data-edu-shell-autoload></div>
 
     <main id="main-content">
       <header class="page-header">
@@ -118,6 +107,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="/edu/js/edu-auth.js"></script>
+  <script src="/edu/js/edu-shell.js"></script>
   <script src="/institution/institution.js"></script>
 </body>
 </html>

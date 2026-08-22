@@ -1,7 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   gIVEMEEDU — Pixel-retro + jemná posvätná geometria
-   Zladené s gIVEMEGAME (Press Start 2P / VT323, tmavá fialová)
-   Načítaj fonty v HTML: fonts.googleapis.com Press Start 2P + VT323
+   gIVEMEEDU — čitateľný produktový shell + pixelové akcenty
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
@@ -19,16 +17,17 @@
   --edu-warning: #f59e0b;
   --edu-danger: #ef4444;
   --edu-radius-pixel: 4px;
-  --edu-font-pixel: 'Press Start 2P', monospace;
-  --edu-font-body: 'VT323', monospace;
+  --edu-font-pixel: var(--font-pixel, 'Press Start 2P', monospace);
+  --edu-font-body: var(--font-body, 'Atkinson Hyperlegible', sans-serif);
+  --edu-font-data: var(--font-data, 'IBM Plex Mono', monospace);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: var(--edu-font-body);
-  font-size: 20px;
-  line-height: 1.4;
+  font-size: 1rem;
+  line-height: 1.5;
   background: var(--edu-bg-deep);
   color: var(--edu-text);
   min-height: 100vh;
@@ -83,8 +82,10 @@ body::after {
   display: flex;
   align-items: center;
   gap: 10px;
+  color: inherit;
+  text-decoration: none;
 }
-.edu-sidebar-brand h1 {
+.edu-sidebar-title {
   font-family: var(--edu-font-pixel);
   font-size: 11px;
   color: #fff;
@@ -103,9 +104,19 @@ body::after {
 }
 
 .edu-sidebar-nav {
-  flex: 1;
-  padding: 12px 0;
+  padding: 0 0 8px;
   list-style: none;
+}
+.edu-nav-group { padding-top: 10px; }
+.edu-nav-group + .edu-nav-group { border-top: 1px solid var(--edu-border-glow); }
+.edu-nav-group-label {
+  padding: 4px 16px 8px;
+  color: var(--edu-text-muted);
+  font-family: var(--edu-font-data);
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 .edu-sidebar-nav a {
   display: flex;
@@ -114,7 +125,9 @@ body::after {
   padding: 12px 16px;
   color: var(--edu-text-muted);
   text-decoration: none;
-  font-size: 22px;
+  min-height: 44px;
+  font-size: 1rem;
+  font-weight: 700;
   border-left: 4px solid transparent;
   transition: all 0.12s;
 }
@@ -136,9 +149,10 @@ body::after {
 }
 
 .edu-sidebar-footer {
+  margin-top: auto;
   padding: 14px 16px;
   border-top: 2px solid var(--edu-border-glow);
-  font-size: 18px;
+  font-size: 1rem;
 }
 .edu-sidebar-footer a {
   color: var(--edu-accent);
@@ -181,7 +195,7 @@ body::after {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 18px;
+  font-size: 1rem;
   color: var(--edu-text-muted);
 }
 .edu-topbar-user img {
@@ -193,8 +207,8 @@ body::after {
   image-rendering: pixelated;
 }
 .edu-topbar-role {
-  font-family: var(--edu-font-pixel);
-  font-size: 6px;
+  font-family: var(--edu-font-data);
+  font-size: .68rem;
   background: rgba(168,85,247,0.25);
   color: var(--edu-accent);
   padding: 4px 8px;
@@ -248,14 +262,14 @@ body::after {
   box-shadow: 3px 3px 0 var(--edu-border-glow);
 }
 .edu-stat-card .stat-value {
-  font-family: var(--edu-font-pixel);
-  font-size: 14px;
+  font-family: var(--edu-font-data);
+  font-size: 1.25rem;
   color: var(--edu-accent);
   line-height: 1.5;
   word-break: break-word;
 }
 .edu-stat-card .stat-label {
-  font-size: 18px;
+  font-size: 1rem;
   color: var(--edu-text-muted);
   margin-top: 8px;
 }
@@ -264,7 +278,7 @@ body::after {
 .edu-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 20px;
+  font-size: 1rem;
 }
 .edu-table th,
 .edu-table td {
@@ -283,6 +297,7 @@ body::after {
 .edu-table tr:hover td {
   background: rgba(168,85,247,0.08);
 }
+.edu-table td { font-family: var(--edu-font-data); }
 
 /* ─── Buttons (retro ako gIVEMEGAME) ─────────────────────── */
 .edu-btn {
@@ -291,7 +306,7 @@ body::after {
   gap: 8px;
   padding: 10px 18px;
   font-family: var(--edu-font-body);
-  font-size: 20px;
+  font-size: 1rem;
   cursor: pointer;
   border: 3px solid var(--edu-border);
   border-radius: 2px;
@@ -326,7 +341,7 @@ body::after {
 }
 .edu-btn-sm {
   padding: 6px 12px;
-  font-size: 18px;
+  font-size: .9rem;
 }
 
 /* ─── Forms ───────────────────────────────────────────────── */
@@ -346,7 +361,7 @@ body::after {
   width: 100%;
   padding: 10px 12px;
   font-family: var(--edu-font-body);
-  font-size: 22px;
+  font-size: 1rem;
   border: 3px solid var(--edu-border);
   border-radius: 2px;
   background: #1a1a2e;
@@ -359,6 +374,8 @@ body::after {
   border-color: var(--edu-accent);
   box-shadow: inset 2px 2px 0 rgba(0,0,0,0.4), 0 0 0 2px rgba(168,85,247,0.35);
 }
+.edu-input[type="number"],
+.edu-input[type="date"] { font-family: var(--edu-font-data); }
 
 /* ─── Modals ──────────────────────────────────────────────── */
 .edu-modal-overlay {
@@ -412,7 +429,7 @@ body::after {
   text-align: center;
   padding: 48px 24px;
   color: var(--edu-text-muted);
-  font-size: 22px;
+  font-size: 1rem;
 }
 .edu-empty-icon {
   font-size: 48px;
@@ -426,7 +443,7 @@ body::after {
   border: 2px solid var(--edu-border);
   border-radius: 2px;
   margin-bottom: 16px;
-  font-size: 20px;
+  font-size: 1rem;
 }
 .edu-alert-info {
   background: rgba(59,130,246,0.15);
@@ -470,6 +487,21 @@ body::after {
   cursor: pointer;
   border-radius: 2px;
 }
+.edu-shell-toggle {
+  display: none;
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 120;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 2px solid var(--edu-border-glow);
+  border-radius: 2px;
+  background: var(--edu-bg-panel);
+  color: var(--edu-text);
+  font: 700 .9rem var(--edu-font-body);
+  cursor: pointer;
+}
 @media (max-width: 768px) {
   .edu-sidebar {
     transform: translateX(-100%);
@@ -484,6 +516,8 @@ body::after {
   .edu-menu-toggle {
     display: block;
   }
+  .edu-shell-toggle { display: inline-flex; align-items: center; }
+  .edu-topbar { padding-left: 76px; }
   .edu-content {
     padding: 16px;
   }

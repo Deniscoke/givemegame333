@@ -11,6 +11,18 @@ const CLASS_A_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
 const CLASS_B_ID = 'bbbbbbbb-0000-4000-8000-000000000002';
 const INVENTED_CLASS_ID = 'cccccccc-0000-4000-8000-000000000003';
 
+test('assessment page participates in the shared educator shell', () => {
+  const html = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'edu', 'assessments.html'),
+    'utf8'
+  );
+
+  assert.equal((html.match(/\bdata-edu-shell(?:\s|=|>)/gi) || []).length, 1);
+  assert.match(html, /href="\/ui\/tokens\.css"/i);
+  assert.match(html, /href="\/ui\/shell\.css"/i);
+  assert.match(html, /src="\/edu\/js\/edu-shell\.js"/i);
+});
+
 class FakeElement {
   constructor(id) {
     this.id = id;
