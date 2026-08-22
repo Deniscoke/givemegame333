@@ -103,7 +103,7 @@ function isExclusiveLegacy016State(state) {
 }
 
 function checksumSql(sql) {
-  return crypto.createHash('sha256').update(sql, 'utf8').digest('hex');
+  return crypto.createHash('sha256').update(sql.replace(/\r\n/g, '\n'), 'utf8').digest('hex');
 }
 
 function loadMigrationEntries(directory, filenames) {

@@ -212,11 +212,15 @@ describe('supported migration catalog', () => {
 });
 
 describe('migration checksums', () => {
-  test('uses the standard SHA-256 digest of the exact SQL bytes', () => {
+  test('uses the standard SHA-256 digest of CRLF-normalized SQL text', () => {
     assert.equal(
       checksumSql('abc'),
       'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
     );
+  });
+
+  test('treats CRLF and LF SQL line endings as equivalent', () => {
+    assert.equal(checksumSql('SELECT 1;\r\n'), checksumSql('SELECT 1;\n'));
   });
 
   test('loads exact SQL text with its full filename and checksum', (t) => {

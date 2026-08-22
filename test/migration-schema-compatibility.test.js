@@ -107,7 +107,7 @@ function legacy016State() {
 test('published migration 029 keeps its adoption checksum unchanged', () => {
   const sql = migration('029_assessment_security.sql');
   assert.equal(
-    crypto.createHash('sha256').update(sql, 'utf8').digest('hex'),
+    crypto.createHash('sha256').update(sql.replace(/\r\n/g, '\n'), 'utf8').digest('hex'),
     '7125f80ea6c279a0249f54133b7fb7ed758612bc8d4a1d856ea9deab2b6157dc'
   );
 });
