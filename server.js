@@ -3982,6 +3982,8 @@ app.get('/api/status', (req, res) => {
 app.get('/choose.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'choose.html')));
 
 // ─── gIVEMEEDU frontend pages ───
+app.get('/student', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'student', 'index.html')));
+app.get('/student/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'student', 'index.html')));
 app.get('/edu', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
 app.get('/edu/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
 app.get('/edu/index.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));

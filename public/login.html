@@ -277,6 +277,7 @@
 
 	<!-- Supabase Auth SDK -->
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+	<script src="/js/post-login-router.js"></script>
 	<script>
 	(function() {
 		'use strict';
@@ -309,6 +310,8 @@
 		}
 
 		async function saveUserAndRedirect(user) {
+			const pendingLobby = sessionStorage.getItem('givemegame_pending_lobby');
+			sessionStorage.removeItem('givemegame_pending_lobby');
 			// Ulož profil do Supabase (ak existuje tabuľka profiles)
 			if (supabase) {
 				const { error } = await supabase.from('profiles').upsert({
@@ -327,7 +330,9 @@
 			}));
 			// Krátke oneskorenie — Supabase musí uložiť session do localStorage pred redirectom
 			await new Promise(r => setTimeout(r, 150));
-			window.location.href = '/choose.html';
+			const { data: { session } } = await supabase.auth.getSession();
+			const schoolRole = await window.PostLoginRouter.fetchSchoolRole(session?.access_token, window.fetch);
+			window.location.href = window.PostLoginRouter.destinationFor({ pendingLobby, schoolRole });
 		}
 
 		function checkOAuthError() {
