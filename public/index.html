@@ -8,8 +8,10 @@
 	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 	<link rel="stylesheet" href="style.css?v=22">
+	<link rel="stylesheet" href="/ui/tokens.css">
+	<link rel="stylesheet" href="/ui/generator-shell.css">
 </head>
-<body class="mode-party">
+<body class="mode-party generator-shell">
 
 	<div class="mobile-overlay-backdrop" id="mobile-overlay-backdrop" onclick="App.UI.closeMobileOverlays()" aria-hidden="true"></div>
 	<div id="app-layout">
@@ -39,16 +41,6 @@
 				🤖 <span data-i18n="robot_challenge">Challenge</span>
 			</button>
 
-			<!-- LANGUAGE SELECTOR -->
-			<div class="lang-selector" id="lang-selector">
-				<button class="btn-lang" data-lang="sk" title="Slovenčina">SK</button>
-				<button class="btn-lang active" data-lang="cs" title="Čeština">CZ</button>
-				<button class="btn-lang" data-lang="de" title="Deutsch">DE</button>
-				<button class="btn-lang" data-lang="en" title="English">EN</button>
-				<button class="btn-lang" data-lang="es" title="Español">ES</button>
-				<button class="btn-lang" data-lang="tr" title="Türkçe">TR</button>
-			</div>
-
 			<div class="header-actions">
 				<a href="/edu/index.html" class="btn btn-retro btn-action-header" title="gIVEMEEDU — Školské rozhranie" style="text-decoration:none;font-size:16px">🏫</a>
 				<button class="btn btn-retro btn-action-header btn-mobile-filters mobile-only" id="btn-mobile-filters" onclick="App.UI.toggleMobileFilters()" title="Filtry" aria-label="Filtry">
@@ -56,17 +48,6 @@
 				</button>
 				<button class="btn btn-retro btn-action-header btn-mobile-smarta mobile-only" id="btn-mobile-smarta" onclick="App.UI.toggleMobileSmarta()" title="SMARTA & Historie" aria-label="SMARTA">
 					<i class="bi bi-mic"></i>
-				</button>
-				<button class="btn btn-retro btn-action-header btn-phone" id="btn-phone" onclick="App.Profile.open()" title="Profil & gIVEMECOIN">
-					<svg class="phone-icon" viewBox="0 0 16 24" width="16" height="24">
-						<rect x="2" y="1" width="12" height="22" rx="2" fill="var(--border)" stroke="var(--text)" stroke-width="1"/>
-						<rect x="3" y="2" width="10" height="18" rx="1" fill="var(--panel)"/>
-						<rect x="5" y="4" width="6" height="10" fill="var(--bg)"/>
-						<circle cx="8" cy="20" r="1.5" fill="var(--border)"/>
-					</svg>
-				</button>
-				<button class="btn btn-retro btn-action-header btn-music" id="btn-music" onclick="App.Music.toggle()" title="Hudba">
-					<i class="bi bi-music-note-beamed" id="music-icon"></i>
 				</button>
 				<button class="btn btn-retro btn-action-header" onclick="App.UI.openHelp()" data-i18n-title="help">
 					<i class="bi bi-question-circle"></i>
@@ -77,12 +58,26 @@
 				<button class="btn btn-retro btn-action-header" id="btn-library" onclick="App.Library.open()" title="Knižnica hier">
 					<i class="bi bi-collection"></i>
 				</button>
-				<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleTheme()" data-i18n-title="appearance">
-					<i class="bi bi-moon-fill" id="theme-icon"></i>
-				</button>
 				<button class="btn btn-retro btn-action-header desktop-only" onclick="App.UI.toggleFullscreen()" data-i18n-title="fullscreen">
 					<i class="bi bi-arrows-fullscreen"></i>
 				</button>
+				<details class="preferences-menu">
+					<summary aria-label="Účet a nastavenia"><i class="bi bi-gear"></i> Nastavenia</summary>
+					<div class="preferences-menu__content">
+						<span class="preferences-menu__label">Jazyk</span>
+						<div class="lang-selector" id="lang-selector">
+							<button class="btn-lang" data-lang="sk" title="Slovenčina">SK</button>
+							<button class="btn-lang active" data-lang="cs" title="Čeština">CZ</button>
+							<button class="btn-lang" data-lang="de" title="Deutsch">DE</button>
+							<button class="btn-lang" data-lang="en" title="English">EN</button>
+							<button class="btn-lang" data-lang="es" title="Español">ES</button>
+							<button class="btn-lang" data-lang="tr" title="Türkçe">TR</button>
+						</div>
+						<button class="btn btn-retro btn-action-header btn-phone" id="btn-phone" onclick="App.Profile.open()" title="Profil & gIVEMECOIN">Účet a gIVEMECOIN</button>
+						<button class="btn btn-retro btn-action-header btn-music" id="btn-music" onclick="App.Music.toggle()" title="Hudba"><i class="bi bi-music-note-beamed" id="music-icon"></i> Hudba</button>
+						<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleTheme()" data-i18n-title="appearance"><i class="bi bi-moon-fill" id="theme-icon"></i> Vzhľad</button>
+					</div>
+				</details>
 			</div>
 		</header>
 
@@ -91,6 +86,11 @@
 
 			<!-- ─── LEFT PANEL: MODE + FILTERS ─── -->
 			<aside class="left-panel">
+				<button id="btn-join-session" class="btn btn-retro btn-join-session" onclick="Session.openJoinDialog()" title="Pripoj sa do session">
+					<i class="bi bi-key"></i> Pripojiť sa do hry
+				</button>
+
+				<section id="creation-basics" aria-label="Základné nastavenia hry">
 
 				<!-- MODE SELECTOR -->
 				<div class="panel-section mode-section">
@@ -187,6 +187,11 @@
 							</button>
 						</div>
 					</div>
+					</div>
+
+					<details id="advanced-options">
+						<summary>Rozšírené možnosti</summary>
+						<div class="advanced-options__content">
 
 					<!-- ENERGY LEVEL (all modes) -->
 					<div class="filter-group">
@@ -289,6 +294,8 @@
 						</select>
 					</div>
 				</div>
+						</div>
+					</details>
 
 				<!-- DESCRIPTION / POPIS -->
 				<div class="panel-section">
@@ -305,16 +312,12 @@
 				<button class="btn btn-retro btn-surprise" onclick="App.surprise()">
 					<i class="bi bi-shuffle"></i> <span data-i18n="surprise">Překvap mě!</span>
 				</button>
+				</section>
 
 				<button id="btn-create-session" class="btn-icon" onclick="Session.create(window.currentGame)"
 				  title="Vytvor hernú session pre skupinu" style="display:none">
 				  🎮
 				</button>
-				<button id="btn-join-session" class="btn-icon" onclick="Session.openJoinDialog()"
-				  title="Pripoj sa do session">
-				  🔑
-				</button>
-
 				<!-- ENGINE STATUS -->
 				<div class="panel-section panel-engine">
 					<label class="panel-label"><i class="bi bi-cpu"></i> <span data-i18n="engine_label">IndieWeb Engine</span></label>

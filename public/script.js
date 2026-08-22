@@ -161,6 +161,7 @@ const App = (() => {
 
 	// ─── Inicializace ───
 	async function init() {
+		document.body.classList.add('generator-shell');
 		try {
 			const raw = sessionStorage.getItem('givemegame_user');
 			const u = raw ? JSON.parse(raw) : null;

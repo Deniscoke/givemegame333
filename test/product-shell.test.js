@@ -71,6 +71,16 @@ test('shared shell reserves the pixel face for display accents', () => {
   assert.match(shell, /prefers-reduced-motion:\s*reduce/);
 });
 
+test('generator foregrounds activity basics and keeps optional controls collapsed', () => {
+  const generator = read('public/index.html');
+
+  assert.match(generator, /id="creation-basics"/);
+  assert.match(generator, /<details\b[^>]*id="advanced-options"/i);
+  assert.match(generator, /id="btn-join-session"[\s\S]*Pripojiť sa do hry/i);
+  assert.match(generator, /href="\/ui\/generator-shell\.css"/i);
+  assert.doesNotMatch(generator, /id="btn-join-session"[\s\S]{0,160}>\s*🔑\s*<\/button>/i);
+});
+
 test('shell helper exports deterministic menu helpers', () => {
   const shell = require('../public/ui/shell.js');
   assert.equal(typeof shell.setActiveNavigation, 'function');

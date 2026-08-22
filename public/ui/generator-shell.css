@@ -1,0 +1,168 @@
+/* Focused generator shell. Scoped to preserve generated-game rendering. */
+body.generator-shell {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+body.generator-shell code,
+body.generator-shell pre,
+body.generator-shell .coin-count,
+body.generator-shell .engine-indicator,
+body.generator-shell .stat-value {
+  font-family: var(--font-data);
+}
+
+body.generator-shell .panel-section,
+body.generator-shell .panel-label,
+body.generator-shell .filter-label,
+body.generator-shell .form-select,
+body.generator-shell .form-textarea,
+body.generator-shell .btn-mode,
+body.generator-shell .btn-toggle {
+  font-family: var(--font-body);
+}
+
+body.generator-shell header {
+  min-width: 0;
+  overflow: visible;
+}
+
+body.generator-shell .brand-title {
+  flex: 0 1 auto;
+}
+
+body.generator-shell .header-actions {
+  align-items: center;
+  min-width: 0;
+}
+
+body.generator-shell .preferences-menu {
+  position: relative;
+}
+
+body.generator-shell .preferences-menu summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  gap: .5rem;
+  padding: 0 .75rem;
+  cursor: pointer;
+  color: var(--shell-text);
+  background: var(--shell-raised);
+  border: 1px solid var(--shell-muted);
+  border-radius: var(--shell-radius);
+  font-weight: 700;
+  list-style: none;
+}
+
+body.generator-shell .preferences-menu summary::-webkit-details-marker { display: none; }
+
+body.generator-shell .preferences-menu__content {
+  position: absolute;
+  z-index: 101;
+  top: calc(100% + .5rem);
+  right: 0;
+  display: grid;
+  gap: .5rem;
+  width: min(19rem, calc(100vw - 2rem));
+  padding: 1rem;
+  background: var(--shell-surface);
+  border: 1px solid var(--shell-muted);
+  border-radius: var(--shell-radius);
+  box-shadow: 0 .75rem 2rem rgba(0, 0, 0, .35);
+}
+
+body.generator-shell .preferences-menu__label {
+  color: var(--shell-muted);
+  font-size: .875rem;
+  font-weight: 700;
+}
+
+body.generator-shell .preferences-menu .lang-selector {
+  flex-wrap: wrap;
+}
+
+body.generator-shell .preferences-menu .btn-action-header {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+  gap: .5rem;
+  font-family: var(--font-body);
+  font-size: .9375rem;
+}
+
+body.generator-shell aside.left-panel {
+  width: min(100%, 28rem);
+  padding: var(--shell-space-3);
+}
+
+body.generator-shell #creation-basics {
+  display: grid;
+  gap: var(--shell-space-3);
+}
+
+body.generator-shell .btn-join-session,
+body.generator-shell .btn-generate,
+body.generator-shell .btn-surprise {
+  width: 100%;
+  min-height: 44px;
+  font-family: var(--font-body);
+  font-weight: 700;
+}
+
+body.generator-shell #advanced-options {
+  padding: .75rem;
+  border: 1px solid var(--shell-muted);
+  border-radius: var(--shell-radius);
+  background: var(--shell-surface);
+}
+
+body.generator-shell #advanced-options summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--shell-text);
+  font-weight: 700;
+}
+
+body.generator-shell .advanced-options__content {
+  display: grid;
+  gap: var(--shell-space-3);
+  padding-top: var(--shell-space-2);
+}
+
+body.generator-shell:not(.mobile-smarta-open) aside.right-panel {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  body.generator-shell header {
+    overflow: hidden;
+    justify-content: space-between;
+  }
+
+  body.generator-shell .header-actions > a,
+  body.generator-shell .header-actions > button:not(.btn-mobile-filters):not(.btn-mobile-smarta) {
+    display: none;
+  }
+
+  body.generator-shell .preferences-menu summary {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  body.generator-shell .preferences-menu summary i { font-size: 1rem; }
+
+  body.generator-shell aside.left-panel {
+    width: min(22rem, 90vw);
+  }
+
+  body.generator-shell.mobile-smarta-open aside.right-panel {
+    display: flex;
+  }
+}
