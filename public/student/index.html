@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gIVEME — Domov žiaka</title>
+  <link rel="stylesheet" href="/ui/tokens.css">
+  <link rel="stylesheet" href="/ui/shell.css">
+  <link rel="stylesheet" href="/student/student.css">
+</head>
+<body>
+  <div class="product-shell student-home">
+    <a class="product-skip-link" href="#main-content">Preskočiť na obsah</a>
+    <nav class="product-nav student-nav" aria-label="Navigácia žiaka">
+      <a class="student-nav__brand" href="/student/" aria-label="gIVEME, domov žiaka">gIVEME</a>
+      <div class="student-nav__primary" aria-label="Hlavné časti">
+        <a href="/student/" data-shell-route="/student/">Domov</a>
+        <a href="#activities">Moje aktivity</a>
+        <a href="#progress">Pokrok</a>
+        <a href="/index.html">Hrať sám</a>
+        <button class="student-nav__more" type="button" aria-expanded="false" aria-controls="student-more-menu">Viac</button>
+      </div>
+      <div class="student-nav__more-menu" id="student-more-menu" hidden>
+        <a href="/account.html">Môj účet</a>
+      </div>
+    </nav>
+
+    <main class="product-shell__content" id="main-content" tabindex="-1">
+      <header class="student-intro">
+        <p class="student-eyebrow">DOMOV ŽIAKA</p>
+        <h1>Pripoj sa do hry</h1>
+        <p>Kód dostaneš od učiteľa. Zadaj ho a otvorí sa spoločná hra.</p>
+        <p class="student-profile" id="student-profile" hidden></p>
+      </header>
+
+      <section class="student-join product-card" aria-labelledby="join-title">
+        <div>
+          <p class="student-eyebrow">SPOLOČNÁ HRA</p>
+          <h2 id="join-title">Zadaj kód hry</h2>
+        </div>
+        <form id="join-game-form" novalidate>
+          <label class="product-field" for="join-game-code">Kód hry</label>
+          <div class="join-code-portal" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <input id="join-game-code" name="join-game-code" type="text" inputmode="text" autocomplete="off" maxlength="12" aria-label="6-znakový kód hry" aria-describedby="join-code-help join-code-error" placeholder="AB12CD">
+          <p class="student-hint" id="join-code-help">Použi 6 písmen alebo číslic z pozvánky.</p>
+          <p class="student-error" id="join-code-error" role="alert" tabindex="-1" hidden></p>
+          <button class="product-button" type="submit">Pripojiť sa</button>
+        </form>
+      </section>
+
+      <section class="student-grid" aria-label="Prehľad žiaka">
+        <article class="product-card student-state" aria-labelledby="session-title">
+          <p class="student-eyebrow">TERAZ</p>
+          <h2 id="session-title">Aktívna hra</h2>
+          <p id="active-session" class="product-state" aria-live="polite">Žiadna aktívna hra.</p>
+        </article>
+        <article class="product-card student-state" id="activities" aria-labelledby="activities-title">
+          <p class="student-eyebrow">PREHĽAD</p>
+          <h2 id="activities-title">Moje aktivity</h2>
+          <p id="activity-state" class="product-state" aria-live="polite">Načítavam tvoje aktivity…</p>
+        </article>
+        <article class="product-card student-state" id="progress" aria-labelledby="progress-title">
+          <p class="student-eyebrow">UČENIE</p>
+          <h2 id="progress-title">Pokrok</h2>
+          <p id="progress-state" class="product-state" aria-live="polite">Načítavam pokrok…</p>
+        </article>
+      </section>
+
+      <p class="student-solo"><a class="product-button" href="/index.html">Hrať sám</a></p>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/ui/shell.js"></script>
+  <script src="/student/student.js"></script>
+</body>
+</html>
