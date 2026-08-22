@@ -30,6 +30,22 @@
 		}
 		.game-title { font-size: 24px; font-weight: 700; }
 		.section-title { font-size: 17px; font-weight: 700; }
+		.section-toggle {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			width: 100%;
+			min-height: 44px;
+			padding: 8px 0;
+			border: 0;
+			background: transparent;
+			color: inherit;
+			font: inherit;
+			text-align: left;
+			cursor: pointer;
+		}
+		.section-toggle .toggle-icon { margin-left: auto; }
+		.section-toggle[aria-expanded="false"] .toggle-icon { transform: rotate(-90deg); }
 		.game-mode-badge, .badge, .game-meta-row, .meta-value, .tag, .rvp-sub-label, .rvp-badge {
 			font-family: var(--font-data);
 			font-size: 12px;
@@ -94,9 +110,11 @@
 			</div>
 
 			<div class="game-section collapsible" data-section="rvp">
-				<h3 class="section-title clickable" onclick="GP.toggleSection('rvp')">
-					<i class="bi bi-journal-bookmark"></i> Mapovanie RVP
-					<i class="bi bi-chevron-down toggle-icon"></i>
+				<h3 class="section-title">
+					<button class="section-toggle" type="button" aria-expanded="true" aria-controls="section-rvp" onclick="GP.toggleSection('rvp'); this.setAttribute('aria-expanded', String(this.getAttribute('aria-expanded') !== 'true'))">
+						<i class="bi bi-journal-bookmark" aria-hidden="true"></i> Mapovanie RVP
+						<i class="bi bi-chevron-down toggle-icon" aria-hidden="true"></i>
+					</button>
 				</h3>
 				<div class="section-body" id="section-rvp">
 					<div class="rvp-subsection"><span class="rvp-sub-label">Kľúčové kompetencie</span><div id="rvp-kompetence" class="rvp-badges"></div></div>
@@ -109,9 +127,11 @@
 			</div>
 
 			<div class="game-section collapsible" data-section="reflection">
-				<h3 class="section-title clickable" onclick="GP.toggleSection('reflection')">
-					<i class="bi bi-chat-dots"></i> Reflexné otázky
-					<i class="bi bi-chevron-down toggle-icon"></i>
+				<h3 class="section-title">
+					<button class="section-toggle" type="button" aria-expanded="true" aria-controls="section-reflection" onclick="GP.toggleSection('reflection'); this.setAttribute('aria-expanded', String(this.getAttribute('aria-expanded') !== 'true'))">
+						<i class="bi bi-chat-dots" aria-hidden="true"></i> Reflexné otázky
+						<i class="bi bi-chevron-down toggle-icon" aria-hidden="true"></i>
+					</button>
 				</h3>
 				<div class="section-body" id="section-reflection">
 					<ul id="game-reflection" class="game-list"></ul>
@@ -119,9 +139,11 @@
 			</div>
 
 			<div class="game-section collapsible" data-section="safety">
-				<h3 class="section-title clickable" onclick="GP.toggleSection('safety')">
-					<i class="bi bi-shield-check"></i> Bezpečnostné poznámky
-					<i class="bi bi-chevron-down toggle-icon"></i>
+				<h3 class="section-title">
+					<button class="section-toggle" type="button" aria-expanded="true" aria-controls="section-safety" onclick="GP.toggleSection('safety'); this.setAttribute('aria-expanded', String(this.getAttribute('aria-expanded') !== 'true'))">
+						<i class="bi bi-shield-check" aria-hidden="true"></i> Bezpečnostné poznámky
+						<i class="bi bi-chevron-down toggle-icon" aria-hidden="true"></i>
+					</button>
 				</h3>
 				<div class="section-body" id="section-safety">
 					<ul id="game-safety" class="game-list"></ul>
@@ -129,9 +151,11 @@
 			</div>
 
 			<div class="game-section collapsible" data-section="adaptation">
-				<h3 class="section-title clickable" onclick="GP.toggleSection('adaptation')">
-					<i class="bi bi-arrows-angle-expand"></i> Tipy na úpravy
-					<i class="bi bi-chevron-down toggle-icon"></i>
+				<h3 class="section-title">
+					<button class="section-toggle" type="button" aria-expanded="true" aria-controls="section-adaptation" onclick="GP.toggleSection('adaptation'); this.setAttribute('aria-expanded', String(this.getAttribute('aria-expanded') !== 'true'))">
+						<i class="bi bi-arrows-angle-expand" aria-hidden="true"></i> Tipy na úpravy
+						<i class="bi bi-chevron-down toggle-icon" aria-hidden="true"></i>
+					</button>
 				</h3>
 				<div class="section-body" id="section-adaptation">
 					<ul id="game-adaptation" class="game-list"></ul>
@@ -139,9 +163,11 @@
 			</div>
 
 			<div class="game-section collapsible" data-section="facilitator">
-				<h3 class="section-title clickable" onclick="GP.toggleSection('facilitator')">
-					<i class="bi bi-person-badge"></i> Poznámky pre vedúceho
-					<i class="bi bi-chevron-down toggle-icon"></i>
+				<h3 class="section-title">
+					<button class="section-toggle" type="button" aria-expanded="true" aria-controls="section-facilitator" onclick="GP.toggleSection('facilitator'); this.setAttribute('aria-expanded', String(this.getAttribute('aria-expanded') !== 'true'))">
+						<i class="bi bi-person-badge" aria-hidden="true"></i> Poznámky pre vedúceho
+						<i class="bi bi-chevron-down toggle-icon" aria-hidden="true"></i>
+					</button>
 				</h3>
 				<div class="section-body" id="section-facilitator">
 					<p id="game-facilitator" class="facilitator-text"></p>

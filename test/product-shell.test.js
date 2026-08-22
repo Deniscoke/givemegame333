@@ -168,7 +168,7 @@ test('public and account surfaces load the readable shell and reserve pixel type
 
 test('public authentication, account, pricing, game and billing controls keep 44px touch targets', () => {
   const controls = [
-    ['public/home.html', ['public/home.css'], ['.btn', '.hc-dot-btn']],
+    ['public/home.html', ['public/home.css'], ['.brand', '.nav-links a', '.btn', '.hc-dot-btn', '.footer a']],
     ['public/login.html', [], ['.btn-login', '.login-lang-btn', '.btn-skip']],
     ['public/account.html', [], ['.btn']],
     ['public/pricing.html', [], ['.plan-card button', '.consent-modal label', '.consent-modal button']],
@@ -181,6 +181,41 @@ test('public authentication, account, pricing, game and billing controls keep 44
     const css = pageOwnedStyles(file, linkedStylesheets);
     for (const selector of selectors) assertMinTouchTarget(css, selector, file);
   }
+});
+
+test('long account, pricing and billing documents override the legacy fixed viewport', () => {
+  for (const file of [
+    'public/account.html',
+    'public/pricing.html',
+    'public/billing/success.html',
+    'public/billing/cancel.html',
+  ]) {
+    const body = declarationsFor(pageOwnedStyles(file, []), 'body');
+    assert.match(body, /display:\s*block/i, `${file} should use document flow`);
+    assert.match(body, /min-height:\s*100vh/i, `${file} should cover short viewports`);
+    assert.match(body, /height:\s*auto/i, `${file} should grow beyond one viewport`);
+    assert.match(body, /overflow-y:\s*auto/i, `${file} should keep lower content reachable`);
+    assert.doesNotMatch(body, /overflow(?:-y)?:\s*hidden/i, `${file} should not clip vertical content`);
+  }
+});
+
+test('public game disclosure controls expose native keyboard and expanded-state semantics', () => {
+  const game = read('public/game.html');
+  const css = pageOwnedStyles('public/game.html', []);
+  const toggles = [...game.matchAll(/<button\b[^>]*class="[^"]*section-toggle[^"]*"[^>]*>/gi)];
+
+  assert.equal(toggles.length, 5);
+  assert.doesNotMatch(game, /<h3\b[^>]*onclick=/i);
+  for (const toggle of toggles) {
+    assert.match(toggle[0], /type="button"/i);
+    assert.match(toggle[0], /aria-expanded="true"/i);
+    const controlledId = toggle[0].match(/aria-controls="([^"]+)"/i)?.[1];
+    assert.ok(controlledId, 'each disclosure button should identify its controlled region');
+    assert.match(game, new RegExp(`<div\\b[^>]*id="${controlledId}"`, 'i'));
+    assert.match(toggle[0], /onclick="[^"]*GP\.toggleSection\('[^']+'\)[^"]*aria-expanded/i);
+  }
+  assertMinTouchTarget(css, '.section-toggle', 'public/game.html');
+  assert.match(declarationsFor(css, '.section-toggle'), /font:\s*inherit/i);
 });
 
 test('public task labels are Slovak and generator actions use the canonical route', () => {
@@ -197,6 +232,28 @@ test('public task labels are Slovak and generator actions use the canonical rout
   const generatorLinks = [...game.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?Otvoriť generátor(?:(?!<\/a>)[\s\S])*?<\/a>/gi)];
   assert.ok(generatorLinks.length >= 2);
   assert.ok(generatorLinks.every((match) => match[1] === '/index.html'));
+});
+
+test('pricing presents plan and consent tasks consistently in Slovak', () => {
+  const pricing = read('public/pricing.html');
+
+  for (const copy of [
+    '/ mesiac',
+    'Učiteľ – mesačný',
+    'Učiteľ – ročný',
+    'Škola – pilotný',
+    'Pred presmerovaním na platobnú bránu',
+    'Načítava sa…',
+    'Súhlasom zároveň potvrdzujete',
+    'Obchodné podmienky',
+    'Zásady ochrany osobných údajov',
+  ]) {
+    assert.match(pricing, new RegExp(copy, 'i'));
+  }
+  assert.doesNotMatch(
+    pricing,
+    /měsíc|měsíční|roční|pilotní|Před přesměrováním|Načítá se|Souhlasem zároveň|Obchodní podmínky|osobních údajů/i,
+  );
 });
 
 test('generator foregrounds activity basics and keeps optional controls collapsed', () => {
