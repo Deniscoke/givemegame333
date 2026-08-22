@@ -44,13 +44,13 @@
     return path;
   }
 
-  function appendLink(document, list, item, activeHref) {
+  function appendLink(document, list, item, activeItem) {
     const listItem = document.createElement('li');
     const link = document.createElement('a');
     link.setAttribute('href', item.href);
     link.setAttribute('data-shell-route', '');
     link.textContent = item.label;
-    if (item.href === activeHref) {
+    if (item === activeItem) {
       link.className = 'active';
       link.setAttribute('aria-current', 'page');
     }
@@ -58,13 +58,15 @@
     list.append(listItem);
   }
 
-  function activeHrefFor(items, pathname) {
+  function activeItemFor(items, pathname, role) {
     const current = canonicalPath(pathname);
-    const exact = items.find((item) => canonicalPath(item.href) === current);
-    return exact ? exact.href : null;
+    if (role === 'student' && current === '/edu/assessments.html') {
+      return items.find((item) => item.label === 'Moje aktivity') || null;
+    }
+    return items.find((item) => canonicalPath(item.href) === current) || null;
   }
 
-  function appendGroup(document, nav, items, group, label, activeHref) {
+  function appendGroup(document, nav, items, group, label, activeItem) {
     const groupedItems = items.filter((item) => item.group === group);
     if (!groupedItems.length) return;
 
@@ -78,7 +80,7 @@
     }
     const list = document.createElement('ul');
     list.className = 'edu-sidebar-nav';
-    groupedItems.forEach((item) => appendLink(document, list, item, activeHref));
+    groupedItems.forEach((item) => appendLink(document, list, item, activeItem));
     section.append(list);
     nav.append(section);
   }
@@ -90,7 +92,7 @@
 
     const resolvedRole = role || root?.EduAuth?.getProfile?.()?.school?.role || null;
     const items = itemsForRole(resolvedRole);
-    const activeHref = activeHrefFor(items, pathname || root?.location?.pathname || '/');
+    const activeItem = activeItemFor(items, pathname || root?.location?.pathname || '/', resolvedRole);
     const nav = document.createElement('nav');
     nav.className = 'edu-sidebar';
     nav.setAttribute('aria-label', 'Navigácia EDU');
@@ -109,8 +111,8 @@
     brand.append(title, badge);
     nav.append(brand);
 
-    appendGroup(document, nav, items, 'primary', 'Hlavná navigácia', activeHref);
-    appendGroup(document, nav, items, 'school', 'Správa školy', activeHref);
+    appendGroup(document, nav, items, 'primary', 'Hlavná navigácia', activeItem);
+    appendGroup(document, nav, items, 'school', 'Správa školy', activeItem);
 
     const footer = document.createElement('div');
     footer.className = 'edu-sidebar-footer';

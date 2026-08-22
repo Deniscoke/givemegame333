@@ -197,6 +197,87 @@ test('educator shell mounts DOM nodes and marks only the current route active', 
   assert.equal(currentLinks[0].attributes.get('href'), '/edu/assessments.html');
 });
 
+test('educator shell keeps active navigation unique across the role and route matrix', () => {
+  class TestNode {
+    constructor(tagName, ownerDocument) {
+      this.tagName = tagName;
+      this.ownerDocument = ownerDocument;
+      this.children = [];
+      this.attributes = new Map();
+      this.className = '';
+      this.textContent = '';
+    }
+
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = [...children]; }
+    setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  }
+
+  const shell = require('../public/edu/js/edu-shell.js');
+  const currentLabels = (role, pathname) => {
+    const ownerDocument = { createElement: (tagName) => new TestNode(tagName, ownerDocument) };
+    const root = new TestNode('div', ownerDocument);
+    shell.mount({ root, role, pathname });
+    const current = [];
+    const visit = (node) => {
+      if (node.attributes.get('aria-current') === 'page') current.push(node.textContent);
+      node.children.forEach(visit);
+    };
+    root.children.forEach(visit);
+    return current;
+  };
+
+  for (const role of ['teacher', 'admin']) {
+    for (const pathname of shell.itemsForRole(role).map((item) => item.href)) {
+      assert.ok(currentLabels(role, pathname).length <= 1, `${role} ${pathname} should have at most one current link`);
+    }
+    assert.deepEqual(currentLabels(role, '/index.html'), ['Vytvoriť aktivitu']);
+  }
+  assert.deepEqual(currentLabels('student', '/edu/assessments.html'), ['Moje aktivity']);
+});
+
+test('EDU surface typography keeps labels readable and pixel text at least 10px', () => {
+  const css = read('public/edu/css/edu.css');
+  const scopedSources = [
+    css,
+    read('public/edu/members.html'),
+    read('public/edu/perk-requests.html'),
+  ];
+
+  assert.match(css, /\.edu-table th\s*\{[^}]*font-family:\s*var\(--edu-font-data\)/i);
+  assert.match(css, /\.edu-form-group label\s*\{[^}]*font-family:\s*var\(--edu-font-body\)/i);
+
+  for (const source of scopedSources) {
+    for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1].trim();
+      const declarations = match[2];
+      const sizes = [...declarations.matchAll(/font-size:\s*([0-9.]+)px/gi)];
+      for (const size of sizes) {
+        assert.ok(Number(size[1]) >= 10, `${selector} should not render ${size[1]}px text`);
+      }
+      if (/font-family:\s*(?:var\(--edu-font-pixel\)|['"]Press Start 2P['"])/i.test(declarations)) {
+        assert.ok(sizes.every((size) => Number(size[1]) >= 10), `${selector} uses pixel text below 10px`);
+      }
+    }
+  }
+});
+
+test('every educator surface exposes a skip link, main target and one primary heading', () => {
+  for (const [file] of educatorPages) {
+    const html = read(file);
+    assert.match(html, /<a\b[^>]*class="[^"]*skip-link[^"]*"[^>]*href="#main-content"/i,
+      `${file} should offer a skip link to its main content`);
+    assert.match(html, /<main\b[^>]*id="main-content"/i, `${file} should expose the skip target`);
+    assert.equal((html.match(/<h1\b/gi) || []).length, 1, `${file} should contain one primary heading`);
+  }
+});
+
+test('assessment tabs and actions preserve the 44px touch target minimum', () => {
+  const html = read('public/edu/assessments.html');
+  assert.match(html, /\.assess-tab\s*\{[^}]*min-height:\s*44px/i);
+  assert.match(html, /\.assess-btn\s*\{[^}]*min-height:\s*44px/i);
+});
+
 test('every educator surface loads the shared shell once in stable asset order', () => {
   for (const [file, pageStylesheet] of educatorPages) {
     const html = read(file);

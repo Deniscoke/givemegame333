@@ -13,7 +13,7 @@
       padding: 4px 10px;
       border-radius: 2px;
       font-family: var(--edu-font-data);
-      font-size: 6px;
+      font-size: .75rem;
       border: 2px solid #000;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -161,30 +161,31 @@
     }
     .rpg-inline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 10px; }
     .rpg-inline-tile { background: rgba(124,58,237,0.08); border: 1px solid #2d2d6b; padding: 8px; border-radius: 4px; }
-    .rpg-inline-tile-label { font-family: 'Press Start 2P', monospace; font-size: 8px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; }
+    .rpg-inline-tile-label { font-family: var(--edu-font-data); font-size: .7rem; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; }
     .rpg-inline-tile-val { font-family: var(--edu-font-data); font-size: 22px; color: #e9d5ff; }
     .rpg-inline-title { font-family: 'Press Start 2P', monospace; font-size: 10px; color: #a855f7; margin: 12px 0 6px 0; }
     .rpg-inline-perks { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
     .rpg-inline-perk { text-align: center; padding: 6px; background: rgba(255,255,255,0.04); border: 1px solid #2d2d6b; border-radius: 4px; font-size: 22px; position: relative; }
     .rpg-inline-perk.locked { opacity: 0.3; }
     .rpg-inline-perk.used::after { content: '•'; position: absolute; top: -2px; right: 4px; color: #4ade80; font-size: 18px; }
-    .rpg-inline-perk-level { font-family: 'Press Start 2P', monospace; font-size: 6px; color: #94a3b8; display: block; margin-top: 2px; }
+    .rpg-inline-perk-level { font-family: var(--edu-font-data); font-size: .65rem; color: #94a3b8; display: block; margin-top: 2px; }
     .rpg-xp-bar { height: 10px; background: #1e1b4b; border: 1px solid #000; border-radius: 2px; overflow: hidden; margin-top: 4px; }
     .rpg-xp-bar-fill { height: 100%; background: linear-gradient(90deg, #7c3aed, #a855f7); }
   </style>
 </head>
 <body>
+  <a class="product-skip-link skip-link" href="#main-content">Preskočiť na obsah</a>
   <div data-edu-shell></div>
 
   <div class="edu-main">
     <header class="edu-topbar">
       <div style="display:flex;align-items:center;gap:12px">
-        <h2>Clenovia a role</h2>
+        <h1>Clenovia a role</h1>
       </div>
       <div id="edu-topbar-user" class="edu-topbar-user"></div>
     </header>
 
-    <main class="edu-content">
+    <main class="edu-content" id="main-content">
       <div id="alerts"></div>
 
       <!-- Role stats -->

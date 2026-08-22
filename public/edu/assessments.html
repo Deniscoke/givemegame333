@@ -13,7 +13,7 @@
 	.assess-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
 	.assess-header h1 { font-size: 28px; margin: 0; }
 	.assess-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
-	.assess-tab { padding: 10px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; cursor: pointer; color: inherit; font-size: 14px; min-height: 40px; }
+	.assess-tab { padding: 10px 16px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; cursor: pointer; color: inherit; font-size: 14px; min-height: 44px; }
 	.assess-tab[aria-selected="true"] { background: var(--accent, #633cff); color: #fff; }
 	.assess-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
 	.assess-card h3 { margin: 0 0 6px 0; font-size: 18px; }
@@ -21,7 +21,7 @@
 	.assess-pill { background: rgba(99,60,255,0.18); border: 1px solid rgba(99,60,255,0.4); padding: 2px 8px; border-radius: 999px; }
 	.assess-pill.pre { background: rgba(34,197,94,0.18); border-color: rgba(34,197,94,0.4); }
 	.assess-pill.post { background: rgba(249,115,22,0.18); border-color: rgba(249,115,22,0.4); }
-	.assess-btn { padding: 10px 16px; background: var(--accent, #633cff); color: #fff; border: 0; border-radius: 6px; cursor: pointer; font-size: 14px; min-height: 40px; }
+	.assess-btn { padding: 10px 16px; background: var(--accent, #633cff); color: #fff; border: 0; border-radius: 6px; cursor: pointer; font-size: 14px; min-height: 44px; }
 	.assess-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 	.assess-btn.secondary { background: rgba(255,255,255,0.12); }
 	.assess-form { display: grid; gap: 12px; }
@@ -47,9 +47,10 @@
 </style>
 </head>
 <body>
+<a class="product-skip-link skip-link" href="#main-content">Preskočiť na obsah</a>
 <div data-edu-shell data-edu-shell-autoload></div>
 <div class="edu-main">
-<main class="assess-shell" id="assess-shell">
+<main class="assess-shell" id="main-content">
 	<header class="assess-header">
 		<h1 data-i18n="assess_title">INVOK Assessmenty</h1>
 		<a href="index.html" class="assess-btn secondary" data-i18n="assess_back_to_edu">← Späť do EDU</a>
