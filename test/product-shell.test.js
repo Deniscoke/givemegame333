@@ -43,6 +43,22 @@ test('student home exposes its join portal and canonical lobby helpers', async (
   assert.equal(student.joinDestination('123'), null);
 });
 
+test('student assessment summary uses submitted attempts and the canonical delta map', () => {
+  const student = require('../public/student/student.js');
+  const summary = student.summarizeAssessmentResults({
+    attempts: [
+      { id: 'attempt-draft', status: 'in_progress' },
+      { id: 'attempt-done', status: 'submitted' },
+    ],
+    deltas: {
+      entrepreneurship: { pre_percent: 45, post_percent: 70 },
+      critical_media_thinking: { pre_percent: 60, post_percent: 75 },
+    },
+  });
+
+  assert.deepEqual(summary, { completedActivities: 1, progressAreas: 2 });
+});
+
 test('shared shell reserves the pixel face for display accents', () => {
   const tokens = read('public/ui/tokens.css');
   const shell = read('public/ui/shell.css');

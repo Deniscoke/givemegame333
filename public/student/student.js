@@ -78,15 +78,25 @@
     element.hidden = false;
   }
 
-  function renderResults(results) {
+  function summarizeAssessmentResults(results) {
     const attempts = Array.isArray(results && results.attempts) ? results.attempts : [];
-    const deltas = Array.isArray(results && results.deltas) ? results.deltas : [];
-    setState('activity-state', attempts.length
-      ? `Máš ${attempts.length} dokončených aktivít.`
-      : 'Zatiaľ nemáš dokončené aktivity.', attempts.length ? 'success' : '');
-    setState('progress-state', deltas.length
-      ? `Sleduješ pokrok v ${deltas.length} oblastiach.`
-      : 'Pokrok sa ukáže po prvých aktivitách.', deltas.length ? 'success' : '');
+    const deltas = results && results.deltas;
+    return {
+      completedActivities: attempts.filter((attempt) => attempt && attempt.status === 'submitted').length,
+      progressAreas: deltas && typeof deltas === 'object' && !Array.isArray(deltas)
+        ? Object.keys(deltas).length
+        : 0,
+    };
+  }
+
+  function renderResults(results) {
+    const summary = summarizeAssessmentResults(results);
+    setState('activity-state', summary.completedActivities
+      ? `Máš ${summary.completedActivities} dokončených aktivít.`
+      : 'Zatiaľ nemáš dokončené aktivity.', summary.completedActivities ? 'success' : '');
+    setState('progress-state', summary.progressAreas
+      ? `Sleduješ pokrok v ${summary.progressAreas} oblastiach.`
+      : 'Pokrok sa ukáže po prvých aktivitách.', summary.progressAreas ? 'success' : '');
   }
 
   async function loadRemoteState() {
@@ -147,5 +157,5 @@
     else bindPage();
   }
 
-  return { normalizeJoinCode, joinDestination };
+  return { normalizeJoinCode, joinDestination, summarizeAssessmentResults };
 });
