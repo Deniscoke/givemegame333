@@ -403,3 +403,55 @@ test('school role lookup never grants a role after a failed or invalid response'
   assert.equal(await router.fetchSchoolRole('access-token', invalidRole), null);
   assert.equal(await router.fetchSchoolRole('access-token', networkFailure), null);
 });
+
+test('session shell exposes a focused state helper for the live game experience', () => {
+  const toggles = [];
+  const context = vm.createContext({
+    window: {},
+    document: { body: { classList: { toggle: (...args) => toggles.push(args) } } },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    URLSearchParams,
+    AbortController,
+    fetch: async () => { throw new Error('not used by focused-state test'); },
+  });
+
+  vm.runInContext(read('public/js/session.js'), context, { filename: 'session.js' });
+
+  assert.equal(typeof context.window.Session.setFocusedState, 'function');
+  context.window.Session.setFocusedState(true);
+  context.window.Session.setFocusedState(0);
+  assert.deepEqual(toggles, [
+    ['session-focused', true],
+    ['session-focused', false],
+  ]);
+});
+
+test('session dialogs use semantic classes and accessible live participant state', () => {
+  const session = read('public/js/session.js');
+
+  assert.doesNotMatch(session, /style\s*=/i, 'session presentation should live in session-shell.css');
+  assert.match(session, /class="session-dialog session-dialog--join"/);
+  assert.match(session, /class="session-dialog session-dialog--lobby"/);
+  assert.match(session, /role="dialog"[\s\S]*aria-modal="true"[\s\S]*aria-labelledby=/);
+  assert.match(session, /<h2 id="session-(?:join|lobby)-title"/);
+  assert.match(session, /class="session-code"/);
+  assert.match(session, /class="session-participants"[^>]*aria-live="polite"/);
+  assert.match(session, /aria-label="\$\{_t\('close','Zavrieť'\)\}"/);
+  assert.match(session, /aria-label="\$\{_t\('sess_quit','Opustiť session'\)\}"/);
+});
+
+test('focused session styles isolate the live game without changing the normal workspace', () => {
+  const styles = read('public/ui/session-shell.css');
+
+  assert.match(styles, /body\.session-focused\s+aside\.left-panel\s*\{[\s\S]*display:\s*none/);
+  assert.match(styles, /body\.session-focused\s+aside\.right-panel\s*\{[\s\S]*display:\s*none/);
+  assert.match(styles, /body\.session-focused\s+\.header-actions\s*\{[\s\S]*display:\s*none/);
+  assert.match(styles, /\.session-code\s*\{[\s\S]*font-family:\s*var\(--font-data\)/);
+  assert.match(styles, /\.session-actions\s+button[\s\S]*min-height:\s*44px/);
+  assert.match(styles, /@media\s*\(max-width:\s*600px\)[\s\S]*\.session-dialog\s*\{[\s\S]*grid-template-columns:\s*1fr/);
+});
