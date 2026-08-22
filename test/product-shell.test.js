@@ -39,7 +39,13 @@ test('school role lookup accepts a valid authenticated school role', async () =>
   const requests = [];
   const fetchImpl = async (url, options) => {
     requests.push({ url, options });
-    return { ok: true, json: async () => ({ role: 'student' }) };
+    return {
+      ok: true,
+      json: async () => ({
+        user: { id: 'user-1', email: 'student@example.test' },
+        school: { id: 'school-1', name: 'Example School', role: 'student' },
+      }),
+    };
   };
 
   assert.equal(await router.fetchSchoolRole('access-token', fetchImpl), 'student');
@@ -52,11 +58,22 @@ test('school role lookup accepts a valid authenticated school role', async () =>
 test('school role lookup never grants a role after a failed or invalid response', async () => {
   const unauthorized = async () => ({ ok: false, status: 401 });
   const forbidden = async () => ({ ok: false, status: 403 });
-  const invalidRole = async () => ({ ok: true, json: async () => ({ role: 'player' }) });
+  const noSchool = async () => ({
+    ok: true,
+    json: async () => ({ user: { id: 'user-1', email: 'player@example.test' }, school: null }),
+  });
+  const invalidRole = async () => ({
+    ok: true,
+    json: async () => ({
+      user: { id: 'user-1', email: 'player@example.test' },
+      school: { id: 'school-1', name: 'Example School', role: 'player' },
+    }),
+  });
   const networkFailure = async () => { throw new Error('offline'); };
 
   assert.equal(await router.fetchSchoolRole('access-token', unauthorized), null);
   assert.equal(await router.fetchSchoolRole('access-token', forbidden), null);
+  assert.equal(await router.fetchSchoolRole('access-token', noSchool), null);
   assert.equal(await router.fetchSchoolRole('access-token', invalidRole), null);
   assert.equal(await router.fetchSchoolRole('access-token', networkFailure), null);
 });

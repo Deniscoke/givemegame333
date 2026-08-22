@@ -25,7 +25,7 @@
       if (!response.ok) return null;
 
       const payload = await response.json();
-      return SCHOOL_ROLES.has(payload?.role) ? payload.role : null;
+      return SCHOOL_ROLES.has(payload?.school?.role) ? payload.school.role : null;
     } catch {
       return null;
     }
