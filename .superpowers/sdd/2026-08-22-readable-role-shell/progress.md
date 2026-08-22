@@ -37,7 +37,7 @@ Task 0 Ruling: fix cross-platform migration checksum normalization before UI wor
 - [x] Task 5 — educator navigation. Commits `fbb8647`, `239f40b`, `f3a8ae0`; accessibility/typography/active-route blockers fixed; final independent re-review APPROVED; focused tests 46/46 (full suite 564/564 before isolated final CSS/markup fix).
 - [x] Task 6 — focused session/play shell. Commits `4673bd2`, `416a46d`; waiting recovery, mobile cascade, and timer typography fixed; independent re-review APPROVED; full suite 570/570.
 - [x] Task 7 — typography cleanup across remaining pages. Commits `a7057e2`, `5e0bd4d`; mobile flow, Slovak copy, 44px links, and keyboard disclosures fixed; independent re-review APPROVED; focused tests 66/66.
-- [ ] Task 8 — whole-product QA, documentation, push, and Vercel Preview.
+- [x] Task 8 — whole-product QA, documentation, push, and Vercel Preview. Commits `eef78f4`, `ad8811b`; independent re-review APPROVED; full suite 583/583; 21-cell responsive matrix complete; `origin/codex/readable-student-shell` pushed; Git-integrated Preview Ready and required routes verified; production alias unchanged.
   - [x] Steps 1, 2 and 4: local automated verification, 21-cell responsive browser matrix, reduced-motion/deep-link checks and state/plan evidence.
   - [x] QA fixes: restored one primary heading on login/generator, removed the embedded gIVEME Supabase global collision and aligned the billing XSS regression with approved Slovak copy.
   - [x] Initial Step 3 review completed: `CHANGES_REQUIRED`, four Important findings and no Critical findings.

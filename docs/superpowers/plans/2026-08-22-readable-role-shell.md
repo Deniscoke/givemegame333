@@ -470,22 +470,24 @@ Run: `git diff --check d05dab8..HEAD`.
 
 At 1440x900, 768x1024 and 375x812 verify `/`, `/login.html`, `/student/`, `/index.html`, `/edu/`, `/edu/assessments.html` and `/institution/`. For each width, record title/primary heading, horizontal overflow, visible focus, navigation count and console errors. Verify `prefers-reduced-motion` behavior and direct `/index.html?lobby=ABC123` routing without submitting a live join.
 
-- [ ] **Step 3: Run independent QA review**
+- [x] **Step 3: Run independent QA review**
 
 Review information hierarchy, student join discoverability, educator navigation, XSS-safe rendering, auth routing, keyboard behavior, mobile touch targets and regressions. Fix all Critical/Important findings and rerun affected tests.
 
-Evidence (2026-08-22): the initial independent review returned `CHANGES_REQUIRED` with four Important findings and no Critical findings. All four were remediated with RED/GREEN regressions: pending-lobby retention plus single-flight login redirect, a distinct existing `/index.html?view=library` state, complete join/lobby modal focus lifecycle, and 44 × 44 px `.edu-btn-sm` controls. Focused product-shell tests passed 38/38 and the full suite passed 583/583. This checkbox remains open until the independent re-review approves the remediation.
+Evidence (2026-08-22): the initial independent review returned `CHANGES_REQUIRED` with four Important findings and no Critical findings. All four were remediated with RED/GREEN regressions: pending-lobby retention plus single-flight login redirect, a distinct existing `/index.html?view=library` state, complete join/lobby modal focus lifecycle, and 44 × 44 px `.edu-btn-sm` controls. Focused product-shell tests passed 38/38 and the full suite passed 583/583. Independent re-review returned `APPROVED` with no remaining Critical or Important findings and explicitly approved a Vercel Preview push.
 
 - [x] **Step 4: Update project state and plan evidence**
 
 Record completed routes, typography rules, test count, known external dependencies and Preview-only release status. Mark all implemented task checkboxes complete.
 
-Evidence (2026-08-22): pre-review `npm test` passed 578/578 tests and post-remediation `npm test` passed 583/583; 29 required JavaScript files plus all subsequently modified scripts passed syntax checks. The 21-cell responsive matrix covered seven routes at 1440×900, 768×1024 and 375×812 with no document overflow and visible keyboard focus. Reduced motion was emulated in local Chromium. Independent re-review plus Steps 5 and 6 remain open for approval, GitHub push, Vercel Preview verification and final handoff.
+Evidence (2026-08-22): pre-review `npm test` passed 578/578 tests and post-remediation `npm test` passed 583/583; 29 required JavaScript files plus all subsequently modified scripts passed syntax checks. The 21-cell responsive matrix covered seven routes at 1440×900, 768×1024 and 375×812 with no document overflow and visible keyboard focus. Reduced motion was emulated in local Chromium. Independent re-review approved the branch; Steps 5 and 6 were then completed without changing production.
 
-- [ ] **Step 5: Push and verify Vercel Preview**
+- [x] **Step 5: Push and verify Vercel Preview**
 
 Push `codex/readable-student-shell` to `origin`. Wait for the Git-integrated Vercel Preview to reach `Ready`. Use authenticated `vercel curl` to verify `/`, `/student/`, `/index.html`, `/edu/`, `/institution/` and `/api/billing/public-config`. Confirm production aliases were not changed.
 
-- [ ] **Step 6: Final handoff**
+Evidence (2026-08-22): commit `ad8811b` was pushed to `origin/codex/readable-student-shell`. Git-integrated Preview `givemegame333-icynw0pqa-denis-mitrovics-projects.vercel.app` reached `Ready`; authenticated `vercel curl` returned successful content for all six required paths and confirmed new shell markers. Production alias `givemegame333.vercel.app` remained on the previous Production deployment.
+
+- [x] **Step 6: Final handoff**
 
 Provide the GitHub branch, commit SHA, Vercel Preview URL, test results, routes to exercise and any action that still requires the repository owner. Do not claim live student/teacher data success without staging credentials and seeded accounts.
