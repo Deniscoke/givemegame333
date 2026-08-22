@@ -5,6 +5,7 @@ node_modules/
 !.env.example
 .claude/
 .vercel
+.worktrees/
 
 # Local credential exports and key dumps. Existing tracked files remain tracked;
 # the repository owner must rotate exposed credentials and remove them from history.
