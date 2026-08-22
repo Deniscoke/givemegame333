@@ -1,26 +1,27 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="sk">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Ceník — gIVEMEGAME.IO</title>
+	<title>Cenník — gIVEMEGAME.IO</title>
 	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23633cff'/><text x='16' y='22' font-size='14' fill='white' text-anchor='middle' font-family='sans-serif'>G</text></svg>">
-	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="style.css?v=1">
+	<link rel="stylesheet" href="/ui/tokens.css">
+	<link rel="stylesheet" href="/ui/shell.css">
 	<style>
-		.pricing-page { max-width: 1000px; margin: 40px auto; padding: 24px; }
-		.pricing-page h1 { font-family: 'Press Start 2P', monospace; font-size: 20px; text-align: center; margin-bottom: 8px; }
+		.pricing-page { max-width: 1000px; margin: 40px auto; padding: 24px; font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+		.pricing-page h1 { font-family: var(--font-body); font-size: 30px; font-weight: 700; text-align: center; margin-bottom: 8px; }
 		.pricing-page .lead { text-align: center; font-size: 16px; opacity: .8; margin-bottom: 32px; }
 		.plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
 		.plan-card { background: rgba(0,0,0,.25); border: 2px solid var(--border, #333); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; }
 		.plan-card.featured { border-color: #4ade80; box-shadow: 0 0 0 2px rgba(74,222,128,.2); }
-		.plan-card h2 { font-family: 'Press Start 2P', monospace; font-size: 14px; margin: 0 0 8px; }
-		.plan-card .price { font-family: 'VT323', monospace; font-size: 40px; line-height: 1; margin: 12px 0; }
+		.plan-card h2 { font-family: var(--font-body); font-size: 21px; font-weight: 700; margin: 0 0 8px; }
+		.plan-card .price { font-family: var(--font-data); font-size: 40px; line-height: 1.2; margin: 12px 0; }
 		.plan-card .price small { font-size: 18px; opacity: .7; }
 		.plan-card ul { list-style: none; padding: 0; margin: 0 0 20px; flex: 1; }
-		.plan-card li { padding: 6px 0; font-size: 15px; border-bottom: 1px dashed rgba(255,255,255,.1); }
+		.plan-card li { padding: 8px 0; font-size: 16px; line-height: 1.5; border-bottom: 1px dashed rgba(255,255,255,.1); }
 		.plan-card li::before { content: '✓ '; color: #4ade80; }
-		.plan-card button { width: 100%; padding: 14px; font-family: 'Press Start 2P', monospace; font-size: 11px; cursor: pointer; border: 2px solid #633cff; background: #633cff; color: white; border-radius: 8px; }
+		.plan-card button { width: 100%; min-height: 44px; padding: 10px 14px; font-family: var(--font-body); font-size: 16px; font-weight: 700; cursor: pointer; border: 2px solid #633cff; background: #633cff; color: white; border-radius: 8px; }
 		.plan-card button:hover { background: #7c5dff; }
 		.plan-card button:disabled { opacity: .5; cursor: not-allowed; }
 		.plan-card button.school-contact { background: transparent; border-color: #60a5fa; }
@@ -34,12 +35,12 @@
 		.consent-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
 		.consent-overlay.open { display: flex; }
 		.consent-modal { background: #1a1a2e; border: 2px solid #633cff; border-radius: 12px; padding: 28px; max-width: 540px; width: 100%; }
-		.consent-modal h3 { font-family: 'Press Start 2P', monospace; font-size: 13px; margin: 0 0 16px; }
-		.consent-modal p { font-size: 14px; line-height: 1.6; margin: 0 0 12px; opacity: .9; }
-		.consent-modal label { display: flex; gap: 10px; align-items: flex-start; padding: 12px; background: rgba(255,255,255,.05); border-radius: 8px; cursor: pointer; margin: 14px 0; }
-		.consent-modal input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+		.consent-modal h3 { font-family: var(--font-body); font-size: 20px; font-weight: 700; margin: 0 0 16px; }
+		.consent-modal p { font-size: 16px; line-height: 1.6; margin: 0 0 12px; opacity: .9; }
+		.consent-modal label { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 12px; background: rgba(255,255,255,.05); border-radius: 8px; cursor: pointer; margin: 14px 0; }
+		.consent-modal input[type="checkbox"] { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; }
 		.consent-modal .buttons { display: flex; gap: 10px; margin-top: 18px; }
-		.consent-modal button { flex: 1; padding: 12px; font-family: 'Press Start 2P', monospace; font-size: 10px; cursor: pointer; border-radius: 6px; }
+		.consent-modal button { flex: 1; min-height: 44px; padding: 10px 12px; font-family: var(--font-body); font-size: 16px; font-weight: 700; cursor: pointer; border-radius: 6px; }
 		.consent-modal .cancel { background: transparent; border: 2px solid #666; color: inherit; }
 		.consent-modal .confirm { background: #4ade80; border: 2px solid #4ade80; color: #000; }
 		.consent-modal .confirm:disabled { background: #2a2a3e; border-color: #2a2a3e; color: #666; cursor: not-allowed; }
@@ -49,8 +50,8 @@
 </head>
 <body class="mode-party">
 	<div class="pricing-page">
-		<h1>Ceník</h1>
-		<p class="lead">Začněte zdarma. Platí se, až když chcete víc.</p>
+		<h1>Cenník</h1>
+		<p class="lead">Začnite zadarmo. Platíte, až keď chcete viac.</p>
 		<div class="billing-notice" id="billing-notice" role="status"></div>
 
 		<div class="plans">
@@ -58,55 +59,55 @@
 				<h2>Free</h2>
 				<div class="price">0 Kč<small> / měsíc</small></div>
 				<ul>
-					<li>3 generované hry / den</li>
+					<li>3 generované hry denne</li>
 					<li>Úroveň postavy do 5</li>
-					<li>1 souběžná lobby</li>
-					<li>Základní kompetence RVP</li>
+					<li>1 súbežná lobby</li>
+					<li>Základné kompetencie RVP</li>
 				</ul>
-				<button disabled>Už máte</button>
+				<button disabled>Aktuálny plán</button>
 			</div>
 
 			<div class="plan-card featured">
 				<h2>Teacher měsíční</h2>
 				<div class="price">299 Kč<small> / měsíc</small></div>
 				<ul>
-					<li>Neomezené generování</li>
-					<li>Bez limitu úrovně</li>
-					<li>Přístup ke všem perkům</li>
-					<li>Třídní nástěnka a přehledy</li>
+					<li>Neobmedzené generovanie</li>
+					<li>Bez limitu úrovne</li>
+					<li>Prístup ku všetkým výhodám</li>
+					<li>Triedna nástenka a prehľady</li>
 				</ul>
-				<button data-plan="teacher_monthly">Vybrat plán</button>
+				<button data-plan="teacher_monthly">Vybrať plán</button>
 			</div>
 
 			<div class="plan-card">
 				<h2>Teacher roční</h2>
 				<div class="price">2 990 Kč<small> / rok</small></div>
 				<ul>
-					<li>Vše z měsíčního plánu</li>
-					<li>Ušetříte 2 měsíce</li>
-					<li>Fakturace jednorázově</li>
+					<li>Všetko z mesačného plánu</li>
+					<li>Ušetríte 2 mesiace</li>
+					<li>Jednorazová fakturácia</li>
 				</ul>
-				<button data-plan="teacher_yearly">Vybrat plán</button>
+				<button data-plan="teacher_yearly">Vybrať plán</button>
 			</div>
 
 			<div class="plan-card">
 				<h2>School pilotní</h2>
 				<div class="price">od 14 990 Kč<small> / rok</small></div>
 				<ul>
-					<li>Pilot podle dohodnutého rozsahu</li>
-					<li>Individuální onboarding</li>
-					<li>Fakturace podle dohody</li>
-					<li>DPA pro ochranu osobních údajů</li>
-					<li>Prioritní podpora</li>
+					<li>Pilot podľa dohodnutého rozsahu</li>
+					<li>Individuálny onboarding</li>
+					<li>Fakturácia podľa dohody</li>
+					<li>DPA na ochranu osobných údajov</li>
+					<li>Prioritná podpora</li>
 				</ul>
-				<button class="school-contact" id="school-contact" type="button">Kontaktovat nás</button>
+				<button class="school-contact" id="school-contact" type="button">Kontaktovať nás</button>
 			</div>
 		</div>
 
 		<p class="legal-note">
-			Ceny uvedeny v Kč.
-			<a href="#" data-legal-link="terms">Obchodní podmínky</a> ·
-			<a href="#" data-legal-link="privacy">Zásady ochrany osobních údajů</a> ·
+			Ceny sú uvedené v Kč.
+			<a href="#" data-legal-link="terms">Obchodné podmienky</a> ·
+			<a href="#" data-legal-link="privacy">Zásady ochrany osobných údajov</a> ·
 			<a href="#" data-legal-link="contact">Kontakt</a>
 		</p>
 	</div>
@@ -114,7 +115,7 @@
 	<!-- Consent modal (§ 1837 OZ) -->
 	<div class="consent-overlay" id="consent-overlay" role="dialog" aria-modal="true" aria-labelledby="consent-title">
 		<div class="consent-modal">
-			<h3 id="consent-title">Potvrzení před platbou</h3>
+			<h3 id="consent-title">Potvrdenie pred platbou</h3>
 			<p>Před přesměrováním na platební bránu potřebujeme váš výslovný souhlas, protože digitální služba se vám zpřístupní okamžitě po zaplacení.</p>
 			<label>
 				<input type="checkbox" id="consent-check">
@@ -127,8 +128,8 @@
 			</p>
 			<div class="error" id="consent-error"></div>
 			<div class="buttons">
-				<button class="cancel" id="consent-cancel">Zrušit</button>
-				<button class="confirm" id="consent-confirm" disabled>Pokračovat na platbu</button>
+				<button class="cancel" id="consent-cancel">Zrušiť</button>
+				<button class="confirm" id="consent-confirm" disabled>Pokračovať na platbu</button>
 			</div>
 		</div>
 	</div>
@@ -163,7 +164,7 @@
 				} else {
 					link.removeAttribute('href');
 					link.setAttribute('aria-disabled', 'true');
-					link.title = 'Odkaz zatím není nakonfigurován';
+					link.title = 'Odkaz zatiaľ nie je nakonfigurovaný';
 				}
 			});
 		}
@@ -174,17 +175,17 @@
 		]).then(([config, legal]) => {
 			publicConfig = config;
 			applyLegalLinks(config.legal);
-			consentTextEl.textContent = legal.withdrawal_text || 'Online platba není dostupná.';
+			consentTextEl.textContent = legal.withdrawal_text || 'Online platba nie je dostupná.';
 			if (!config.subscriptionBillingEnabled) {
-				billingNotice.textContent = config.billingMessage || 'Online platby jsou dočasně nedostupné.';
+				billingNotice.textContent = config.billingMessage || 'Online platby sú dočasne nedostupné.';
 				billingNotice.style.display = 'block';
 				document.querySelectorAll('.plan-card button[data-plan]').forEach((button) => { button.disabled = true; });
 			}
 		}).catch(() => {
-			billingNotice.textContent = 'Stav online plateb se nepodařilo ověřit. Zkuste to prosím později.';
+			billingNotice.textContent = 'Stav online platieb sa nepodarilo overiť. Skúste to prosím neskôr.';
 			billingNotice.style.display = 'block';
 			document.querySelectorAll('.plan-card button[data-plan]').forEach((button) => { button.disabled = true; });
-			consentTextEl.textContent = 'Online platba není dostupná.';
+			consentTextEl.textContent = 'Online platba nie je dostupná.';
 		});
 
 		checkEl.addEventListener('change', () => {
@@ -208,7 +209,7 @@
 			const contactUrl = publicConfig?.legal?.contactUrl;
 			if (contactUrl) window.location.href = contactUrl;
 			else {
-				billingNotice.textContent = 'Kontaktní stránka zatím není nakonfigurována.';
+				billingNotice.textContent = 'Kontaktná stránka zatiaľ nie je nakonfigurovaná.';
 				billingNotice.style.display = 'block';
 			}
 		});
@@ -219,7 +220,7 @@
 		confirmBtn.addEventListener('click', async () => {
 			if (!checkEl.checked || !selectedPlan) return;
 			confirmBtn.disabled = true;
-			confirmBtn.textContent = 'Přesměrování…';
+			confirmBtn.textContent = 'Presmerovanie…';
 			try {
 				const { data: { session } } = await sb.auth.getSession();
 				if (!session) {
@@ -236,20 +237,20 @@
 					body: JSON.stringify({ plan: selectedPlan, withdrawalConsent: true })
 				});
 				const json = await res.json();
-				if (!res.ok || !json.url) throw new Error(json.error || 'Checkout selhal');
+				if (!res.ok || !json.url) throw new Error(json.error || 'Platba zlyhala');
 				window.location.href = json.url;
 			} catch (err) {
 				errorEl.textContent = err.message;
 				errorEl.classList.add('show');
 				confirmBtn.disabled = false;
-				confirmBtn.textContent = 'Pokračovat na platbu';
+				confirmBtn.textContent = 'Pokračovať na platbu';
 			}
 		});
 
 		if (new URLSearchParams(location.search).get('canceled') === '1') {
 			const n = document.createElement('div');
 			n.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#000;padding:10px 16px;border-radius:8px;font-size:14px;z-index:500;';
-			n.textContent = 'Platba byla zrušena. Můžete to kdykoli zkusit znovu.';
+			n.textContent = 'Platba bola zrušená. Môžete to kedykoľvek skúsiť znova.';
 			document.body.appendChild(n);
 			setTimeout(() => n.remove(), 4000);
 		}

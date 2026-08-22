@@ -18,6 +18,16 @@ const educatorPages = [
   ['public/institution/index.html', '/institution/institution.css'],
 ];
 
+const publicTypographyPages = [
+  ['public/home.html', ['public/home.css']],
+  ['public/login.html', []],
+  ['public/account.html', []],
+  ['public/pricing.html', []],
+  ['public/game.html', []],
+  ['public/billing/success.html', []],
+  ['public/billing/cancel.html', []],
+];
+
 const voidElements = new Set([
   'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr',
 ]);
@@ -43,6 +53,28 @@ function assertHtmlTreeIsBalanced(html) {
   }
 
   assert.deepEqual(stack, [], 'all generator markup elements close in their original hierarchy');
+}
+
+function pageOwnedStyles(file, linkedStylesheets) {
+  const html = read(file);
+  const inlineStyles = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((match) => match[1]);
+  const styleAttributes = [...html.matchAll(/\bstyle="([^"]*)"/gi)].map((match) => `.__inline { ${match[1]} }`);
+  return [...linkedStylesheets.map(read), ...inlineStyles, ...styleAttributes]
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+function declarationsFor(css, selector) {
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter((match) => match[1].split(',').some((part) => part.trim() === selector))
+    .map((match) => match[2])
+    .join('\n');
+}
+
+function assertMinTouchTarget(css, selector, file) {
+  const declaration = declarationsFor(css, selector).match(/min-(?:height|block-size):\s*([0-9.]+)(px|rem)/i);
+  const pixels = declaration && Number(declaration[1]) * (declaration[2].toLowerCase() === 'rem' ? 16 : 1);
+  assert.ok(pixels >= 44, `${file} ${selector} should preserve a 44px minimum touch target`);
 }
 
 let server;
@@ -108,6 +140,63 @@ test('shared shell reserves the pixel face for display accents', () => {
   assert.match(shell, /:focus-visible/);
   assert.match(shell, /min-height:\s*44px/);
   assert.match(shell, /prefers-reduced-motion:\s*reduce/);
+});
+
+test('public and account surfaces load the readable shell and reserve pixel type for short accents', () => {
+  const forbiddenPixelSelector = /(?:^|[\s>+~,])(?:body|p|input|select|textarea|button|table|td)(?:$|[\s.#:[>+~,])|\.(?:btn|nav)(?:[-_][\w-]+)?/i;
+  const pixelDeclaration = /font-family:\s*(?:var\(--font-pixel\)|['"]Press Start 2P['"])/i;
+
+  for (const [file, linkedStylesheets] of publicTypographyPages) {
+    const html = read(file);
+    const css = pageOwnedStyles(file, linkedStylesheets);
+
+    assert.match(html, /href="(?:\.\.\/|\/)?ui\/tokens\.css(?:\?[^"']*)?"/i, `${file} should load tokens.css`);
+    assert.match(html, /href="(?:\.\.\/|\/)?ui\/shell\.css(?:\?[^"']*)?"/i, `${file} should load shell.css`);
+
+    for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const selector = match[1].trim();
+      const declarations = match[2];
+      if (forbiddenPixelSelector.test(selector)) {
+        assert.doesNotMatch(declarations, pixelDeclaration, `${file} ${selector} should use readable type`);
+      }
+      for (const size of declarations.matchAll(/font-size:\s*([0-9.]+)px/gi)) {
+        assert.ok(Number(size[1]) >= 10, `${file} ${selector} should not render ${size[1]}px text`);
+      }
+    }
+  }
+});
+
+test('public authentication, account, pricing, game and billing controls keep 44px touch targets', () => {
+  const controls = [
+    ['public/home.html', ['public/home.css'], ['.btn', '.hc-dot-btn']],
+    ['public/login.html', [], ['.btn-login', '.login-lang-btn', '.btn-skip']],
+    ['public/account.html', [], ['.btn']],
+    ['public/pricing.html', [], ['.plan-card button', '.consent-modal label', '.consent-modal button']],
+    ['public/game.html', [], ['.gp-back', '.game-card-footer .btn-action']],
+    ['public/billing/success.html', [], ['.billing-page .btn']],
+    ['public/billing/cancel.html', [], ['.billing-page .btn']],
+  ];
+
+  for (const [file, linkedStylesheets, selectors] of controls) {
+    const css = pageOwnedStyles(file, linkedStylesheets);
+    for (const selector of selectors) assertMinTouchTarget(css, selector, file);
+  }
+});
+
+test('public task labels are Slovak and generator actions use the canonical route', () => {
+  for (const [file] of publicTypographyPages) {
+    assert.match(read(file), /<html\s+lang="sk">/i, `${file} should declare Slovak UI copy`);
+  }
+
+  const home = read('public/home.html');
+  assert.match(home, /3 AI hry denne zadarmo/i);
+  assert.match(home, /<li>3 AI hry denne<\/li>/i);
+  assert.doesNotMatch(home, /2 AI hry denne/i);
+
+  const game = read('public/game.html');
+  const generatorLinks = [...game.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:(?!<\/a>)[\s\S])*?Otvoriť generátor(?:(?!<\/a>)[\s\S])*?<\/a>/gi)];
+  assert.ok(generatorLinks.length >= 2);
+  assert.ok(generatorLinks.every((match) => match[1] === '/index.html'));
 });
 
 test('generator foregrounds activity basics and keeps optional controls collapsed', () => {
