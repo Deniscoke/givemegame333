@@ -32,3 +32,12 @@ Status: DONE
 - The remaining risk is visual-only: authenticated/mock waiting-lobby and focused mobile states still need the deferred Task 8 browser smoke because the local server reload failed outside Task 6 scope.
 - Requested tests print the repository's existing Node `punycode` deprecation warning; both commands exited successfully.
 - `AI_CONTEXT_PROMPT.md` and `Avatars/` were not read or modified.
+
+## Review-fix evidence
+
+- Added the waiting-session badge as soon as a waiting lobby opens. It keeps visible 44 px reopen and local-quit actions available when the dialog is closed; reopening restarts fallback polling only while the session is waiting.
+- `Session.setFocusedState(true)` now clears stale mobile filter/SMARTA body classes. The mobile session scope explicitly hides both drawers with `display: none !important`, so the previous mobile right-panel rule cannot override focused state.
+- Scoped `.timer-display` to `body.session-focused` and `var(--font-data)`, preserving the ordinary generator timer typography.
+- RED: `node --test test/product-shell.test.js` failed the new focused-state cleanup, waiting `close -> reopen -> quit` lifecycle and mobile-cascade/timer regressions on the reviewed implementation.
+- GREEN: `node --test test/product-shell.test.js` passed 25/25 after the fixes.
+- Browser re-smoke was intentionally not retried under the review instruction; Task 8 retains the waiting-lobby and focused mobile visual smoke.

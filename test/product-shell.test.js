@@ -405,10 +405,18 @@ test('school role lookup never grants a role after a failed or invalid response'
 });
 
 test('session shell exposes a focused state helper for the live game experience', () => {
-  const toggles = [];
+  const classes = new Set(['mobile-filters-open', 'mobile-smarta-open']);
   const context = vm.createContext({
-    window: {},
-    document: { body: { classList: { toggle: (...args) => toggles.push(args) } } },
+    window: { location: { origin: 'https://example.test' } },
+    document: {
+      getElementById: () => null,
+      body: {
+        classList: {
+          toggle: (name, active) => classes[active ? 'add' : 'delete'](name),
+          remove: (...names) => names.forEach((name) => classes.delete(name)),
+        },
+      },
+    },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     setTimeout,
@@ -425,10 +433,9 @@ test('session shell exposes a focused state helper for the live game experience'
   assert.equal(typeof context.window.Session.setFocusedState, 'function');
   context.window.Session.setFocusedState(true);
   context.window.Session.setFocusedState(0);
-  assert.deepEqual(toggles, [
-    ['session-focused', true],
-    ['session-focused', false],
-  ]);
+  assert.equal(classes.has('session-focused'), false);
+  assert.equal(classes.has('mobile-filters-open'), false);
+  assert.equal(classes.has('mobile-smarta-open'), false);
 });
 
 test('session dialogs use semantic classes and accessible live participant state', () => {
@@ -454,4 +461,101 @@ test('focused session styles isolate the live game without changing the normal w
   assert.match(styles, /\.session-code\s*\{[\s\S]*font-family:\s*var\(--font-data\)/);
   assert.match(styles, /\.session-actions\s+button[\s\S]*min-height:\s*44px/);
   assert.match(styles, /@media\s*\(max-width:\s*600px\)[\s\S]*\.session-dialog\s*\{[\s\S]*grid-template-columns:\s*1fr/);
+});
+
+test('waiting lobby can close, reopen and quit without stranding focused session controls', async () => {
+  const elements = new Map();
+  const classes = new Set();
+  let nextTimer = 0;
+  const scheduledTimers = new Set();
+  const makeElement = () => ({
+    hidden: false,
+    className: '',
+    innerHTML: '',
+    style: {},
+    addEventListener() {},
+    focus() {},
+  });
+  const body = {
+    classList: {
+      toggle(name, active) { classes[active ? 'add' : 'delete'](name); },
+      remove(...names) { names.forEach((name) => classes.delete(name)); },
+    },
+    appendChild(element) { elements.set(element.id, element); },
+  };
+  const document = {
+    body,
+    createElement: makeElement,
+    getElementById: (id) => elements.get(id) || null,
+  };
+  const sessionResponse = () => ({ ok: true, json: async () => ({ status: 'waiting', participants: [] }) });
+  const context = vm.createContext({
+    window: { location: { origin: 'https://example.test' } },
+    document,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    supabaseClient: {
+      auth: { getSession: async () => ({ data: { session: { access_token: 'token' } } }) },
+      channel: () => ({ on() { return this; }, subscribe() { return this; }, unsubscribe() {} }),
+    },
+    GameUI: { toast() {} },
+    fetch: async (url) => url === '/api/sessions'
+      ? { ok: true, json: async () => ({ id: 'session-1', join_code: 'AB12CD' }) }
+      : sessionResponse(),
+    setTimeout,
+    clearTimeout,
+    setInterval: () => { const id = ++nextTimer; scheduledTimers.add(id); return id; },
+    clearInterval: (id) => scheduledTimers.delete(id),
+    URLSearchParams,
+    AbortController,
+    confirm: () => true,
+  });
+  vm.runInContext(read('public/js/session.js'), context, { filename: 'session.js' });
+
+  await context.window.Session.create({ title: 'Čakajúca hra' });
+  const lobby = elements.get('session-lobby-modal');
+  const badge = elements.get('session-badge');
+  assert.equal(classes.has('session-focused'), true);
+  assert.equal(lobby.hidden, false);
+  assert.ok(badge, 'waiting users need a visible recovery control');
+  assert.equal(badge.hidden, false);
+
+  context.window.Session._closeLobby();
+  assert.equal(lobby.hidden, true);
+  assert.equal(badge.hidden, false);
+  assert.equal(scheduledTimers.size, 0);
+
+  context.window.Session._openLobbyFromBadge();
+  assert.equal(lobby.hidden, false);
+  assert.equal(scheduledTimers.size, 1, 'reopening a waiting lobby restarts fallback polling');
+
+  context.window.Session._quitSession();
+  assert.equal(classes.has('session-focused'), false);
+  assert.equal(badge.hidden, true);
+  assert.equal(scheduledTimers.size, 0);
+});
+
+test('mobile focused cascade hides stale generator drawers and uses data type for the active timer', () => {
+  const combined = `${read('public/style.css')}\n${read('public/ui/session-shell.css')}`;
+  const rules = [...combined.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match, index) => ({
+    selector: match[1].trim(),
+    declarations: match[2],
+    index,
+  }));
+  const computedDisplay = (panel) => {
+    const applicable = rules.filter((rule) => {
+      if (!rule.selector.includes(`aside.${panel}-panel`)) return false;
+      if (rule.selector.includes('body.session-focused') === false && rule.selector !== `aside.${panel}-panel`) return false;
+      return true;
+    }).flatMap((rule) => [...rule.declarations.matchAll(/display\s*:\s*([^;!]+)(\s*!important)?/g)].map((declaration) => ({
+      value: declaration[1].trim(),
+      important: Boolean(declaration[2]),
+      index: rule.index,
+    })));
+    return applicable.sort((a, b) => Number(a.important) - Number(b.important) || a.index - b.index).at(-1)?.value;
+  };
+
+  assert.equal(computedDisplay('left'), 'none');
+  assert.equal(computedDisplay('right'), 'none');
+  assert.match(read('public/ui/session-shell.css'), /body\.session-focused\s+\.timer-display\s*\{[\s\S]*font-family:\s*var\(--font-data\)/);
 });

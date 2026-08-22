@@ -17,6 +17,10 @@ body.session-focused .btn-robot-challenge {
   display: none;
 }
 
+body.session-focused .timer-display {
+  font-family: var(--font-data);
+}
+
 body.session-focused #workspace {
   justify-content: center;
 }
@@ -232,6 +236,12 @@ body.session-focused #workspace {
 .session-badge__action--leave { background: rgba(248, 113, 113, .85); }
 
 @media (max-width: 600px) {
+  body.session-focused aside.left-panel,
+  body.session-focused aside.right-panel {
+    display: none !important;
+    transform: none;
+  }
+
   .session-modal {
     align-items: flex-end;
     padding: .5rem;

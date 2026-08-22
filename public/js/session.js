@@ -52,7 +52,9 @@ const Session = (() => {
 	let _lastKnownStatus = 'waiting'; // track session status for poll-based transition
 
 	function setFocusedState(active) {
-		document.body.classList.toggle('session-focused', Boolean(active));
+		const focused = Boolean(active);
+		document.body.classList.toggle('session-focused', focused);
+		if (focused) document.body.classList.remove('mobile-filters-open', 'mobile-smarta-open');
 	}
 
 	// ─── Public API ───────────────────────────────────────────────
@@ -297,6 +299,7 @@ const Session = (() => {
 	}
 
 	function _onSessionUpdate(session) {
+		_lastKnownStatus = session.status;
 		_renderStatus(session.status);
 
 		if (session.status === 'active') {
@@ -551,6 +554,7 @@ const Session = (() => {
 			document.body.appendChild(modal);
 		}
 		setFocusedState(true);
+		if (_lastKnownStatus === 'waiting') _showSessionBadge();
 		modal.hidden = false;
 		_renderLobby();
 	}
@@ -585,6 +589,7 @@ const Session = (() => {
 	function _openLobbyFromBadge() {
 		if (!_code) return;
 		_openLobby();
+		if (_lastKnownStatus === 'waiting') _startPoll();
 		_refreshParticipants();
 	}
 
