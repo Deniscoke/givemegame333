@@ -716,7 +716,7 @@ describe('billing page safety', () => {
 
 		const actions = element('plan-actions');
 		assert.equal(actions.children.length, 1);
-		assert.equal(actions.children[0].textContent, `Nepodařilo se načíst stav předplatného: ${hostileMessage}`);
+		assert.equal(actions.children[0].textContent, `Nepodarilo sa načítať stav predplatného: ${hostileMessage}`);
 		assert.equal(actions.unsafeHtml, undefined);
 	});
 });

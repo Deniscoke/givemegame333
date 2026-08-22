@@ -166,6 +166,19 @@ test('public and account surfaces load the readable shell and reserve pixel type
   }
 });
 
+test('core login and generator surfaces expose one primary heading', () => {
+  for (const file of ['public/login.html', 'public/index.html']) {
+    const headings = read(file).match(/<h1\b/gi) || [];
+    assert.equal(headings.length, 1, `${file} should expose exactly one h1`);
+  }
+});
+
+test('embedded social script can coexist with the Supabase browser global', () => {
+  const socialScript = read('public/gIVEME/script.js');
+  assert.doesNotThrow(() => new vm.Script(`var supabase = {};\n${socialScript}`));
+  assert.match(socialScript, /window\.supabase\.createClient/);
+});
+
 test('public authentication, account, pricing, game and billing controls keep 44px touch targets', () => {
   const controls = [
     ['public/home.html', ['public/home.css'], ['.brand', '.nav-links a', '.btn', '.hc-dot-btn', '.footer a']],

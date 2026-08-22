@@ -5,10 +5,10 @@
 // ===== SUPABASE (prepojené s Google účtom — každý používateľ má svoj gIVEME účet) =====
 const SUPABASE_URL = 'https://vhpkkbixshfyytohkruv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
-let supabase = null;
+let socialSupabase = null;
 try {
 	if (typeof window !== 'undefined' && window.supabase) {
-		supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+		socialSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 			auth: { detectSessionInUrl: true, persistSession: true }
 		});
 	}
@@ -27,10 +27,10 @@ function getCurrentUser() {
 
 // Sync auth z Supabase (ak sessionStorage prázdne napr. po refreshi)
 async function syncAuthFromSupabase() {
-	if (!supabase) return null;
+	if (!socialSupabase) return null;
 	try {
 		const { data: { session } } = await Promise.race([
-			supabase.auth.getSession(),
+			socialSupabase.auth.getSession(),
 			new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
 		]);
 		if (session?.user) {
@@ -43,7 +43,7 @@ async function syncAuthFromSupabase() {
 			};
 			sessionStorage.setItem('givemegame_user', JSON.stringify(user));
 			// Upsert profiles — potrebné pre FK integrity (author_id → profiles.id)
-			supabase.from('profiles').upsert({
+			socialSupabase.from('profiles').upsert({
 				id: u.id,
 				display_name: user.name,
 				avatar_url: user.photo,
@@ -67,9 +67,9 @@ function getAvatarEmoji(name) {
 // ===== FOLLOW API (sledovanie používateľov) =====
 async function followUser(targetId) {
 	const me = getCurrentUser();
-	if (!me || me.uid === targetId || !supabase) return false;
+	if (!me || me.uid === targetId || !socialSupabase) return false;
 	try {
-		const { error } = await supabase.from('follows').insert({
+		const { error } = await socialSupabase.from('follows').insert({
 			follower_id: me.uid,
 			following_id: targetId
 		});
@@ -79,9 +79,9 @@ async function followUser(targetId) {
 
 async function unfollowUser(targetId) {
 	const me = getCurrentUser();
-	if (!me || !supabase) return false;
+	if (!me || !socialSupabase) return false;
 	try {
-		const { error } = await supabase.from('follows').delete()
+		const { error } = await socialSupabase.from('follows').delete()
 			.eq('follower_id', me.uid)
 			.eq('following_id', targetId);
 		return !error;
@@ -90,9 +90,9 @@ async function unfollowUser(targetId) {
 
 async function getFollowStatus(targetId) {
 	const me = getCurrentUser();
-	if (!me || !supabase) return false;
+	if (!me || !socialSupabase) return false;
 	try {
-		const { data } = await supabase.from('follows').select('follower_id')
+		const { data } = await socialSupabase.from('follows').select('follower_id')
 			.eq('follower_id', me.uid).eq('following_id', targetId).maybeSingle();
 		return !!data;
 	} catch (e) { return false; }
@@ -100,26 +100,26 @@ async function getFollowStatus(targetId) {
 
 async function getFollowingIds() {
 	const me = getCurrentUser();
-	if (!me || !supabase) return [];
+	if (!me || !socialSupabase) return [];
 	try {
-		const { data } = await supabase.from('follows').select('following_id')
+		const { data } = await socialSupabase.from('follows').select('following_id')
 			.eq('follower_id', me.uid);
 		return (data || []).map(r => r.following_id);
 	} catch (e) { return []; }
 }
 
 async function getFollowersCount(userId) {
-	if (!supabase) return 0;
+	if (!socialSupabase) return 0;
 	try {
-		const { count } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId);
+		const { count } = await socialSupabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId);
 		return count || 0;
 	} catch (e) { return 0; }
 }
 
 async function getFollowingCount(userId) {
-	if (!supabase) return 0;
+	if (!socialSupabase) return 0;
 	try {
-		const { count } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId);
+		const { count } = await socialSupabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId);
 		return count || 0;
 	} catch (e) { return 0; }
 }
@@ -276,7 +276,7 @@ async function loadFeed() {
     if (!feedEl || !loadingEl) return;
 
     try {
-        if (!supabase) {
+        if (!socialSupabase) {
             loadingEl.style.display = 'none';
             emptyEl.style.display = 'block';
             const txt = document.getElementById('feedEmptyText');
@@ -284,7 +284,7 @@ async function loadFeed() {
             return;
         }
         const { data: posts, error } = await Promise.race([
-            supabase
+            socialSupabase
                 .from('giveme_posts')
                 .select('id, image_data, caption, prompt, created_at, author_id')
                 .order('created_at', { ascending: false })
@@ -312,7 +312,7 @@ async function loadFeed() {
 
         const authorIds = [...new Set(posts.map(p => p.author_id))];
         const { data: profilesData } = await Promise.race([
-            supabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds),
+            socialSupabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds),
             new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
         ]).catch(() => ({ data: [] }));
         const profileMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
@@ -321,9 +321,9 @@ async function loadFeed() {
         const postIds = posts.map(p => p.id);
         const [likesRes, commentsRes, donationsRes] = await Promise.race([
             Promise.all([
-                supabase.from('giveme_likes').select('post_id, user_id').in('post_id', postIds),
-                supabase.from('giveme_comments').select('post_id').in('post_id', postIds),
-                supabase.from('giveme_coin_donations').select('post_id, amount').in('post_id', postIds)
+                socialSupabase.from('giveme_likes').select('post_id, user_id').in('post_id', postIds),
+                socialSupabase.from('giveme_comments').select('post_id').in('post_id', postIds),
+                socialSupabase.from('giveme_coin_donations').select('post_id, amount').in('post_id', postIds)
             ]),
             new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
         ]).catch(() => [{ data: [] }, { data: [] }, { data: [] }]);
@@ -526,15 +526,15 @@ async function toggleLike(btn, postId) {
 
     const isLiked = btn.classList.contains('liked');
 
-    if (me && supabase) {
+    if (me && socialSupabase) {
         try {
             if (isLiked) {
-                await supabase.from('giveme_likes').delete().eq('post_id', postId).eq('user_id', me.uid);
+                await socialSupabase.from('giveme_likes').delete().eq('post_id', postId).eq('user_id', me.uid);
                 btn.classList.remove('liked');
                 btn.querySelector('.like-icon').textContent = '🤍';
                 likesEl.textContent = Math.max(0, parseInt(likesEl.textContent) - 1);
             } else {
-                await supabase.from('giveme_likes').insert({ post_id: postId, user_id: me.uid });
+                await socialSupabase.from('giveme_likes').insert({ post_id: postId, user_id: me.uid });
                 btn.classList.add('liked');
                 btn.querySelector('.like-icon').textContent = '❤️';
                 likesEl.textContent = parseInt(likesEl.textContent) + 1;
@@ -576,7 +576,7 @@ async function toggleFollow(btn, authorId) {
 let currentProfileUserId = null;
 
 async function openUserProfile(userId) {
-	if (!userId || !supabase) return;
+	if (!userId || !socialSupabase) return;
 	currentProfileUserId = userId;
 	const modal = document.getElementById('userProfileModal');
 	const avatarEl = document.getElementById('userProfileAvatar');
@@ -601,14 +601,14 @@ async function openUserProfile(userId) {
 	if (loadingEl) loadingEl.style.display = 'block';
 
 	try {
-		const { data: profile } = await supabase.from('profiles').select('id, display_name, avatar_url, bio').eq('id', userId).single();
+		const { data: profile } = await socialSupabase.from('profiles').select('id, display_name, avatar_url, bio').eq('id', userId).single();
 		const displayName = profile?.display_name || 'Anonym';
 		nameEl.textContent = displayName;
 		avatarEl.innerHTML = profile?.avatar_url ? `<img src="${escapeHTML(profile.avatar_url)}" alt="">` : getAvatarEmoji(displayName);
 
 		const [postsRes, countRes, followersCount, followingCount] = await Promise.all([
-			supabase.from('giveme_posts').select('id, image_data, caption, created_at').eq('author_id', userId).order('created_at', { ascending: false }).limit(30),
-			supabase.from('giveme_posts').select('*', { count: 'exact', head: true }).eq('author_id', userId),
+			socialSupabase.from('giveme_posts').select('id, image_data, caption, created_at').eq('author_id', userId).order('created_at', { ascending: false }).limit(30),
+			socialSupabase.from('giveme_posts').select('*', { count: 'exact', head: true }).eq('author_id', userId),
 			getFollowersCount(userId),
 			getFollowingCount(userId)
 		]);
@@ -671,8 +671,8 @@ function doubleTapLike(container, postId) {
         if (likesEl) likesEl.textContent = parseInt(likesEl.textContent || 0) + 1;
         earnCoin('double-tap-like');
         const me = getCurrentUser();
-        if (me && supabase) {
-            supabase.from('giveme_likes').upsert({ post_id: postId, user_id: me.uid }, { onConflict: 'post_id,user_id' }).then(() => {});
+        if (me && socialSupabase) {
+            socialSupabase.from('giveme_likes').upsert({ post_id: postId, user_id: me.uid }, { onConflict: 'post_id,user_id' }).then(() => {});
         }
     }
     setTimeout(() => heart.classList.remove('animate'), 1000);
@@ -697,7 +697,7 @@ async function sendCoins(event, postId, recipientId, amount) {
     if (amount <= 0) return;
 
     const me = getCurrentUser();
-    if (!me || !supabase) {
+    if (!me || !socialSupabase) {
         alert('Prihlás sa, aby si mohol darovať coiny ostatným.');
         return;
     }
@@ -715,10 +715,10 @@ async function sendCoins(event, postId, recipientId, amount) {
     }
 
     // Persist to Supabase FIRST — deduct only on success
-    if (me && supabase && recipientId) {
+    if (me && socialSupabase && recipientId) {
         try {
             await Promise.race([
-                supabase.from('giveme_coin_donations').insert({
+                socialSupabase.from('giveme_coin_donations').insert({
                     post_id: postId,
                     donor_id: me.uid,
                     recipient_id: recipientId,
@@ -811,9 +811,9 @@ async function openComments(postId) {
     const list = document.getElementById('commentsList');
     list.innerHTML = '<div class="comment-loading">Načítavam...</div>';
 
-    if (supabase) {
+    if (socialSupabase) {
         try {
-            const { data: comments } = await supabase
+            const { data: comments } = await socialSupabase
                 .from('giveme_comments')
                 .select('id, content, created_at, user_id')
                 .eq('post_id', postId)
@@ -821,7 +821,7 @@ async function openComments(postId) {
 
             list.innerHTML = '';
             const authorIds = [...new Set((comments || []).map(c => c.user_id))];
-            const { data: profs } = authorIds.length ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds) : { data: [] };
+            const { data: profs } = authorIds.length ? await socialSupabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds) : { data: [] };
             const profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
 
             for (const c of comments || []) {
@@ -869,13 +869,13 @@ async function submitInlineComment(btn, postId) {
     if (!content) return;
 
     const me = getCurrentUser();
-    if (!me || !supabase) {
+    if (!me || !socialSupabase) {
         alert('Prihlás sa, aby si mohol komentovať.');
         return;
     }
 
     try {
-        await supabase.from('giveme_comments').insert({
+        await socialSupabase.from('giveme_comments').insert({
             post_id: postId,
             user_id: me.uid,
             content
@@ -906,13 +906,13 @@ async function submitModalComment() {
     if (!content || !currentCommentPost) return;
 
     const me = getCurrentUser();
-    if (!me || !supabase) {
+    if (!me || !socialSupabase) {
         alert('Prihlás sa, aby si mohol komentovať.');
         return;
     }
 
     try {
-        const { error } = await supabase.from('giveme_comments').insert({
+        const { error } = await socialSupabase.from('giveme_comments').insert({
             post_id: currentCommentPost,
             user_id: me.uid,
             content
@@ -1249,7 +1249,7 @@ async function publishPost() {
         return;
     }
 
-    if (!canvas || !supabase) {
+    if (!canvas || !socialSupabase) {
         alert('Pripojenie k serveru nie je dostupné. Skús obnoviť stránku.');
         return;
     }
@@ -1261,7 +1261,7 @@ async function publishPost() {
     const imageData = canvas.toDataURL('image/png');
 
     try {
-        const { error } = await supabase.from('giveme_posts').insert({
+        const { error } = await socialSupabase.from('giveme_posts').insert({
             author_id: me.uid,
             image_data: imageData,
             caption: caption || null,
@@ -1320,12 +1320,12 @@ async function handleSearch(query) {
     results.innerHTML = '<div class="search-empty">Hľadám...</div>';
 
     searchTimeout = setTimeout(async () => {
-        if (!supabase) {
+        if (!socialSupabase) {
             results.innerHTML = '<div class="search-empty">Pripojenie nie je dostupné.</div>';
             return;
         }
         try {
-            const { data: users, error } = await supabase
+            const { data: users, error } = await socialSupabase
                 .from('profiles')
                 .select('id, display_name, avatar_url')
                 .ilike('display_name', `%${query}%`)

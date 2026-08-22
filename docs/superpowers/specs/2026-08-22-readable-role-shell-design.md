@@ -1,7 +1,7 @@
 # Readable role-based product shell
 
-**Date:** 2026-08-22  
-**Status:** Approved direction; implementation pending  
+**Date:** 2026-08-22
+**Status:** Approved direction; implementation pending
 **Product:** gIVEMEGAME.IO / gIVEMEEDU / INVOK
 
 ## Objective
@@ -230,4 +230,3 @@ Each slice must leave the application runnable. The branch is pushed only after 
 7. The app has no horizontal page scroll at 375px, 768px or desktop widths.
 8. Existing lobby deep links, auth, generator, EDU, assessment, INVOK and billing behavior remain functional.
 9. The complete automated suite passes and the Vercel Preview is `Ready` and smoke-tested.
-

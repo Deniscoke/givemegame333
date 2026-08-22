@@ -1,8 +1,8 @@
 # PROJECT_STATE.md
 
 > Single source of truth pre gIVEMEGAME.IO → INVOK transformáciu.
-> Posledná aktualizácia: 2026-08-21
-> Verzia: 1.1
+> Posledná aktualizácia: 2026-08-22
+> Verzia: 1.2
 
 ---
 
@@ -80,7 +80,9 @@ gIVEMEGAME.IO-OPENCLAW/
 - ✅ XSS escape v session participant rendering
 - ✅ Mobile host UX fixes (badge, backdrop dismiss, fast polling)
 - ✅ EDU portal scaffold (`/edu/`) — members, classes, attendance, gradebook
-- ✅ Stabilizovaný testovací baseline: plný suite green (543 testov pri verifikácii 2026-08-21)
+- ✅ Čitateľný role-aware shell: join-first `/student/`, zjednotená EDU/Assessment/INVOK navigácia, zameraný generátor a live-session režim
+- ✅ Verejné, prihlasovacie, účtové a billing plochy používajú čitateľnú typografiu a viditeľný keyboard focus
+- ✅ Stabilizovaný testovací baseline: plný suite green (578 testov pri verifikácii 2026-08-22)
 
 ---
 
@@ -179,6 +181,12 @@ gIVEMEGAME.IO-OPENCLAW/
 - [x] **Fáza 1 / Týždeň 2 / T2b**: Inštitucionálny Dashboard UI (HOTOVO — Task 4)
   - `/institution/` dashboard, školské/triedne filtre, Impact Trail, summary/module pre-post pohľady a CSV export.
   - Konzumuje existujúcich sedem `/api/institution/*` endpointov; nepridáva `029_institutions.sql`.
+- [x] **Readable role-based product shell — Tasks 1–7 + Task 8 lokálne QA** (IMPLEMENTOVANÉ, ČAKÁ NA REVIEW/PREVIEW)
+  - Dokončené trasy: `/`, `/login.html`, `/student/`, `/index.html`, `/edu/`, `/edu/assessments.html` a `/institution/`.
+  - Typografia: Atkinson Hyperlegible pre body a controls (min. 16 px), IBM Plex Mono pre kódy/timery/dáta, Press Start 2P iba pre krátke brand/badge/celebration akcenty.
+  - Accessibility/responsive: 44 px touch targets, spoločné `:focus-visible`, reduced-motion režim a nulový document overflow v 21 kombináciách trás pri 1440×900, 768×1024 a 375×812.
+  - Lokálny testovací baseline: 578/578 testov; všetkých 29 požadovaných JavaScript súborov prešlo syntax kontrolou.
+  - Release stav: iba lokálne overená feature branch; GitHub push a Vercel Preview sú zámerne pozastavené do nezávislého review. Produkcia nebola zmenená.
 - [ ] **Fáza 1 / Týždeň 3**: WCAG audit
 - [ ] **Fáza 1 / Týždeň 4**: Knižnica oficiálnych modulov
 
@@ -196,6 +204,8 @@ gIVEMEGAME.IO-OPENCLAW/
 - ⚠️ Institution export pseudonymizácia: `user_id` (UUID) je v CSV — dostatočné pre INVOK reporting, ale pri požiadavke na úplnú anonymizáciu treba sequence number (Student 1, 2...) namiesto UUID
 - ⚠️ Deployment credential exposure: ignore pravidlá nezbavia už trackovaných súborov ani Git histórie. Repository owner musí zrotovať existujúce credentials a vyčistiť históriu podľa incident procesu.
 - ⚠️ Externé DB migrácie zostávajú owner-operated: podporovaný runner aplikuje billing/assessment release ako `026_billing.sql` → `027_billing_consent.sql` → `028_assessments.sql` → `029_assessment_security.sql` → `030_billing_security.sql` → `031_assessment_scope_security.sql` → `032_assessment_scope_evidence.sql`, najprv na staging. Eviduje plný názov + SHA-256 iba za migrácie, ktoré sám úspešne vykonal. Jeho bootstrap preflight najprv iba číta stav trackeru a schémy; prázdny tracker nad existujúcou non-legacy schémou fail-closed bez DB zápisu vyžaduje kontrolovaný DBA baseline/manuálnu reconciliáciu mimo runnera. Jedinou automatickou výnimkou je explicitne overený legacy-016 upgrade. Obe `018` ostávajú aktívne, `019` je disabled a `023` chýba.
+- ⚠️ Lokálne UI QA prebehlo bez `SUPABASE_DB_URL`, OpenAI API kľúča, staging účtov a seedovaných školských dát. Overené boli bezpečné no-auth/error stavy; reálne student/teacher dáta a platený checkout sa nesmú deklarovať ako overené pred staging smoke testom.
+- ⚠️ GitHub/Vercel sú externé release závislosti Task 8. Push, Vercel Preview `Ready` kontrola a Preview API smoke ostávajú po nezávislom schválení vetvy; produkčný alias sa nesmie meniť.
 
 ---
 
@@ -246,6 +256,7 @@ INVOK pokryje 1. rok pre 10 škôl. Potom prechádzajú na School License.
 - **Supabase project**: `vhpkkbixshfyytohkruv`
 - **Repo**: gIVEMEGAME.IO-OPENCLAW
 - **Branch**: `main`
+- **Aktuálna QA branch**: `codex/readable-student-shell-impl` (lokálna; ešte bez pushu/Preview)
 
 ---
 
@@ -274,6 +285,7 @@ INVOK pokryje 1. rok pre 10 škôl. Potom prechádzajú na School License.
 - **2026-08-21**: **Task 2 baseline** — plný testovací suite je green: 543 testov pri finálnej verifikácii; presný počet sa môže zvyšovať s ďalšími regresnými testami.
 - **2026-08-21**: **Task 4 dashboard** — INVOK institution dashboard UI je hotové nad existujúcim reporting API. Migrácia `029_assessment_security.sql` patrí assessment RLS hardeningu; žiadna `029_institutions.sql` neexistuje ani nie je potrebná.
 - **2026-08-21**: **Migration runner** — poradie je explicitné podľa plných názvov (vrátane oboch `018`), disabled `019` sa neaplikuje a chýbajúce `023` sa nedopĺňa premenovaním. Úspešné transakcie sa evidujú plným názvom + SHA-256. Fresh DB môže použiť celý katalóg a tracked DB release selector; existujúca non-legacy schéma s prázdnym trackerom sa odmietne bez zapisovania checksumov a vyžaduje owner/DBA baseline alebo manuálnu reconciliáciu mimo runnera. Explicitný overený legacy-016 upgrade ostáva podporovaný. Release sa vždy skúša najprv na staging.
+- **2026-08-22**: **Readable role shell rollout** — role-aware/readable Tasks 1–7 sú lokálne implementované a whole-product QA prešlo 578/578 testami. Vetva ostáva Preview-only kandidátom; push, Vercel Preview a produkčné rozhodnutie nasledujú až po nezávislom review.
 
 ---
 
