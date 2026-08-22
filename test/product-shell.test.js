@@ -2,6 +2,7 @@ const { after, before, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const router = require('../public/js/post-login-router.js');
 
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
@@ -260,6 +261,54 @@ test('EDU surface typography keeps labels readable and pixel text at least 10px'
       }
     }
   }
+});
+
+test('rendered perk level metadata uses readable data typography at 10px or larger', async () => {
+  const list = {
+    innerHTML: '',
+    querySelectorAll() { return []; },
+  };
+  const document = {
+    createElement() {
+      let text = '';
+      return {
+        set textContent(value) { text = String(value); },
+        get innerHTML() { return text; },
+      };
+    },
+    getElementById(id) { return id === 'perk-req-list' ? list : null; },
+  };
+  const context = vm.createContext({
+    document,
+    EduApp: { getRole: () => 'teacher' },
+    EduAuth: {
+      apiFetch: async () => ({
+        requests: [{
+          id: 'request-1',
+          perk_title: 'Prestávka navyše',
+          perk_level: 3,
+          duration_minutes: 15,
+          student_name: 'Alex',
+          claimed_at: '2026-08-22T10:00:00Z',
+        }],
+      }),
+    },
+    Date,
+    setTimeout,
+  });
+  const source = `${read('public/edu/js/edu-perks.js')}\n;globalThis.TestEduPerks = EduPerks;`;
+  vm.runInContext(source, context, { filename: 'edu-perks.js' });
+
+  await context.TestEduPerks.init();
+
+  assert.match(list.innerHTML, /<span class="perk-req-level">Lv 3 · 15 min<\/span>/);
+  assert.doesNotMatch(list.innerHTML, /<span\b[^>]*style=/i);
+
+  const html = read('public/edu/perk-requests.html');
+  const declarations = html.match(/\.perk-req-level\s*\{([^}]*)\}/i)?.[1] || '';
+  assert.match(declarations, /font-family:\s*var\(--edu-font-data\)/i);
+  const size = Number(declarations.match(/font-size:\s*([0-9.]+)px/i)?.[1]);
+  assert.ok(Number.isFinite(size) && size >= 10, 'perk level metadata should render at 10px or larger');
 });
 
 test('every educator surface exposes a skip link, main target and one primary heading', () => {

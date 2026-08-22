@@ -52,7 +52,7 @@ const EduPerks = (function () {
       <div class="perk-req-row" data-id="${esc(r.id)}">
         <div class="perk-req-icon">${esc(r.perk_icon || '🎁')}</div>
         <div class="perk-req-body">
-          <div class="perk-req-title">${esc(r.perk_title || r.perk_key)} <span style="font-size:8px;color:#a855f7">Lv ${esc(r.perk_level || '')}${r.duration_minutes ? ' · ' + r.duration_minutes + ' min' : ''}</span></div>
+          <div class="perk-req-title">${esc(r.perk_title || r.perk_key)} <span class="perk-req-level">Lv ${esc(r.perk_level || '')}${r.duration_minutes ? ' · ' + r.duration_minutes + ' min' : ''}</span></div>
           <div class="perk-req-meta">${esc(r.student_name || r.student_email || 'Ziak')} · ${fmtTime(r.claimed_at)}</div>
           <div class="perk-req-desc">${esc(r.perk_description || '')}</div>
         </div>
