@@ -6,6 +6,33 @@ const router = require('../public/js/post-login-router.js');
 
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 
+const voidElements = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr',
+]);
+
+function assertHtmlTreeIsBalanced(html) {
+  const stack = [];
+  const tags = html.matchAll(/<!--[\s\S]*?-->|<\/?([a-z][\w-]*)\b[^>]*>/gi);
+
+  for (const match of tags) {
+    const source = match[0];
+    const tag = match[1]?.toLowerCase();
+    if (!tag || source.startsWith('<!--') || voidElements.has(tag) || /\/\s*>$/.test(source)) continue;
+
+    if (source.startsWith('</')) {
+      assert.equal(
+        stack.pop(),
+        tag,
+        `expected </${tag}> to close its direct parent near character ${match.index}`,
+      );
+    } else {
+      stack.push(tag);
+    }
+  }
+
+  assert.deepEqual(stack, [], 'all generator markup elements close in their original hierarchy');
+}
+
 let server;
 let origin;
 
@@ -79,6 +106,26 @@ test('generator foregrounds activity basics and keeps optional controls collapse
   assert.match(generator, /id="btn-join-session"[\s\S]*Pripojiť sa do hry/i);
   assert.match(generator, /href="\/ui\/generator-shell\.css"/i);
   assert.doesNotMatch(generator, /id="btn-join-session"[\s\S]{0,160}>\s*🔑\s*<\/button>/i);
+});
+
+test('generator preserves the workspace hierarchy around the creation controls', () => {
+  const generator = read('public/index.html');
+
+  assertHtmlTreeIsBalanced(generator.slice(generator.indexOf('<body'), generator.lastIndexOf('</html>')));
+});
+
+test('generator styles keep advanced controls hidden until their details element opens', () => {
+  const styles = read('public/ui/generator-shell.css');
+
+  assert.match(styles, /#advanced-options\s*>\s*\.advanced-options__content\s*\{[\s\S]*display:\s*none/);
+  assert.match(styles, /#advanced-options\[open\]\s*>\s*\.advanced-options__content\s*\{[\s\S]*display:\s*grid/);
+});
+
+test('generator mobile header leaves the preferences popover outside its clipping area', () => {
+  const styles = read('public/ui/generator-shell.css');
+  const mobileStyles = styles.slice(styles.indexOf('@media (max-width: 600px)'));
+
+  assert.doesNotMatch(mobileStyles, /body\.generator-shell header\s*\{[\s\S]*overflow:\s*hidden/);
 });
 
 test('shell helper exports deterministic menu helpers', () => {

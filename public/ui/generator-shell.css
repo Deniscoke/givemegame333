@@ -127,7 +127,11 @@ body.generator-shell #advanced-options summary {
   font-weight: 700;
 }
 
-body.generator-shell .advanced-options__content {
+body.generator-shell #advanced-options > .advanced-options__content {
+  display: none;
+}
+
+body.generator-shell #advanced-options[open] > .advanced-options__content {
   display: grid;
   gap: var(--shell-space-3);
   padding-top: var(--shell-space-2);
@@ -139,7 +143,7 @@ body.generator-shell:not(.mobile-smarta-open) aside.right-panel {
 
 @media (max-width: 600px) {
   body.generator-shell header {
-    overflow: hidden;
+    overflow: visible;
     justify-content: space-between;
   }
 
