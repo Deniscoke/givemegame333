@@ -47,14 +47,11 @@
 				<button class="btn btn-retro btn-action-header btn-mobile-filters mobile-only" id="btn-mobile-filters" onclick="App.UI.toggleMobileFilters()" title="Filtry" aria-label="Filtry">
 					<i class="bi bi-sliders"></i>
 				</button>
-				<button class="btn btn-retro btn-action-header btn-mobile-smarta mobile-only" id="btn-mobile-smarta" onclick="App.UI.toggleMobileSmarta()" title="SMARTA & Historie" aria-label="SMARTA">
-					<i class="bi bi-mic"></i>
+				<button class="btn btn-retro btn-action-header btn-game-tools" id="btn-game-tools" onclick="App.UI.openTool('smarta', this)" aria-controls="game-tools-panel" aria-expanded="false" title="SMARTA, questy, profil a postup">
+					<i class="bi bi-grid-3x3-gap"></i> <span>Nástroje</span>
 				</button>
 				<button class="btn btn-retro btn-action-header" onclick="App.UI.openHelp()" data-i18n-title="help">
 					<i class="bi bi-question-circle"></i>
-				</button>
-				<button class="btn btn-retro btn-action-header desktop-only" onclick="App.UI.toggleHistory()" data-i18n-title="history">
-					<i class="bi bi-clock-history"></i>
 				</button>
 				<button class="btn btn-retro btn-action-header" id="btn-library" onclick="App.Library.open()" title="Knižnica hier">
 					<i class="bi bi-collection"></i>
@@ -520,8 +517,22 @@
 				</div>
 			</main>
 
-			<!-- ─── RIGHT PANEL: PREVIEW & HISTORY ─── -->
-			<aside class="right-panel">
+			<!-- ─── RIGHT PANEL: NAMED GAME TOOLS ─── -->
+			<aside id="game-tools-panel" class="right-panel game-tools" aria-label="Herné nástroje" aria-hidden="false">
+				<div class="game-tools-header">
+					<h2 class="game-tools-title">Herné nástroje</h2>
+					<button type="button" class="game-tools-close" id="game-tools-close" onclick="App.UI.closeTools()" aria-label="Zavrieť herné nástroje">
+						<i class="bi bi-x-lg" aria-hidden="true"></i>
+					</button>
+				</div>
+				<div class="game-tools-tabs" role="tablist" aria-label="Herné nástroje">
+					<button type="button" id="tool-tab-smarta" class="game-tools-tab" role="tab" data-tool="smarta" aria-controls="tool-panel-smarta" aria-selected="true" onclick="App.UI.openTool('smarta', this)">SMARTA</button>
+					<button type="button" id="tool-tab-history" class="game-tools-tab" role="tab" data-tool="history" aria-controls="tool-panel-history" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('history', this)">Questy a história</button>
+					<button type="button" id="tool-tab-tamagochi" class="game-tools-tab" role="tab" data-tool="tamagochi" aria-controls="tool-panel-tamagochi" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('tamagochi', this)">gIVEMEGOCHI</button>
+					<button type="button" id="tool-tab-stats" class="game-tools-tab" role="tab" data-tool="stats" aria-controls="tool-panel-stats" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('stats', this)">Štatistiky</button>
+				</div>
+
+				<div id="tool-panel-smarta" class="game-tools-panel" role="tabpanel" data-tool-panel="smarta" aria-labelledby="tool-tab-smarta">
 				<div class="panel-section narrator-section" data-narrator-zone>
 					<label class="panel-label"><i class="bi bi-mic"></i> SMARTA</label>
 					<div class="narrator-area-select-wrap">
@@ -568,14 +579,10 @@
 						<i class="bi bi-mic"></i>
 						<span data-i18n="narrator_click">Klikni a počúvaj</span>
 					</div>
-					<div id="quick-view" class="quick-view quick-view-compact" style="margin-top:8px">
-						<div class="quick-placeholder">
-							<i class="bi bi-dice-3"></i>
-							<span data-i18n="no_game">Žádná hra</span>
-						</div>
-					</div>
+				</div>
 				</div>
 
+				<div id="tool-panel-tamagochi" class="game-tools-panel" role="tabpanel" data-tool-panel="tamagochi" aria-labelledby="tool-tab-tamagochi" hidden>
 				<div class="panel-section tamagochi-section">
 					<label class="panel-label tamagochi-label"><i class="bi bi-heart-pulse"></i> gIVEMEGOCHI</label>
 					<a href="tamagochi/index.html" target="_blank" class="tamagochi-embed tamagochi-avatar-skin" title="Otvoriť hru">
@@ -601,6 +608,15 @@
 						</div>
 					</a>
 				</div>
+				</div>
+
+				<div id="tool-panel-history" class="game-tools-panel" role="tabpanel" data-tool-panel="history" aria-labelledby="tool-tab-history" hidden>
+				<div id="quick-view" class="quick-view quick-view-compact">
+					<div class="quick-placeholder">
+						<i class="bi bi-dice-3"></i>
+						<span data-i18n="no_game">Žádná hra</span>
+					</div>
+				</div>
 				<div class="panel-section panel-scrollable">
 					<label class="panel-label"><i class="bi bi-clock-history"></i> <span data-i18n="history">Historie</span></label>
 					<div class="panel-scroll-inner">
@@ -612,7 +628,9 @@
 						</div>
 					</div>
 				</div>
+				</div>
 
+				<div id="tool-panel-stats" class="game-tools-panel" role="tabpanel" data-tool-panel="stats" aria-labelledby="tool-tab-stats" hidden>
 				<div class="panel-section">
 					<label class="panel-label"><i class="bi bi-bar-chart"></i> <span data-i18n="stats">Statistiky</span></label>
 					<div class="stats-grid">
@@ -624,6 +642,15 @@
 							<span class="stat-value" id="stat-exported">0</span>
 							<span class="stat-label" data-i18n="stat_exported">Exportováno</span>
 						</div>
+					</div>
+				</div>
+				</div>
+
+				<div class="game-tools-profile" aria-label="Profil a postup">
+					<strong>Profil a postup</strong>
+					<div class="game-tools-profile-actions">
+						<button type="button" class="btn btn-retro" onclick="App.Profile.open()">Môj profil</button>
+						<button type="button" class="btn btn-retro" onclick="window.RpgScreen && RpgScreen.open()">RPG profil</button>
 					</div>
 				</div>
 

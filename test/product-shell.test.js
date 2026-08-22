@@ -299,6 +299,109 @@ test('generator mobile header leaves the preferences popover outside its clippin
   assert.doesNotMatch(mobileStyles, /body\.generator-shell header\s*\{[\s\S]*overflow:\s*hidden/);
 });
 
+test('generator exposes one named, accessible tools surface without removing profile or RPG entry points', () => {
+  const generator = read('public/index.html');
+
+  assert.match(generator, /id="btn-game-tools"[^>]*aria-controls="game-tools-panel"[^>]*>[^<]*<i[^>]*><\/i>\s*<span>Nástroje<\/span>/i);
+  assert.match(generator, /<aside\b[^>]*id="game-tools-panel"[^>]*class="[^"]*right-panel[^"]*game-tools[^"]*"[^>]*aria-label="Herné nástroje"/i);
+  assert.match(generator, /class="game-tools-title"[^>]*>Herné nástroje</i);
+  assert.match(generator, /role="tablist"[^>]*aria-label="Herné nástroje"/i);
+
+  for (const [tool, label] of [
+    ['smarta', 'SMARTA'],
+    ['history', 'Questy a história'],
+    ['tamagochi', 'gIVEMEGOCHI'],
+    ['stats', 'Štatistiky'],
+  ]) {
+    assert.match(generator, new RegExp(`role="tab"[^>]*data-tool="${tool}"[^>]*aria-controls="tool-panel-${tool}"[\\s\\S]{0,120}>[\\s\\S]{0,80}${label}`, 'i'));
+    assert.match(generator, new RegExp(`id="tool-panel-${tool}"[^>]*role="tabpanel"[^>]*aria-labelledby="tool-tab-${tool}"`, 'i'));
+  }
+
+  assert.match(generator, /onclick="App\.Profile\.open\(\)"[^>]*>\s*Môj profil\s*</i);
+  assert.match(generator, /onclick="window\.RpgScreen\s*&&\s*RpgScreen\.open\(\)"[^>]*>\s*RPG profil\s*</i);
+});
+
+test('generator tools are a static wide panel and an explicit compact drawer', () => {
+  const styles = read('public/ui/generator-shell.css');
+
+  assert.doesNotMatch(styles, /body\.generator-shell:not\(\.mobile-smarta-open\)\s+aside\.right-panel\s*\{[\s\S]*?display:\s*none/);
+  assert.match(styles, /@media\s*\(min-width:\s*1200px\)[\s\S]*body\.generator-shell\s+aside\.game-tools\s*\{[\s\S]*display:\s*flex/);
+  assert.match(styles, /@media\s*\(max-width:\s*1199px\)[\s\S]*body\.generator-shell\.mobile-smarta-open\s+aside\.game-tools\s*\{[\s\S]*transform:\s*translateX\(0\)/);
+  assert.match(styles, /body\.session-focused\s+aside\.game-tools\s*\{[\s\S]*display:\s*none\s*!important/);
+  assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+});
+
+test('GameUI opens named tools and preserves legacy SMARTA and history entry points', () => {
+  const listeners = {};
+  const classes = new Set();
+  const attrs = new Map();
+  const makeNode = (id) => ({
+    id,
+    hidden: false,
+    tabIndex: 0,
+    focus() { this.focused = true; },
+    scrollIntoView() {},
+    setAttribute(name, value) { attrs.set(`${id}:${name}`, String(value)); },
+    getAttribute(name) { return attrs.get(`${id}:${name}`) ?? null; },
+  });
+  const nodes = new Map([
+    ['btn-game-tools', makeNode('btn-game-tools')],
+    ['game-tools-panel', makeNode('game-tools-panel')],
+    ['game-tools-close', makeNode('game-tools-close')],
+  ]);
+  const tabs = ['smarta', 'history', 'tamagochi', 'stats'].map(tool => {
+    const node = makeNode(`tool-tab-${tool}`);
+    node.dataset = { tool };
+    nodes.set(node.id, node);
+    return node;
+  });
+  const panels = ['smarta', 'history', 'tamagochi', 'stats'].map(tool => {
+    const node = makeNode(`tool-panel-${tool}`);
+    node.setAttribute('data-tool-panel', tool);
+    nodes.set(node.id, node);
+    return node;
+  });
+  const context = vm.createContext({
+    console,
+    setTimeout,
+    window: {},
+    document: {
+      activeElement: { id: 'history-trigger', focus() { this.focused = true; } },
+      body: {
+        classList: {
+          add(...names) { names.forEach(name => classes.add(name)); },
+          remove(...names) { names.forEach(name => classes.delete(name)); },
+          contains(name) { return classes.has(name); },
+          toggle(name) { classes.has(name) ? classes.delete(name) : classes.add(name); return classes.has(name); },
+        },
+      },
+      getElementById(id) { return nodes.get(id) || null; },
+      querySelectorAll(selector) {
+        if (selector === '[role="tab"][data-tool]') return tabs;
+        if (selector === '[role="tabpanel"][data-tool-panel]') return panels;
+        return [];
+      },
+      addEventListener(type, handler) { listeners[type] = handler; },
+    },
+  });
+  context.window = context;
+  vm.runInContext(read('public/js/game-ui.js'), context, { filename: 'game-ui.js' });
+
+  context.GameUI.initTools();
+  context.GameUI.toggleHistory();
+  assert.equal(classes.has('mobile-smarta-open'), true);
+  assert.equal(attrs.get('btn-game-tools:aria-expanded'), 'true');
+  assert.equal(attrs.get('tool-tab-history:aria-selected'), 'true');
+  assert.equal(nodes.get('tool-panel-history').hidden, false);
+  assert.equal(nodes.get('tool-panel-smarta').hidden, true);
+
+  context.GameUI.toggleMobileSmarta();
+  assert.equal(attrs.get('tool-tab-smarta:aria-selected'), 'true');
+  listeners.keydown({ key: 'Escape' });
+  assert.equal(classes.has('mobile-smarta-open'), false);
+  assert.equal(attrs.get('btn-game-tools:aria-expanded'), 'false');
+});
+
 test('shell helper exports deterministic menu helpers', () => {
   const shell = require('../public/ui/shell.js');
   assert.equal(typeof shell.setActiveNavigation, 'function');
