@@ -317,7 +317,7 @@ test('educator shell exposes one role-filtered navigation vocabulary', () => {
   assert.equal(teacherLabels.includes('Členovia'), true);
   assert.equal(
     shell.itemsForRole('teacher').find((item) => item.label === 'Knižnica a živé hry').href,
-    '/index.html',
+    '/index.html?view=library',
   );
 });
 
@@ -392,8 +392,38 @@ test('educator shell keeps active navigation unique across the role and route ma
       assert.ok(currentLabels(role, pathname).length <= 1, `${role} ${pathname} should have at most one current link`);
     }
     assert.deepEqual(currentLabels(role, '/index.html'), ['Vytvoriť aktivitu']);
+    assert.deepEqual(currentLabels(role, '/index.html?view=library'), ['Knižnica a živé hry']);
   }
   assert.deepEqual(currentLabels('student', '/edu/assessments.html'), ['Moje aktivity']);
+});
+
+test('educator library route opens the existing generator library state', async () => {
+  const modal = { style: { display: 'none' } };
+  const list = { innerHTML: '' };
+  const context = vm.createContext({
+    window: { location: { origin: 'https://example.test', search: '?view=library' } },
+    document: {
+      addEventListener() {},
+      getElementById(id) {
+        if (id === 'library-modal') return modal;
+        if (id === 'library-list') return list;
+        return null;
+      },
+      querySelectorAll: () => [],
+    },
+    getCurrentUser: () => null,
+    setTimeout,
+    clearTimeout,
+    URLSearchParams,
+    AbortController,
+    fetch: async () => { throw new Error('unauthenticated library view should not fetch'); },
+  });
+  vm.runInContext(read('public/js/library.js'), context, { filename: 'library.js' });
+
+  assert.equal(typeof context.window.Library.openRequestedView, 'function');
+  assert.equal(await context.window.Library.openRequestedView(), true);
+  assert.equal(modal.style.display, 'flex');
+  assert.match(list.innerHTML, /prístup ku knižnici sa prihlás/i);
 });
 
 test('EDU surface typography keeps labels readable and pixel text at least 10px', () => {
@@ -486,6 +516,14 @@ test('assessment tabs and actions preserve the 44px touch target minimum', () =>
   assert.match(html, /\.assess-btn\s*\{[^}]*min-height:\s*44px/i);
 });
 
+test('authenticated educator small buttons preserve a 44px interactive box', () => {
+  const css = read('public/edu/css/edu.css');
+  const declarations = declarationsFor(css, '.edu-btn-sm');
+
+  assertMinTouchTarget(css, '.edu-btn-sm', 'public/edu/css/edu.css');
+  assert.match(declarations, /min-width:\s*44px/i);
+});
+
 test('every educator surface loads the shared shell once in stable asset order', () => {
   for (const [file, pageStylesheet] of educatorPages) {
     const html = read(file);
@@ -511,6 +549,116 @@ test('every educator surface loads the shared shell once in stable asset order',
 
 test('pending lobby wins over role routing', () => {
   assert.equal(router.destinationFor({ pendingLobby: 'AB12CD', schoolRole: 'student' }), '/index.html?lobby=AB12CD');
+});
+
+test('pending lobby survives an unauthenticated generator reload', async () => {
+  const pending = new Map();
+  const location = {
+    origin: 'https://example.test',
+    pathname: '/index.html',
+    search: '?lobby=AB12CD',
+    hash: '',
+  };
+  const context = vm.createContext({
+    window: { location },
+    history: {
+      replaceState(_state, _title, next) {
+        location.search = next.includes('?') ? `?${next.split('?')[1].split('#')[0]}` : '';
+      },
+    },
+    document: {
+      getElementById: () => null,
+      body: { classList: { toggle() {}, remove() {} } },
+    },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: {
+      getItem: (key) => pending.get(key) || null,
+      setItem: (key, value) => pending.set(key, value),
+      removeItem: (key) => pending.delete(key),
+    },
+    GameUI: { toast() {} },
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    URLSearchParams,
+    AbortController,
+    fetch: async () => { throw new Error('unauthenticated restore should not fetch'); },
+  });
+  vm.runInContext(read('public/js/session.js'), context, { filename: 'session.js' });
+
+  await context.window.Session.restoreFromUrlOrStorage();
+  assert.equal(pending.get('givemegame_pending_lobby'), 'AB12CD');
+  await context.window.Session.restoreFromUrlOrStorage();
+  assert.equal(pending.get('givemegame_pending_lobby'), 'AB12CD');
+});
+
+test('login performs one pending-lobby redirect when auth callbacks race', async () => {
+  const pending = new Map([['givemegame_pending_lobby', 'AB12CD']]);
+  const navigations = [];
+  let authCallback;
+  let profileWrites = 0;
+  let roleLookups = 0;
+  const user = {
+    id: 'user-1',
+    email: 'student@example.test',
+    user_metadata: { full_name: 'Student' },
+  };
+  const session = { access_token: 'access-token', user };
+  const location = {
+    origin: 'https://example.test',
+    pathname: '/login.html',
+    search: '',
+    hash: '',
+    get href() { return 'https://example.test/login.html'; },
+    set href(value) { navigations.push(value); },
+  };
+  const client = {
+    from: () => ({
+      upsert: async () => {
+        profileWrites += 1;
+        await Promise.resolve();
+        return { error: null };
+      },
+    }),
+    auth: {
+      getSession: async () => ({ data: { session } }),
+      onAuthStateChange(callback) { authCallback = callback; },
+    },
+  };
+  const button = { addEventListener() {}, classList: { add() {}, remove() {} } };
+  const context = vm.createContext({
+    window: {
+      location,
+      history: { replaceState() {} },
+      supabase: { createClient: () => client },
+      PostLoginRouter: {
+        async fetchSchoolRole() { roleLookups += 1; return 'student'; },
+        destinationFor: router.destinationFor,
+      },
+      fetch: async () => { throw new Error('router fetch is stubbed'); },
+    },
+    document: { getElementById: (id) => id === 'btn-google' ? button : null },
+    sessionStorage: {
+      getItem: (key) => pending.get(key) || null,
+      setItem: (key, value) => pending.set(key, value),
+      removeItem: (key) => pending.delete(key),
+    },
+    URLSearchParams,
+    Date,
+    console,
+    setTimeout: (callback) => { queueMicrotask(callback); return 1; },
+  });
+  const loginScripts = [...read('public/login.html').matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)];
+  vm.runInContext(loginScripts.at(-1)[1], context, { filename: 'login-inline.js' });
+  authCallback('INITIAL_SESSION', session);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(profileWrites, 1);
+  assert.equal(roleLookups, 1);
+  assert.deepEqual(navigations, ['/index.html?lobby=AB12CD']);
+  assert.equal(pending.has('givemegame_pending_lobby'), false);
 });
 
 test('role routing sends each user to the next task', () => {
@@ -609,6 +757,146 @@ test('session dialogs use semantic classes and accessible live participant state
   assert.match(session, /class="session-participants"[^>]*aria-live="polite"/);
   assert.match(session, /aria-label="\$\{_t\('close','Zavrieť'\)\}"/);
   assert.match(session, /aria-label="\$\{_t\('sess_quit','Opustiť session'\)\}"/);
+});
+
+test('session dialogs trap focus, close with Escape and restore the invoking control', async () => {
+  const elements = new Map();
+  const bodyChildren = [];
+  const classes = new Set();
+  let nextTimer = 0;
+  const scheduledTimers = new Set();
+  let document;
+
+  function makeElement(tagName = 'div') {
+    const listeners = new Map();
+    let html = '';
+    const element = {
+      tagName: tagName.toUpperCase(),
+      id: '',
+      hidden: false,
+      disabled: false,
+      inert: false,
+      className: '',
+      style: {},
+      _focusables: [],
+      classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} },
+      addEventListener(type, callback) { listeners.set(type, callback); },
+      dispatch(type, event) { listeners.get(type)?.({ target: element, ...event }); },
+      focus() { document.activeElement = element; },
+      contains(node) { return node === element || element._focusables.includes(node); },
+      querySelectorAll() { return element._focusables; },
+      querySelector() { return null; },
+    };
+    Object.defineProperty(element, 'innerHTML', {
+      get: () => html,
+      set(value) {
+        html = String(value);
+        element._focusables = [];
+        for (const match of html.matchAll(/<(button|input|a)\b([^>]*)>/gi)) {
+          const control = makeElement(match[1]);
+          control.id = match[2].match(/\bid="([^"]+)"/i)?.[1] || '';
+          control.hidden = /\bhidden\b/i.test(match[2]);
+          if (control.id) elements.set(control.id, control);
+          element._focusables.push(control);
+        }
+        for (const id of html.matchAll(/\bid="([^"]+)"/gi)) {
+          if (!elements.has(id[1])) {
+            const child = makeElement();
+            child.id = id[1];
+            elements.set(child.id, child);
+          }
+        }
+      },
+    });
+    return element;
+  }
+
+  const body = {
+    children: bodyChildren,
+    classList: {
+      toggle(name, active) { classes[active ? 'add' : 'delete'](name); },
+      remove(...names) { names.forEach((name) => classes.delete(name)); },
+    },
+    appendChild(element) {
+      bodyChildren.push(element);
+      if (element.id) elements.set(element.id, element);
+    },
+  };
+  document = {
+    activeElement: null,
+    body,
+    createElement: makeElement,
+    getElementById: (id) => elements.get(id) || null,
+  };
+  const workspace = makeElement('main');
+  workspace.id = 'workspace';
+  body.appendChild(workspace);
+  const joinTrigger = makeElement('button');
+  joinTrigger.id = 'btn-join-session';
+  body.appendChild(joinTrigger);
+
+  const context = vm.createContext({
+    window: { location: { origin: 'https://example.test' } },
+    document,
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    supabaseClient: {
+      auth: { getSession: async () => ({ data: { session: { access_token: 'token' } } }) },
+      channel: () => ({ on() { return this; }, subscribe() { return this; }, unsubscribe() {} }),
+    },
+    GameUI: { toast() {} },
+    fetch: async (url) => url === '/api/sessions'
+      ? { ok: true, json: async () => ({ id: 'session-1', join_code: 'AB12CD' }) }
+      : { ok: true, json: async () => ({ status: 'waiting', participants: [] }) },
+    setTimeout: (callback, delay = 0) => { if (delay < 8000) callback(); return 1; },
+    clearTimeout,
+    setInterval: () => { const id = ++nextTimer; scheduledTimers.add(id); return id; },
+    clearInterval: (id) => scheduledTimers.delete(id),
+    URLSearchParams,
+    AbortController,
+    confirm: () => true,
+  });
+  vm.runInContext(read('public/js/session.js'), context, { filename: 'session.js' });
+
+  document.activeElement = joinTrigger;
+  context.window.Session.openJoinDialog();
+  const joinModal = elements.get('session-join-modal');
+  const joinInput = elements.get('join-code-input');
+  const joinSubmit = elements.get('btn-join-submit');
+  assert.equal(workspace.inert, true);
+  assert.equal(document.activeElement, joinInput);
+
+  document.activeElement = joinSubmit;
+  let prevented = false;
+  joinModal.dispatch('keydown', { key: 'Tab', shiftKey: false, preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(document.activeElement, joinInput);
+  document.activeElement = joinInput;
+  joinModal.dispatch('keydown', { key: 'Tab', shiftKey: true, preventDefault() {} });
+  assert.equal(document.activeElement, joinSubmit);
+  joinModal.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+  assert.equal(joinModal.hidden, true);
+  assert.equal(workspace.inert, false);
+  assert.equal(document.activeElement, joinTrigger);
+
+  document.activeElement = joinTrigger;
+  await context.window.Session.create({ title: 'Čakajúca hra' });
+  const lobby = elements.get('session-lobby-modal');
+  const badge = elements.get('session-badge');
+  assert.equal(document.activeElement, elements.get('session-lobby-close'));
+  assert.equal(workspace.inert, true);
+  lobby.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+  assert.equal(lobby.hidden, true);
+  assert.equal(workspace.inert, false);
+  assert.equal(badge.hidden, false, 'Escape must preserve the waiting-lobby recovery badge');
+  assert.equal(document.activeElement, joinTrigger);
+
+  const badgeOpen = badge._focusables[0];
+  document.activeElement = badgeOpen;
+  context.window.Session._openLobbyFromBadge();
+  lobby.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+  assert.equal(document.activeElement, badgeOpen);
+  assert.equal(scheduledTimers.size, 0);
 });
 
 test('focused session styles isolate the live game without changing the normal workspace', () => {

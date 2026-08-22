@@ -50,11 +50,73 @@ const Session = (() => {
 	let _channel   = null;  // Supabase Realtime channel
 	let _pollTimer = null;  // fallback polling interval for lobby participants
 	let _lastKnownStatus = 'waiting'; // track session status for poll-based transition
+	let _activeModal = null;
+	let _modalReturnFocus = null;
+	let _inertedBackground = [];
 
 	function setFocusedState(active) {
 		const focused = Boolean(active);
 		document.body.classList.toggle('session-focused', focused);
 		if (focused) document.body.classList.remove('mobile-filters-open', 'mobile-smarta-open');
+	}
+
+	function _modalFocusables(modal) {
+		if (!modal || typeof modal.querySelectorAll !== 'function') return [];
+		return Array.from(modal.querySelectorAll(
+			'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+		)).filter((element) => !element.hidden && !element.disabled);
+	}
+
+	function _handleModalKeydown(event) {
+		if (!_activeModal) return;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			if (_activeModal.id === 'session-join-modal') _closeJoinModal();
+			else if (_activeModal.id === 'session-lobby-modal') _closeLobby();
+			return;
+		}
+		if (event.key !== 'Tab') return;
+
+		const focusables = _modalFocusables(_activeModal);
+		if (!focusables.length) return;
+		const first = focusables[0];
+		const last = focusables[focusables.length - 1];
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		} else if (!_activeModal.contains(document.activeElement)) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
+
+	function _activateModal(modal, initialFocusId) {
+		if (!modal) return;
+		if (_activeModal && _activeModal !== modal) _deactivateModal(_activeModal, false);
+		_modalReturnFocus = document.activeElement && !modal.contains(document.activeElement)
+			? document.activeElement
+			: null;
+		_inertedBackground = Array.from(document.body?.children || [])
+			.filter((element) => element !== modal)
+			.map((element) => ({ element, inert: Boolean(element.inert) }));
+		_inertedBackground.forEach(({ element }) => { element.inert = true; });
+		_activeModal = modal;
+		setTimeout(() => document.getElementById(initialFocusId)?.focus(), 50);
+	}
+
+	function _deactivateModal(modal, restoreFocus = true) {
+		if (!modal || _activeModal !== modal) return;
+		_inertedBackground.forEach(({ element, inert }) => { element.inert = inert; });
+		_inertedBackground = [];
+		_activeModal = null;
+		const returnFocus = _modalReturnFocus;
+		_modalReturnFocus = null;
+		if (restoreFocus && returnFocus?.isConnected !== false && typeof returnFocus?.focus === 'function') {
+			returnFocus.focus();
+		}
 	}
 
 	// ─── Public API ───────────────────────────────────────────────
@@ -225,6 +287,7 @@ const Session = (() => {
 			modal = document.createElement('div');
 			modal.id = 'session-join-modal';
 			modal.className = 'modal-overlay session-modal';
+			modal.addEventListener('keydown', _handleModalKeydown);
 			document.body.appendChild(modal);
 		}
 		modal.hidden = false;
@@ -249,7 +312,7 @@ const Session = (() => {
 					</button>
 				</div>
 			</div>`;
-		setTimeout(() => document.getElementById('join-code-input')?.focus(), 50);
+		_activateModal(modal, 'join-code-input');
 	}
 
 	function _submitJoin() {
@@ -260,6 +323,7 @@ const Session = (() => {
 	function _closeJoinModal() {
 		const modal = document.getElementById('session-join-modal');
 		if (modal) modal.hidden = true;
+		_deactivateModal(modal);
 	}
 
 	function _setJoinLoading(on) {
@@ -427,9 +491,12 @@ const Session = (() => {
 		try {
 			const pending = sessionStorage.getItem('givemegame_pending_lobby');
 			if (pending) {
-				sessionStorage.removeItem('givemegame_pending_lobby');
 				const token = await _token();
-				if (token) { await _restoreOrJoin(pending); return; }
+				if (token) {
+					await _restoreOrJoin(pending);
+					sessionStorage.removeItem('givemegame_pending_lobby');
+					return;
+				}
 			}
 		} catch {}
 
@@ -551,12 +618,14 @@ const Session = (() => {
 			modal.addEventListener('click', (e) => {
 				if (e.target === modal) _closeLobby();
 			});
+			modal.addEventListener('keydown', _handleModalKeydown);
 			document.body.appendChild(modal);
 		}
 		setFocusedState(true);
 		if (_lastKnownStatus === 'waiting') _showSessionBadge();
 		modal.hidden = false;
 		_renderLobby();
+		_activateModal(modal, 'session-lobby-close');
 	}
 
 	// In-game floating badge: lets the host re-open the lobby (or quit the session)
@@ -618,7 +687,7 @@ const Session = (() => {
 			<div class="session-dialog session-dialog--lobby" role="dialog" aria-modal="true" aria-labelledby="session-lobby-title" onclick="event.stopPropagation()">
 				<header class="session-dialog__header">
 					<h2 id="session-lobby-title">🎮 Session Lobby</h2>
-					<button class="modal-close" onclick="Session._closeLobby()" aria-label="${_t('close','Zavrieť')}"
+					<button id="session-lobby-close" class="modal-close" onclick="Session._closeLobby()" aria-label="${_t('close','Zavrieť')}"
 					        type="button">✕</button>
 				</header>
 				<div class="session-code">${_code}</div>
@@ -737,6 +806,7 @@ const Session = (() => {
 		const modal = document.getElementById('session-lobby-modal');
 		if (modal) modal.hidden = true;
 		_stopPoll();
+		_deactivateModal(modal);
 	}
 
 	function _startPoll() {

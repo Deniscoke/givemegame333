@@ -474,11 +474,13 @@ At 1440x900, 768x1024 and 375x812 verify `/`, `/login.html`, `/student/`, `/inde
 
 Review information hierarchy, student join discoverability, educator navigation, XSS-safe rendering, auth routing, keyboard behavior, mobile touch targets and regressions. Fix all Critical/Important findings and rerun affected tests.
 
+Evidence (2026-08-22): the initial independent review returned `CHANGES_REQUIRED` with four Important findings and no Critical findings. All four were remediated with RED/GREEN regressions: pending-lobby retention plus single-flight login redirect, a distinct existing `/index.html?view=library` state, complete join/lobby modal focus lifecycle, and 44 × 44 px `.edu-btn-sm` controls. Focused product-shell tests passed 38/38 and the full suite passed 583/583. This checkbox remains open until the independent re-review approves the remediation.
+
 - [x] **Step 4: Update project state and plan evidence**
 
 Record completed routes, typography rules, test count, known external dependencies and Preview-only release status. Mark all implemented task checkboxes complete.
 
-Evidence (2026-08-22): `npm test` passed 578/578 tests; 29 required JavaScript files passed `node --check`; the 21-cell responsive matrix covered seven routes at 1440×900, 768×1024 and 375×812 with no document overflow and visible keyboard focus. Reduced motion was emulated in local Chromium. Steps 3, 5 and 6 remain open for independent review, GitHub push, Vercel Preview verification and final handoff.
+Evidence (2026-08-22): pre-review `npm test` passed 578/578 tests and post-remediation `npm test` passed 583/583; 29 required JavaScript files plus all subsequently modified scripts passed syntax checks. The 21-cell responsive matrix covered seven routes at 1440×900, 768×1024 and 375×812 with no document overflow and visible keyboard focus. Reduced motion was emulated in local Chromium. Independent re-review plus Steps 5 and 6 remain open for approval, GitHub push, Vercel Preview verification and final handoff.
 
 - [ ] **Step 5: Push and verify Vercel Preview**
 

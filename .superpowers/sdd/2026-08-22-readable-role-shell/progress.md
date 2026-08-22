@@ -40,5 +40,7 @@ Task 0 Ruling: fix cross-platform migration checksum normalization before UI wor
 - [ ] Task 8 — whole-product QA, documentation, push, and Vercel Preview.
   - [x] Steps 1, 2 and 4: local automated verification, 21-cell responsive browser matrix, reduced-motion/deep-link checks and state/plan evidence.
   - [x] QA fixes: restored one primary heading on login/generator, removed the embedded gIVEME Supabase global collision and aligned the billing XSS regression with approved Slovak copy.
-  - [x] Local verification: 578/578 tests, 29 JavaScript syntax checks and `git diff --check d05dab8..HEAD`.
-  - [ ] Steps 3, 5 and 6: independent review, GitHub push, Vercel Preview `Ready` smoke and final handoff.
+  - [x] Initial Step 3 review completed: `CHANGES_REQUIRED`, four Important findings and no Critical findings.
+  - [x] Review remediation: pending-lobby retention/single-flight login, distinct existing library state, complete session-modal focus lifecycle and 44 × 44 px educator small buttons; focused product-shell suite 38/38.
+  - [x] Local verification after remediation: 583/583 tests, modified-script syntax checks and `git diff --check`.
+  - [ ] Independent re-review approval plus Steps 5 and 6: GitHub push, Vercel Preview `Ready` smoke and final handoff.

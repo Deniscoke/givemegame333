@@ -185,7 +185,8 @@ gIVEMEGAME.IO-OPENCLAW/
   - Dokončené trasy: `/`, `/login.html`, `/student/`, `/index.html`, `/edu/`, `/edu/assessments.html` a `/institution/`.
   - Typografia: Atkinson Hyperlegible pre body a controls (min. 16 px), IBM Plex Mono pre kódy/timery/dáta, Press Start 2P iba pre krátke brand/badge/celebration akcenty.
   - Accessibility/responsive: 44 px touch targets, spoločné `:focus-visible`, reduced-motion režim a nulový document overflow v 21 kombináciách trás pri 1440×900, 768×1024 a 375×812.
-  - Lokálny testovací baseline: 578/578 testov; všetkých 29 požadovaných JavaScript súborov prešlo syntax kontrolou.
+  - Lokálny testovací baseline po opravách nezávislého review: 583/583 testov; všetkých 29 pôvodne požadovaných JavaScript súborov a všetky následne zmenené skripty prešli syntax kontrolou.
+  - Task 8 review opravy: pending lobby prežije neprihlásený reload a login redirect je single-flight; učiteľská knižnica má samostatný existujúci stav `/index.html?view=library`; session modály majú focus trap/inert/Escape/restore lifecycle; `.edu-btn-sm` má min. 44 × 44 px.
   - Release stav: iba lokálne overená feature branch; GitHub push a Vercel Preview sú zámerne pozastavené do nezávislého review. Produkcia nebola zmenená.
 - [ ] **Fáza 1 / Týždeň 3**: WCAG audit
 - [ ] **Fáza 1 / Týždeň 4**: Knižnica oficiálnych modulov
@@ -285,7 +286,7 @@ INVOK pokryje 1. rok pre 10 škôl. Potom prechádzajú na School License.
 - **2026-08-21**: **Task 2 baseline** — plný testovací suite je green: 543 testov pri finálnej verifikácii; presný počet sa môže zvyšovať s ďalšími regresnými testami.
 - **2026-08-21**: **Task 4 dashboard** — INVOK institution dashboard UI je hotové nad existujúcim reporting API. Migrácia `029_assessment_security.sql` patrí assessment RLS hardeningu; žiadna `029_institutions.sql` neexistuje ani nie je potrebná.
 - **2026-08-21**: **Migration runner** — poradie je explicitné podľa plných názvov (vrátane oboch `018`), disabled `019` sa neaplikuje a chýbajúce `023` sa nedopĺňa premenovaním. Úspešné transakcie sa evidujú plným názvom + SHA-256. Fresh DB môže použiť celý katalóg a tracked DB release selector; existujúca non-legacy schéma s prázdnym trackerom sa odmietne bez zapisovania checksumov a vyžaduje owner/DBA baseline alebo manuálnu reconciliáciu mimo runnera. Explicitný overený legacy-016 upgrade ostáva podporovaný. Release sa vždy skúša najprv na staging.
-- **2026-08-22**: **Readable role shell rollout** — role-aware/readable Tasks 1–7 sú lokálne implementované a whole-product QA prešlo 578/578 testami. Vetva ostáva Preview-only kandidátom; push, Vercel Preview a produkčné rozhodnutie nasledujú až po nezávislom review.
+- **2026-08-22**: **Readable role shell rollout** — role-aware/readable Tasks 1–7 sú lokálne implementované; Task 8 review našlo štyri Important chyby, všetky sú lokálne opravené s regresiami a whole-product QA prešlo 583/583 testami. Vetva ostáva Preview-only kandidátom; push, Vercel Preview a produkčné rozhodnutie nasledujú až po nezávislom re-review.
 
 ---
 

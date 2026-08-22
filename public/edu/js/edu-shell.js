@@ -16,7 +16,7 @@
   const EDUCATOR_ITEMS = Object.freeze([
     Object.freeze({ href: '/edu/index.html', label: 'Prehľad', group: 'primary' }),
     Object.freeze({ href: '/index.html', label: 'Vytvoriť aktivitu', group: 'primary' }),
-    Object.freeze({ href: '/index.html', label: 'Knižnica a živé hry', group: 'primary' }),
+    Object.freeze({ href: '/index.html?view=library', label: 'Knižnica a živé hry', group: 'primary' }),
     Object.freeze({ href: '/edu/classes.html', label: 'Triedy', group: 'primary' }),
     Object.freeze({ href: '/edu/assessments.html', label: 'Assessmenty', group: 'primary' }),
     Object.freeze({ href: '/institution/', label: 'Výsledky INVOK', group: 'primary' }),
@@ -44,6 +44,14 @@
     return path;
   }
 
+  function canonicalRoute(route) {
+    const source = String(route || '/');
+    const suffixIndex = source.search(/[?#]/);
+    const suffix = suffixIndex >= 0 ? source.slice(suffixIndex) : '';
+    const pathname = suffixIndex >= 0 ? source.slice(0, suffixIndex) : source;
+    return canonicalPath(pathname) + suffix;
+  }
+
   function appendLink(document, list, item, activeItem) {
     const listItem = document.createElement('li');
     const link = document.createElement('a');
@@ -59,11 +67,14 @@
   }
 
   function activeItemFor(items, pathname, role) {
+    const currentRoute = canonicalRoute(pathname);
+    const exact = items.find((item) => canonicalRoute(item.href) === currentRoute);
+    if (exact) return exact;
     const current = canonicalPath(pathname);
     if (role === 'student' && current === '/edu/assessments.html') {
       return items.find((item) => item.label === 'Moje aktivity') || null;
     }
-    return items.find((item) => canonicalPath(item.href) === current) || null;
+    return items.find((item) => !/[?#]/.test(item.href) && canonicalPath(item.href) === current) || null;
   }
 
   function appendGroup(document, nav, items, group, label, activeItem) {
