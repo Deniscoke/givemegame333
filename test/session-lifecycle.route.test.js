@@ -246,6 +246,36 @@ describe('expiry with refund', () => {
 		assert.equal(h.db.state.profiles[P1].coins, 100);
 	});
 
+	it('a host phone locked during a long game does not expire it; the host can still complete', async () => {
+		profile(HOST, 0); profile(P1, 0); profile(P2, 0);
+		// 40-minute room game, started 38 min ago; host unseen since the start.
+		seed({
+			status: 'active', started_at: minAgo(38), last_host_seen_at: minAgo(38),
+			timer_ends_at: new Date(Date.now() + 2 * 60000).toISOString(), expires_at: new Date(Date.now() + 72 * 60000).toISOString(),
+			game_json: { title: 'Dlhá hra', duration: { min: 30, max: 40 }, playerCount: { min: 2, max: 10 }, rvp: { kompetence: [] } },
+		});
+		join('sess-1', P1, { coins_paid: 100, reflection_done: true });
+		join('sess-1', P2, { coins_paid: 100, reflection_done: true });
+		assert.equal(await h.app.locals.sweepExpiredSessions(), 0);
+		const poll = await h.call('POST', '/api/sessions/ABC123/heartbeat', { user: P1 });
+		assert.equal(poll.body.status, 'active');
+
+		const done = await h.call('POST', '/api/sessions/ABC123/complete', { user: HOST });
+		assert.equal(done.status, 200, JSON.stringify(done.body));
+		assert.equal(done.body.participants_rewarded, 2);
+	});
+
+	it('the host coming back records presence before the expiry check', async () => {
+		profile(HOST, 0); profile(P1, 0);
+		// Reflection ended 31 min ago, host unseen since: the host-absent window has passed.
+		seed({ status: 'reflection', started_at: minAgo(60), last_host_seen_at: minAgo(55), reflection_ends_at: minAgo(31) });
+		join('sess-1', P1, { coins_paid: 100, reflection_done: true });
+		const back = await h.call('POST', '/api/sessions/ABC123/heartbeat', { user: HOST });
+		assert.equal(back.body.status, 'reflection', 'the host return itself never expires the game');
+		assert.equal(h.db.state.profiles[P1].coins, 0, 'no refund');
+		assert.ok(Date.now() - new Date(h.db.session('sess-1').last_host_seen_at).getTime() < 5000);
+	});
+
 	it('the host can cancel an open session, which refunds payers', async () => {
 		profile(HOST, 0); profile(P1, 0);
 		seed({ status: 'active', started_at: minAgo(2) });

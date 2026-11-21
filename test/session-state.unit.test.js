@@ -42,6 +42,22 @@ describe('expiry and timers', () => {
 		assert.equal(State.expiryReason({ status: 'reflection', expires_at: ago(-5), last_host_seen_at: ago(2) }, now), null);
 	});
 
+	it('counts host absence only after the current phase should be over', () => {
+		// A 40-minute game: the host phone was locked at the start, the timer still runs.
+		const running = { status: 'active', expires_at: ago(-120), last_host_seen_at: ago(35), timer_ends_at: ago(-5) };
+		assert.equal(State.expiryReason(running, now), null, 'a locked host phone during the game is fine');
+		// Timer ended 20 min ago, host unseen for 60 min: still inside the 30-min window after the phase end.
+		assert.equal(State.expiryReason({ ...running, timer_ends_at: ago(20) }, now), null);
+		assert.equal(State.expiryReason({ ...running, timer_ends_at: ago(31) }, now), 'host_absent');
+		// Reflection: measured from reflection_ends_at.
+		const refl = { status: 'reflection', expires_at: ago(-60), last_host_seen_at: ago(50), reflection_ends_at: ago(10) };
+		assert.equal(State.expiryReason(refl, now), null);
+		assert.equal(State.expiryReason({ ...refl, reflection_ends_at: ago(30) }, now), 'host_absent');
+		// Waiting lobby: just the last heartbeat.
+		assert.equal(State.expiryReason({ status: 'waiting', expires_at: ago(-60), last_host_seen_at: ago(31) }, now), 'host_absent');
+		assert.equal(State.hostAbsentSince({ status: 'active', timer_ends_at: ago(1) }), null, 'no heartbeat stamp, no absence');
+	});
+
 	it('never expires closed sessions or rows without timestamps (pre-040)', () => {
 		assert.equal(State.expiryReason({ status: 'completed', expires_at: ago(100) }, now), null);
 		assert.equal(State.expiryReason({ status: 'completing', expires_at: ago(100) }, now), null);

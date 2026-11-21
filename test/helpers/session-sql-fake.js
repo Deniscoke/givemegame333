@@ -68,11 +68,18 @@ function sessionSql(db, sql, params) {
 		Object.assign(r, { status: 'reflection', reflection_ends_at: params[1], expires_at: params[2] });
 		return ok([{ status: r.status, reflection_ends_at: r.reflection_ends_at, expires_at: r.expires_at }]);
 	}
-	if (sql.startsWith("SELECT id, status, expires_at, last_host_seen_at FROM public.sessions WHERE status IN ('waiting', 'active', 'reflection') AND (expires_at <= NOW() OR last_host_seen_at <= NOW() - make_interval(mins => $1))")) {
+	if (sql.startsWith("SELECT id, status, expires_at, last_host_seen_at, timer_ends_at, reflection_ends_at FROM public.sessions WHERE status IN ('waiting', 'active', 'reflection') AND (expires_at <= NOW() OR (last_host_seen_at IS NOT NULL AND GREATEST(last_host_seen_at, CASE status WHEN 'active' THEN timer_ends_at WHEN 'reflection' THEN reflection_ends_at END) <= NOW() - make_interval(mins => $1))) LIMIT 50")) {
 		const t = Date.now();
+		// GREATEST ignores NULL, like Postgres.
+		const absentSince = (r) => {
+			if (!r.last_host_seen_at) return NaN;
+			const phaseEnd = r.status === 'active' ? r.timer_ends_at : r.status === 'reflection' ? r.reflection_ends_at : null;
+			return phaseEnd ? Math.max(ms(r.last_host_seen_at), ms(phaseEnd)) : ms(r.last_host_seen_at);
+		};
 		return ok(Object.values(s.sessions).filter((r) => OPEN.includes(r.status)
-			&& (ms(r.expires_at) <= t || t - ms(r.last_host_seen_at) >= params[0] * 60000))
-			.map((r) => pick(r, ['id', 'status', 'expires_at', 'last_host_seen_at'])));
+			&& (ms(r.expires_at) <= t || absentSince(r) <= t - params[0] * 60000))
+			.slice(0, 50)
+			.map((r) => pick(r, ['id', 'status', 'expires_at', 'last_host_seen_at', 'timer_ends_at', 'reflection_ends_at'])));
 	}
 	if (sql.startsWith("UPDATE public.sessions SET max_players = $2, allow_guests = $3, play_style = $4 WHERE id = $1 AND status = 'waiting'")) {
 		const r = s.sessions[params[0]];
