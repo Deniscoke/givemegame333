@@ -2257,11 +2257,34 @@ const sessionsRouter = createSessionsRouter({
 		VALID_COMPETENCY_KEYS,
 		GAME_KOMP_TO_STAT,
 	},
+	// Serverless has no interval timer: any session request runs the sweep at
+	// most once a minute per instance; the daily cron below is the backstop.
+	sweepOnRequestMs: process.env.VERCEL ? 60 * 1000 : 0,
 });
 app.use('/api/sessions', sessionsRouter);
-// Phase 6: expire abandoned sessions and refund coins_paid. Serverless hosts
-// (VERCEL) rely on the lazy check inside every session request instead.
+// Phase 6: expire abandoned sessions and refund coins_paid.
 app.locals.sweepExpiredSessions = sessionsRouter.sweepExpired;
+app.locals.resetSessionSweepClock = sessionsRouter.resetSweepClock;
+
+// Cron backstop (vercel.json "crons"): Vercel calls this with
+// "Authorization: Bearer <CRON_SECRET>". Without CRON_SECRET it stays closed.
+function cronAuthorized(req) {
+	const secret = process.env.CRON_SECRET || '';
+	if (!secret) return false;
+	const given = Buffer.from(String(req.headers.authorization || ''));
+	const expected = Buffer.from(`Bearer ${secret}`);
+	return given.length === expected.length && require('node:crypto').timingSafeEqual(given, expected);
+}
+app.get('/api/cron/session-sweep', async (req, res) => {
+	if (!cronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
+	try {
+		const expired = await sessionsRouter.sweepExpired();
+		res.json({ ok: true, expired });
+	} catch (err) {
+		console.error('[Sessions] cron sweep failed:', err.message);
+		res.status(500).json({ error: 'Sweep failed', code: 'SWEEP_ERROR' });
+	}
+});
 if (!process.env.VERCEL) {
 	const sessionSweepTimer = setInterval(() => {
 		sessionsRouter.sweepExpired().catch((err) => console.error('[Sessions] sweep failed:', err.message));

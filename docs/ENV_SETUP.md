@@ -25,6 +25,11 @@ Všetky reálne tajomstvá patria mimo repozitára. Šablóna
    mapovanie pre contact-led provisioning, nie self-service Checkout.
 4. Po zmene environment variables spusti redeploy a over bezpečný Checkout aj
    podpis webhooku.
+5. Nastav `CRON_SECRET` (dlhý náhodný reťazec). Vercel ním raz denne volá
+   `/api/cron/session-sweep` (pozri `crons` vo `vercel.json`), ktorý ukončí
+   opustené sessions a vráti hráčom mince. Bez tejto premennej je endpoint
+   zatvorený; sessions sa potom upratujú len pri bežných požiadavkách na
+   `/api/sessions` (najviac raz za minútu na inštanciu).
 
 ## Databázové migrácie (staging ako prvý)
 

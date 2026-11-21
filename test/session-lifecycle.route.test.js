@@ -276,6 +276,51 @@ describe('expiry with refund', () => {
 		assert.ok(Date.now() - new Date(h.db.session('sess-1').last_host_seen_at).getTime() < 5000);
 	});
 
+	it('on serverless (VERCEL=1) an untouched expired session is refunded by any other session request', async () => {
+		assert.equal(process.env.VERCEL, '1', 'the harness runs as serverless');
+		profile(HOST, 0); profile(P1, 0); profile(P2, 0);
+		// Nobody ever opens ABC123 again: its host vanished and the TTL passed.
+		seed({ status: 'active', started_at: minAgo(300), expires_at: minAgo(5), last_host_seen_at: minAgo(240) });
+		join('sess-1', P1, { coins_paid: 100 });
+		seed({ id: 's2', code: 'OTHER2' });
+		h.app.locals.resetSessionSweepClock();
+
+		const other = await h.call('GET', '/api/sessions/OTHER2', { user: P2 });
+		assert.equal(other.status, 200);
+		assert.equal(h.db.session('sess-1').status, 'expired');
+		assert.equal(h.db.state.profiles[P1].coins, 100);
+
+		// Throttled: a second request within the minute does not sweep again.
+		seed({ id: 's3', code: 'LATE33', status: 'active', started_at: minAgo(300), expires_at: minAgo(1) });
+		join('s3', P2, { coins_paid: 100 });
+		await h.call('GET', '/api/sessions/OTHER2', { user: P2 });
+		assert.equal(h.db.session('s3').status, 'active');
+		assert.equal(h.db.state.profiles[P2].coins, 0);
+		assert.equal(h.db.state.tx.filter((t) => t.action === 'session_refund').length, 1, 'refunded exactly once');
+	});
+
+	it('the cron sweep endpoint needs CRON_SECRET and refunds abandoned sessions', async () => {
+		profile(HOST, 0); profile(P1, 0);
+		seed({ status: 'reflection', expires_at: minAgo(1) });
+		join('sess-1', P1, { coins_paid: 100 });
+		const prev = process.env.CRON_SECRET;
+		try {
+			delete process.env.CRON_SECRET;
+			const closed = await fetch(`${h.baseUrl}/api/cron/session-sweep`, { headers: { Authorization: 'Bearer ' } });
+			assert.equal(closed.status, 401, 'closed without a configured secret');
+			process.env.CRON_SECRET = 'cron-test-secret-value';
+			const wrong = await fetch(`${h.baseUrl}/api/cron/session-sweep`, { headers: { Authorization: 'Bearer nope' } });
+			assert.equal(wrong.status, 401);
+			assert.equal(h.db.session('sess-1').status, 'reflection');
+			const ok = await fetch(`${h.baseUrl}/api/cron/session-sweep`, { headers: { Authorization: 'Bearer cron-test-secret-value' } });
+			assert.equal(ok.status, 200);
+			assert.equal((await ok.json()).expired, 1);
+			assert.equal(h.db.state.profiles[P1].coins, 100);
+		} finally {
+			if (prev === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = prev;
+		}
+	});
+
 	it('the host can cancel an open session, which refunds payers', async () => {
 		profile(HOST, 0); profile(P1, 0);
 		seed({ status: 'active', started_at: minAgo(2) });
