@@ -12,6 +12,17 @@
 // ─────────────────────────────────────────────────
 const GameUI = (() => {
 
+	// M15: game content comes from the AI, the library or a shared session —
+	// escape it before it goes into innerHTML.
+	function _esc(value) {
+		return String(value ?? '')
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+	}
+
 	function showScreen(name) {
 		document.getElementById('welcome-screen').style.display = name === 'welcome' ? '' : 'none';
 		document.getElementById('loading-screen').style.display = name === 'loading' ? '' : 'none';
@@ -83,8 +94,8 @@ const GameUI = (() => {
 						<span class="game-verification-icon">📸</span>
 						<div>
 							<strong>${_t('verify_title', 'Foto výzva (bonus XP + gIVEMECOIN)')}</strong>
-							<p>${vc.description}</p>
-							${vc.hint ? `<small>${vc.hint}</small>` : ''}
+							<p>${_esc(vc.description)}</p>
+							${vc.hint ? `<small>${_esc(vc.hint)}</small>` : ''}
 							<p class="game-verification-bonus">${bonusLine}</p>
 						</div>
 					</div>`;
@@ -222,21 +233,21 @@ const GameUI = (() => {
 		span.className = 'rvp-badge';
 		span.style.backgroundColor = color;
 		span.style.borderColor = color;
-		span.innerHTML = `<i class="bi ${icon}"></i> ${text}`;
+		span.innerHTML = `<i class="bi ${icon}"></i> ${_esc(text)}`;
 		return span;
 	}
 
 	function addBadge(container, text, type, icon) {
 		const span = document.createElement('span');
-		span.className = `badge badge-${type}`;
-		span.innerHTML = `<i class="bi ${icon}"></i> ${text}`;
+		span.className = `badge badge-${_esc(type)}`;
+		span.innerHTML = `<i class="bi ${icon}"></i> ${_esc(text)}`;
 		container.appendChild(span);
 	}
 
 	function addMeta(container, icon, value, label) {
 		const div = document.createElement('div');
 		div.className = 'meta-item';
-		div.innerHTML = `<i class="bi ${icon} meta-icon"></i><span class="meta-value">${value}</span><span>${label}</span>`;
+		div.innerHTML = `<i class="bi ${icon} meta-icon"></i><span class="meta-value">${_esc(value)}</span><span>${_esc(label)}</span>`;
 		container.appendChild(div);
 	}
 
@@ -269,11 +280,11 @@ const GameUI = (() => {
 
 		qv.innerHTML = `
 			<div class="quick-summary">
-				<strong>${game.title}</strong><br>
-				<i class="bi bi-people"></i> ${game.playerCount.min}–${game.playerCount.max} &nbsp;
-				<i class="bi bi-clock"></i> ${game.duration.min}–${game.duration.max}m &nbsp;
-				<i class="bi bi-geo-alt"></i> ${settingLabel}<br>
-				${kompText ? `<small>${kompText}</small>` : ''}
+				<strong>${_esc(game.title)}</strong><br>
+				<i class="bi bi-people"></i> ${_esc(game.playerCount.min)}–${_esc(game.playerCount.max)} &nbsp;
+				<i class="bi bi-clock"></i> ${_esc(game.duration.min)}–${_esc(game.duration.max)}m &nbsp;
+				<i class="bi bi-geo-alt"></i> ${_esc(settingLabel)}<br>
+				${kompText ? `<small>${_esc(kompText)}</small>` : ''}
 			</div>
 		`;
 	}
@@ -287,9 +298,9 @@ const GameUI = (() => {
 		const item = document.createElement('div');
 		item.className = 'history-item';
 		item.innerHTML = `
-			<div class="history-item-title">${game.title}</div>
+			<div class="history-item-title">${_esc(game.title)}</div>
 			<div class="history-item-meta">
-				${settingLabel} · ${game.playerCount.min}–${game.playerCount.max} hráčů · ${game.duration.min}–${game.duration.max}m
+				${_esc(settingLabel)} · ${_esc(game.playerCount.min)}–${_esc(game.playerCount.max)} hráčů · ${_esc(game.duration.min)}–${_esc(game.duration.max)}m
 			</div>
 		`;
 		item.addEventListener('click', () => renderGame(game));
