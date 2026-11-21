@@ -167,6 +167,7 @@ const App = (() => {
 		// database calls below, so Slovak (or the saved language) is on screen
 		// immediately even when Supabase is slow or paused.
 		await applyInitialLanguage();
+		if (window.Tour) setTimeout(() => window.Tour.maybeAutoStart(), 600);
 		GameUI.initTools?.();
 		try {
 			const raw = sessionStorage.getItem('givemegame_user');

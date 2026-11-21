@@ -20,6 +20,8 @@
 	<link rel="stylesheet" href="/ui/px-type-floor.css?v=1">
 	<link rel="stylesheet" href="/ui/px-apply.css?v=1">
 	<link rel="stylesheet" href="/ui/px-mode-decor.css?v=1">
+	<link rel="stylesheet" href="/ui/px-tour.css?v=1">
+	<script>try{if(localStorage.getItem("givemegame_readable_font")==="1")document.documentElement.classList.add("readable-font")}catch(e){}</script>
 </head>
 <body class="mode-party generator-shell px-v2" data-mode="party">
 
@@ -59,7 +61,7 @@
 				<button type="button" class="px-btn btn-game-tools" id="btn-game-tools" onclick="App.UI.openTool('smarta', this)" aria-controls="game-tools-panel" aria-expanded="false" title="SMARTA, questy, profil a postup" data-i18n-title="tools_button_title">
 					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-tools"></use></svg> <span data-i18n="tools_button">Nástroje</span>
 				</button>
-				<button type="button" class="px-iconbtn" onclick="App.UI.openHelp()" title="Pomocník" aria-label="Pomocník" data-i18n-title="help" data-i18n-aria-label="help">
+				<button type="button" class="px-iconbtn" id="btn-help" onclick="App.UI.openHelp()" title="Pomocník" aria-label="Pomocník" data-i18n-title="help" data-i18n-aria-label="help">
 					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-help"></use></svg>
 				</button>
 				<button type="button" class="px-iconbtn" id="btn-library" onclick="App.Library.open()" title="Knižnica hier" aria-label="Knižnica hier" data-i18n-title="library_title" data-i18n-aria-label="library_title">
@@ -82,6 +84,8 @@
 						</div>
 						<button type="button" class="px-btn px-btn--block btn-phone" id="btn-phone" onclick="App.Profile.open()" title="Profil a gIVEMECOIN" data-i18n-title="account_coins_title"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-user"></use></svg> <span data-i18n="account_coins">Účet a gIVEMECOIN</span></button>
 						<button type="button" class="px-btn px-btn--block btn-music" id="btn-music" onclick="App.Music.toggle()" title="Hudba" data-i18n-title="music"><svg class="px-icon" id="music-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-music"></use></svg> <span data-i18n="music">Hudba</span></button>
+						<button type="button" class="px-btn px-btn--block" id="btn-read-aloud" data-read-aloud-toggle aria-pressed="true" onclick="ReadAloud.toggle()" title="Ctrl + klik na text ho prečíta nahlas" data-i18n-title="read_aloud_hint"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-music"></use></svg> <span data-i18n="read_aloud_label">Čítať nahlas</span></button>
+						<button type="button" class="px-btn px-btn--block" id="btn-readable-font" data-readable-font-toggle aria-pressed="false" onclick="ReadableFont.toggle()" data-i18n-title="readable_font_hint"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-help"></use></svg> <span data-i18n="readable_font_label">Čitateľné písmo</span></button>
 						<button type="button" class="px-btn px-btn--block" onclick="App.UI.toggleTheme()" data-i18n-title="appearance"><svg class="px-icon" id="theme-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-moon"></use></svg> <span data-i18n="appearance_label">Vzhľad</span></button>
 					</div>
 				</details>
@@ -534,6 +538,9 @@
 					</div>
 
 					<div class="game-card-footer">
+						<button type="button" class="btn btn-retro btn-action" data-read-aloud-game onclick="ReadAloud.readGame()">
+							<i class="bi bi-volume-up-fill"></i> <span data-i18n="read_aloud_game">Čítať hru</span>
+						</button>
 						<button class="btn btn-retro btn-action" onclick="App.exportGame()">
 							<i class="bi bi-download"></i> Export
 						</button>
@@ -889,6 +896,7 @@
 				</div>
 			</div>
 			<div class="d-flex gap-2 mt-2">
+				<button type="button" class="px-btn px-btn--block" id="btn-start-tour" onclick="App.UI.closeModal('help-modal'); Tour.start()"><span data-i18n="tour_start">Spustiť návod</span></button>
 				<button type="button" class="px-btn px-btn--block" onclick="App.UI.closeModal('help-modal')"><span data-i18n="close">Zavrieť</span></button>
 			</div>
 		</div>
@@ -1015,12 +1023,15 @@
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 	<script src="/supabase-config.js"></script>
 	<!-- Phase 1+2+3 modules — must load before script.js -->
-	<script src="js/narrator.js?v=1"></script>
+	<script src="js/read-aloud.js?v=1"></script>
+	<script src="js/readable-font.js?v=1"></script>
+	<script src="js/narrator.js?v=2"></script>
 	<script src="js/coins.js?v=2"></script>
 	<script src="js/timer.js?v=3"></script>
 	<script src="js/game-data.js?v=1"></script>
 	<script src="js/sfx.js?v=2"></script>
 	<script src="js/px-modal.js?v=1"></script>
+	<script src="js/tour.js?v=1"></script>
 	<script src="js/mode-decor.js?v=1" defer></script>
 	<script src="js/game-ui.js?v=17"></script>
 	<script src="js/reflection.js?v=5"></script>
@@ -1033,7 +1044,7 @@
 	<script src="js/rpg-talents.js?v=7"></script>
 	<script src="js/rpg-screen.js?v=7"></script>
 	<script src="js/rpg-xp-fx.js?v=1"></script>
-	<script src="script.js?v=38"></script>
+	<script src="script.js?v=39"></script>
 	<script src="cursor-effect.js?v=3"></script>
 
 
