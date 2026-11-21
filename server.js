@@ -82,6 +82,9 @@ const {
 } = require('./lib/ai-guard');
 const { validateCoinLog, validateDonation, STARTER_GRANT_COINS } = require('./lib/coin-log-policy');
 const { applyCoinLogEntry, grantStarterCoins, applyRobotChallenge, applyDonation } = require('./lib/coin-ledger');
+const PlayTickets = require('./lib/play-tickets');
+const { GAME_COMPETENCY_TO_STAT, getAttributeManifest } = require('./lib/attribute-map');
+const FilterPresets = require('./lib/filter-presets');
 const {
 	enforceConstraints,
 	applyMethodologyFallback,
@@ -120,19 +123,9 @@ const SESSION_XP_AWARD = 75;  // per multiplayer session completion (reflection_
 const ROBOT_XP_AWARD   = 30;  // per robot challenge completion (completions per 24h capped by plan, M5)
 
 // ─── Reward validation constants ───
-const VALID_COMPETENCY_KEYS = [
-	'k-uceni', 'k-reseni-problemu', 'komunikativni',
-	'socialni-personalni', 'obcanske', 'pracovni', 'digitalni'
-];
-const GAME_KOMP_TO_STAT = {
-	'k-uceni':            'focus',
-	'k-reseni-problemu':  'insight',
-	'komunikativni':      'communication',
-	'socialni-personalni':'communication',
-	'obcanske':           'resilience',
-	'pracovni':           'strategy',
-	'digitalni':          'insight',
-};
+const VALID_COMPETENCY_KEYS = PlayTickets.VALID_GAME_COMPETENCIES;
+// One competency → stat map for the whole app (lib/attribute-map.js).
+const GAME_KOMP_TO_STAT = GAME_COMPETENCY_TO_STAT;
 const MIN_SESSION_DURATION_FLOOR = 3;    // minutes — absolute minimum even if game.duration.min is lower
 const MIN_SESSION_DURATION_FALLBACK = 5; // minutes — used when game has no duration.min
 const HOST_COOLDOWN_MAX  = 5;            // max completed sessions per host per rolling hour
@@ -974,6 +967,13 @@ NEPREHÁŇAJ personalizáciu — jemne uprednostni aktivity ladené s najvyšš�
 			} catch (e) {
 				console.warn('[GenerateGame] plan_usage_daily increment:', e.message);
 			}
+		}
+
+		// Phase 5: the server keeps its own copy of the game as a play ticket.
+		// Completion later sends only this id, so a forged game_json earns nothing.
+		if (genUser && coinsDbPool && PlayTickets.playTicketsEnabled()) {
+			const ticketId = await PlayTickets.issueGenerationTicket(coinsDbPool, genUser.id, game, f.mode);
+			if (ticketId) game._play_ticket = ticketId;
 		}
 
 		res.json(game);
@@ -2031,19 +2031,32 @@ Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "
 	}
 });
 
-// ─── Solo game completion — awards competency points to authenticated user ───
+// ─── Solo game completion ───────────────────────────────────────────────────
+// Phase 5: with PLAY_TICKETS_ENABLED (default on) the client sends ticket_id
+// and the server reads duration, mode and competencies from its own ticket.
+// Without a ticket the old game_json path keeps working until
+// PLAY_TICKETS_LEGACY_UNTIL (two-week deprecation, see docs/ENV_SETUP.md).
 app.post('/api/profile/complete-solo', async (req, res) => {
 	if (!coinApiReady()) return respondCoinApiDisabled(res);
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
-
-	const { game_json } = req.body || {};
-	const kompetence = game_json?.rvp?.kompetence;
-	if (!Array.isArray(kompetence) || kompetence.length === 0) {
-		return res.status(400).json({ error: 'game_json.rvp.kompetence je povinné', code: 'MISSING_COMPETENCIES' });
+	const body = req.body || {};
+	if (PlayTickets.playTicketsEnabled()) {
+		if (body.ticket_id != null) return completeSoloWithTicket(req, res, user, body.ticket_id);
+		if (!PlayTickets.legacyCompleteSoloAllowed()) {
+			return res.status(400).json({
+				error: 'Spusti hru znova, aby sa dala odmena overiť.',
+				code: 'TICKET_REQUIRED',
+			});
+		}
+		res.set('Deprecation', 'true');
+		res.set('Sunset', PlayTickets.legacyUntil().toUTCString());
 	}
+	return completeSoloLegacy(req, res, user);
+});
 
-	// ─── Solo cooldown: max per 24h (Free vs Pro) ──────────────
+/** Solo completions per rolling 24 h (Free vs Pro). Sends the error and returns false when over. */
+async function checkSoloDailyLimit(user, res) {
 	let soloLimit = entitlementsForPlan(false).soloCompletionsPer24h;
 	try {
 		const bill = await getUserBillingState(coinsDbPool, user.id);
@@ -2055,17 +2068,159 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			[user.id]
 		);
 		if ((soloRows[0]?.cnt || 0) >= soloLimit) {
-			return res.status(429).json({
+			res.status(429).json({
 				error: `Denný limit solo hier dosiahnutý (${soloRows[0].cnt}/${soloLimit}). Obnoví sa za 24 h od poslednej hry alebo predplaťte Pro učiteľ.`,
 				code: 'SOLO_DAILY_LIMIT',
 				limit: soloLimit,
 				used: soloRows[0].cnt
 			});
+			return false;
 		}
 	} catch (e) {
 		console.error('[Completion] solo cooldown check failed:', e.message);
-		return res.status(500).json({ error: 'Kontrola limitu zlyhala', code: 'COOLDOWN_CHECK_ERROR' });
+		res.status(500).json({ error: 'Kontrola limitu zlyhala', code: 'COOLDOWN_CHECK_ERROR' });
+		return false;
 	}
+	return true;
+}
+
+/** Effective stats after an award (cosmetic; runs in a savepoint so it cannot abort the award). */
+async function readSoloStatsAfter(client, userId) {
+	let statsAfter = {};
+	await client.query('SAVEPOINT solo_stats');
+	try {
+		const { rows: profileAfter } = await client.query(
+			'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1', [userId]
+		);
+		const classId = profileAfter[0]?.rpg_avatar_id || null;
+		if (classId) {
+			const { rows: tRows } = await client.query(
+				'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [userId]
+			);
+			// M4: map ids to talent objects; the card reads flat stat values.
+			statsAfter = getEffectiveStats(classId, talentIdsToTalents(tRows.map(r => r.talent_id))).effective;
+		}
+		await client.query('RELEASE SAVEPOINT solo_stats');
+	} catch (_) {
+		await client.query('ROLLBACK TO SAVEPOINT solo_stats');
+	}
+	return statsAfter;
+}
+
+async function completeSoloWithTicket(req, res, user, ticketId) {
+	if (!PlayTickets.isTicketId(ticketId)) {
+		return res.status(400).json({ error: 'Neplatný lístok hry', code: 'INVALID_TICKET' });
+	}
+	if (!(await checkSoloDailyLimit(user, res))) return;
+
+	let client;
+	let done = false;
+	const fail = async (status, payload) => {
+		done = true;
+		try { await client.query('ROLLBACK'); } catch (_) {}
+		return res.status(status).json(payload);
+	};
+	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		// Profile lock first (same order as the legacy path) serialises a user's completions.
+		const { rows: preRows } = await client.query(
+			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1 FOR UPDATE',
+			[user.id]
+		);
+		if (!preRows.length) return await fail(404, { error: 'Profil nenájdený', code: 'NO_PROFILE' });
+		const levelBefore = computeRpgLevel(preRows[0].rpg_xp).level;
+
+		const ticket = await PlayTickets.lockTicket(client, user.id, ticketId);
+		if (!ticket) return await fail(404, { error: 'Lístok hry sa nenašiel', code: 'TICKET_NOT_FOUND' });
+		if (ticket.completed_at) return await fail(409, { error: 'Za túto hru už si odmenu dostal/a', code: 'TICKET_USED' });
+		if (!ticket.started_at) return await fail(409, { error: 'Hra ešte nebola spustená', code: 'TICKET_NOT_STARTED' });
+
+		const gate = validateDurationGate(ticket.started_at, { duration: { min: ticket.duration_min } });
+		if (!gate.pass) {
+			return await fail(400, {
+				error: 'Hra trvala príliš krátko na odmenu',
+				code: 'DURATION_TOO_SHORT',
+				duration_actual_min: gate.validation.duration_actual_min,
+				duration_required_min: gate.validation.duration_required_min,
+			});
+		}
+		if (await PlayTickets.overlapsCompletedTicket(client, user.id, ticket)) {
+			return await fail(409, { error: 'Naraz sa dá hrať len jedna hra', code: 'TICKET_OVERLAP' });
+		}
+
+		// H3: the boost comes from server-sold xp_boost_2x uses in the ledger, never from the client.
+		const xpMul = resolveSoloXpMultiplier(XP_BOOST_MULTIPLIER, await countRemainingBoostUses(client, user.id));
+		const reward = PlayTickets.computeTicketReward({
+			durationMax: ticket.duration_max,
+			elapsedMin: gate.validation.duration_actual_min,
+			reflected: Boolean(ticket.reflection_id),
+			multiplier: xpMul,
+			mode: ticket.mode,
+			kompetence: ticket.kompetence,
+		});
+		if (!(await PlayTickets.markTicketCompleted(client, user.id, ticket.id, reward))) {
+			return await fail(409, { error: 'Za túto hru už si odmenu dostal/a', code: 'TICKET_USED' });
+		}
+
+		await client.query(
+			'UPDATE public.profiles SET coins = COALESCE(coins, 0) + $1 WHERE id = $2',
+			[COMPLETION_BONUS, user.id]
+		);
+		await client.query(
+			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
+			[user.id, COMPLETION_BONUS, 'solo_complete', JSON.stringify({
+				ticket_id: ticket.id,
+				mode: ticket.mode,
+				kompetence_keys: ticket.kompetence,
+				duration_max: ticket.duration_max,
+				xp_multiplier: reward.xp_multiplier,
+				reflection: Boolean(ticket.reflection_id),
+			})]
+		);
+		const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
+			client, user.id, reward.total_xp, reward.xp_multiplier > 1 ? 'solo_ticket_boosted' : 'solo_ticket'
+		);
+		await PlayTickets.addStatXp(client, user.id, reward.stat_xp);
+		const statsAfter = await readSoloStatsAfter(client, user.id);
+		await client.query('COMMIT');
+		done = true;
+
+		res.json({
+			ok: true,
+			ticket_id: ticket.id,
+			mode: ticket.mode,
+			rpg_xp_gained: reward.total_xp,
+			participation_xp: reward.participation_xp,
+			reflection_bonus_xp: reward.reflection_bonus_xp,
+			reflection_counted: Boolean(ticket.reflection_id),
+			xp_multiplier_applied: reward.xp_multiplier,
+			coins_awarded: COMPLETION_BONUS,
+			rpg_xp,
+			rpg_level,
+			rpg_level_up: rpg_level > levelBefore,
+			trained_stats: reward.trained_stats,
+			stat_xp_gained: reward.stat_xp,
+			stats_after: statsAfter,
+		});
+	} catch (err) {
+		if (client && !done) { try { await client.query('ROLLBACK'); } catch (_) {} }
+		console.error('[Completion] ticket complete failed:', err.message);
+		if (!res.headersSent) res.status(500).json({ error: 'Nepodarilo sa udeliť body', code: 'AWARD_ERROR' });
+	} finally {
+		if (client) client.release();
+	}
+}
+
+/** Pre-ticket path: trusts game_json (H3 clamp only). Removed after PLAY_TICKETS_LEGACY_UNTIL. */
+async function completeSoloLegacy(req, res, user) {
+	const { game_json } = req.body || {};
+	const kompetence = game_json?.rvp?.kompetence;
+	if (!Array.isArray(kompetence) || kompetence.length === 0) {
+		return res.status(400).json({ error: 'game_json.rvp.kompetence je povinné', code: 'MISSING_COMPETENCIES' });
+	}
+
+	if (!(await checkSoloDailyLimit(user, res))) return;
 
 	// Atomically: award coins + RPG XP (kompetencie z hry ostávajú len v game_json / RVP — bez samostatných „kompetenčných bodov“)
 	const validKomps = kompetence.filter(k => VALID_COMPETENCY_KEYS.includes(k));
@@ -2116,26 +2271,7 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 
 		// Compute which stats this game trains and the user's effective stats after XP
 		const trainedStats = [...new Set(validKomps.map(k => GAME_KOMP_TO_STAT[k]).filter(Boolean))];
-		let statsAfter = {};
-		// Cosmetic reads run in a savepoint so a failure cannot abort the award.
-		await soloClient.query('SAVEPOINT solo_stats');
-		try {
-			const { rows: profileAfter } = await soloClient.query(
-				'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1', [user.id]
-			);
-			const classId = profileAfter[0]?.rpg_avatar_id || null;
-			if (classId) {
-				const { rows: tRows } = await soloClient.query(
-					'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [user.id]
-				);
-				// M4: map ids to talent objects; the card reads flat stat values.
-				statsAfter = getEffectiveStats(classId, talentIdsToTalents(tRows.map(r => r.talent_id))).effective;
-			}
-			await soloClient.query('RELEASE SAVEPOINT solo_stats');
-		} catch (_) {
-			/* non-critical — stats are cosmetic */
-			await soloClient.query('ROLLBACK TO SAVEPOINT solo_stats');
-		}
+		const statsAfter = await readSoloStatsAfter(soloClient, user.id);
 
 		await soloClient.query('COMMIT');
 
@@ -2148,6 +2284,7 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			rpg_level_up,
 			trained_stats: trainedStats,
 			stats_after: statsAfter,
+			legacy: true,
 		});
 	} catch (err) {
 		if (soloClient) { try { await soloClient.query('ROLLBACK'); } catch (_) {} }
@@ -2155,6 +2292,125 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		res.status(500).json({ error: 'Nepodarilo sa udeliť body', code: 'AWARD_ERROR' });
 	} finally {
 		if (soloClient) soloClient.release();
+	}
+}
+
+// ─── Play tickets (Phase 5) ─────────────────────────────────────────────────
+// POST /api/play/start           { ticket_id } | { game_id } | { public_id }
+// POST /api/play/:ticket/reflect { ratings, texts } — quality gate → +25 % bonus
+// GET  /api/play/attributes      stat XP, per-competency counts, mode rationale
+
+function playTicketsGuard(res) {
+	if (!PlayTickets.playTicketsEnabled()) {
+		res.status(404).json({ error: 'Funkcia nie je zapnutá', code: 'PLAY_TICKETS_DISABLED' });
+		return false;
+	}
+	if (!coinApiReady()) { respondCoinApiDisabled(res); return false; }
+	return true;
+}
+
+app.post('/api/play/start', async (req, res) => {
+	if (!playTicketsGuard(res)) return;
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const { ticket_id, game_id, public_id } = req.body || {};
+	try {
+		if (ticket_id != null) {
+			if (!PlayTickets.isTicketId(ticket_id)) {
+				return res.status(400).json({ error: 'Neplatný lístok hry', code: 'INVALID_TICKET' });
+			}
+			const r = await PlayTickets.startTicket(coinsDbPool, user.id, ticket_id);
+			if (r.status === 'not_found') return res.status(404).json({ error: 'Lístok hry sa nenašiel', code: 'TICKET_NOT_FOUND' });
+			if (r.status === 'completed') return res.status(409).json({ error: 'Za túto hru už si odmenu dostal/a', code: 'TICKET_USED' });
+			return res.json({ ok: true, ticket_id: r.id, started_at: r.started_at });
+		}
+
+		// Library game (own saved game or a shared public link): the server
+		// copies its stored game_json into a new ticket and starts it now.
+		const byPublic = game_id == null && public_id != null;
+		const ref = byPublic ? public_id : game_id;
+		if (!PlayTickets.isTicketId(ref)) {
+			return res.status(400).json({ error: 'Chýba hra na spustenie', code: 'MISSING_GAME' });
+		}
+		if ((await PlayTickets.libraryTicketsToday(coinsDbPool, user.id)) >= PlayTickets.MAX_LIBRARY_TICKETS_PER_DAY) {
+			return res.status(429).json({ error: 'Dnes si spustil/a už veľa hier. Skús to zajtra.', code: 'TICKET_DAILY_LIMIT' });
+		}
+		const { rows } = await queryCoinsDb(
+			byPublic
+				? 'SELECT mode, game_json FROM public.saved_games WHERE public_token = $1 LIMIT 1'
+				: 'SELECT mode, game_json FROM public.saved_games WHERE id = $1 AND user_id = $2 LIMIT 1',
+			byPublic ? [ref] : [ref, user.id]
+		);
+		if (!rows.length || !rows[0].game_json) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
+		const row = await PlayTickets.insertTicket(coinsDbPool, user.id, rows[0].game_json, {
+			source: 'library', mode: rows[0].mode, start: true,
+		});
+		res.json({ ok: true, ticket_id: row.id, started_at: row.started_at });
+	} catch (err) {
+		console.error('[Play] start failed:', err.message);
+		res.status(500).json({ error: 'Hru sa nepodarilo spustiť', code: 'TICKET_ERROR' });
+	}
+});
+
+app.post('/api/play/:ticket/reflect', async (req, res) => {
+	if (!playTicketsGuard(res)) return;
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const ticketId = req.params.ticket;
+	if (!PlayTickets.isTicketId(ticketId)) {
+		return res.status(400).json({ error: 'Neplatný lístok hry', code: 'INVALID_TICKET' });
+	}
+	let client;
+	let open = false;
+	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		open = true;
+		const finish = async (status, payload) => {
+			open = false;
+			await client.query(status === 200 ? 'COMMIT' : 'ROLLBACK');
+			return res.status(status).json(payload);
+		};
+		const ticket = await PlayTickets.lockTicket(client, user.id, ticketId);
+		if (!ticket) return await finish(404, { error: 'Lístok hry sa nenašiel', code: 'TICKET_NOT_FOUND' });
+		if (!ticket.started_at) return await finish(409, { error: 'Hra ešte nebola spustená', code: 'TICKET_NOT_STARTED' });
+		if (ticket.completed_at) return await finish(409, { error: 'Reflexiu napíš pred ukončením hry', code: 'TICKET_USED' });
+		if (ticket.reflection_id) return await finish(409, { error: 'Reflexiu k tejto hre už máš', code: 'REFLECTION_EXISTS' });
+
+		const previous = await PlayTickets.recentReflectionTexts(client, user.id);
+		const check = PlayTickets.validateReflection(req.body || {}, ticket.kompetence, previous);
+		if (!check.ok) {
+			return await finish(422, {
+				error: 'Reflexia nespĺňa podmienky bonusu',
+				code: check.code,
+				field: check.field || null,
+				min_chars: PlayTickets.REFLECTION_MIN_CHARS,
+			});
+		}
+		const reflectionId = await PlayTickets.insertReflection(client, user.id, ticket.id, check);
+		return await finish(200, { ok: true, reflection_id: reflectionId, bonus_rate: PlayTickets.REFLECTION_BONUS_RATE });
+	} catch (err) {
+		if (client && open) { try { await client.query('ROLLBACK'); } catch (_) {} }
+		console.error('[Play] reflect failed:', err.message);
+		if (!res.headersSent) res.status(500).json({ error: 'Reflexiu sa nepodarilo uložiť', code: 'REFLECTION_ERROR' });
+	} finally {
+		if (client) client.release();
+	}
+});
+
+app.get('/api/play/attributes', async (req, res) => {
+	const manifest = getAttributeManifest();
+	if (!PlayTickets.playTicketsEnabled() || !coinApiReady()) {
+		return res.json({ enabled: false, manifest, stat_xp: {}, competencies: [], games: 0, reflected: 0 });
+	}
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	try {
+		const data = await PlayTickets.readPlayAttributes(coinsDbPool, user.id);
+		res.json({ enabled: true, manifest, ...data });
+	} catch (err) {
+		console.error('[Play] attributes failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa načítať atribúty', code: 'ATTRIBUTES_ERROR' });
 	}
 });
 

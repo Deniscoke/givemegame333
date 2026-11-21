@@ -24,7 +24,11 @@ function profile(coins, extra = {}) {
 
 const GAME = { title: 'Solo', duration: { min: 5, max: 15 }, rvp: { kompetence: ['komunikativni'] } };
 
-before(async () => { h = await startEconomyServer(); });
+before(async () => {
+	h = await startEconomyServer();
+	// These tests cover the pre-ticket complete-solo path (flag off); tickets: test/play-tickets.route.test.js.
+	process.env.PLAY_TICKETS_ENABLED = '0';
+});
 after(async () => { await h.stop(); });
 beforeEach(() => {
 	h.db.state = { profiles: {}, sessions: {}, participants: [], tx: [], talents: [] };
