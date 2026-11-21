@@ -9,7 +9,12 @@ const {
 	GIVEME_ACTIONS,
 	SPEND_COST,
 	SHOP_COST,
+	SERVER_ROUTED_ACTIONS,
+	DAILY_REWARD_CAP,
+	STARTER_GRANT_COINS,
 	COIN_LOG_RULES,
+	rewardCapKey,
+	computeRewardCredit,
 	validateCoinLog,
 } = require('../lib/coin-log-policy');
 
@@ -50,13 +55,23 @@ describe('coin-log policy stays in sync with the frontend', () => {
 describe('validateCoinLog', () => {
 	it('accepts every frontend action at its nominal amount', () => {
 		for (const [a, base] of Object.entries(REWARD_BASE)) {
+			if (SERVER_ROUTED_ACTIONS.includes(a)) continue;
 			assert.equal(validateCoinLog({ action: a, amount: base }).ok, true, a);
 			assert.equal(validateCoinLog({ action: a, amount: base * 2 }).ok, true, `${a} x2`);
 		}
 		assert.equal(validateCoinLog({ action: 'giveme_like', amount: 1 }).ok, true);
 		assert.equal(validateCoinLog({ action: 'spend_generate', amount: -50 }).ok, true);
 		assert.equal(validateCoinLog({ action: 'spend_remix_free', amount: 0 }).ok, true);
-		assert.equal(validateCoinLog({ action: 'shop_xp_potion_500', amount: -5000 }).ok, true);
+		assert.equal(validateCoinLog({ action: 'shop_timer_extend', amount: -300 }).ok, true);
+	});
+
+	it('refuses actions that have their own server route (mode_click, server-sold shop items)', () => {
+		for (const action of SERVER_ROUTED_ACTIONS) {
+			assert.equal(COIN_LOG_RULES.has(action), false, action);
+		}
+		assert.equal(validateCoinLog({ action: 'mode_click', amount: 1 }).code, 'UNKNOWN_ACTION');
+		assert.equal(validateCoinLog({ action: 'shop_xp_boost_2x', amount: -1500 }).code, 'UNKNOWN_ACTION');
+		assert.equal(validateCoinLog({ action: 'shop_xp_potion_500', amount: -5000 }).code, 'UNKNOWN_ACTION');
 	});
 
 	it('rejects unknown actions', () => {
@@ -93,5 +108,32 @@ describe('validateCoinLog', () => {
 
 	it('allowlist is finite and explicit', () => {
 		assert.ok(COIN_LOG_RULES.size < 100);
+	});
+});
+
+describe('server-side reward caps (C2)', () => {
+	it('every positive reward source has a daily cap bucket', () => {
+		for (const action of Object.keys(REWARD_BASE)) {
+			if (SERVER_ROUTED_ACTIONS.includes(action)) continue;
+			const key = rewardCapKey(action);
+			assert.ok(key && DAILY_REWARD_CAP[key] > 0, action);
+		}
+		for (const a of GIVEME_ACTIONS) assert.equal(rewardCapKey(`giveme_${a}`), 'giveme');
+		assert.equal(rewardCapKey('spend_generate'), null);
+		assert.equal(rewardCapKey('toString'), null);
+	});
+
+	it('computeRewardCredit clamps to what is left of the cap', () => {
+		assert.equal(computeRewardCredit(500, 0, 1000), 500);
+		assert.equal(computeRewardCredit(500, 800, 1000), 200);
+		assert.equal(computeRewardCredit(500, 1000, 1000), 0);
+		assert.equal(computeRewardCredit(500, 5000, 1000), 0);
+		assert.equal(computeRewardCredit(5, -10, 3), 3);
+	});
+
+	it('the server starter grant matches the guest starter wallet in coins.js', () => {
+		const m = /const STARTER_COINS = (\d+);/.exec(coinsJs);
+		assert.ok(m, 'STARTER_COINS not found in coins.js');
+		assert.equal(Number(m[1]), STARTER_GRANT_COINS);
 	});
 });
