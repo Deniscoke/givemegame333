@@ -419,10 +419,11 @@ describe('Slovak defaults and LOW i18n items', () => {
 		assert.ok(html.includes('data-i18n-placeholder="lib_search_placeholder"'));
 	});
 
-	test('the Challenge pill shows one robot emoji', () => {
+	test('the Challenge pill shows exactly one robot (the pixel icon, no emoji)', () => {
 		const pill = html.slice(html.indexOf('id="btn-robot-challenge"'), html.indexOf('</button>', html.indexOf('id="btn-robot-challenge"')));
-		assert.equal((pill.match(/🤖/g) || []).length, 1, pill);
-		for (const lang of LANGS) assert.equal((dicts[lang].robot_challenge.match(/🤖/g) || []).length, 1);
+		assert.equal((pill.match(/🤖/g) || []).length, 0, pill);
+		assert.equal((pill.match(/#i-robot/g) || []).length, 1, pill);
+		for (const lang of LANGS) assert.equal((dicts[lang].robot_challenge.match(/🤖/g) || []).length, 0);
 	});
 
 	test('no Cyrillic letters in index.html or the language files ("Talenты")', () => {

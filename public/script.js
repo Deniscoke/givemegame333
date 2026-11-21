@@ -162,6 +162,7 @@ const App = (() => {
 	// ─── Inicializace ───
 	async function init() {
 		document.body.classList.add('generator-shell');
+		GameUI.restoreTheme?.(); // saved light/dark choice (Phase 2)
 		// i18n first: the static JSON is the only thing we wait for before the
 		// database calls below, so Slovak (or the saved language) is on screen
 		// immediately even when Supabase is slow or paused.
@@ -830,6 +831,9 @@ const App = (() => {
 		// Přepni CSS třídu na body
 		MODES.forEach(m => document.body.classList.remove(`mode-${m}`));
 		document.body.classList.add(`mode-${mode}`);
+		// data-mode drives the per-mode pixel decoration (public/js/mode-decor.js)
+		document.body.dataset.mode = mode;
+		window.ModeDecor?.set?.(mode);
 
 		// Přepni aktivní tlačítko
 		document.querySelectorAll('.btn-mode').forEach(btn => {
@@ -848,11 +852,10 @@ const App = (() => {
 			if (el) el.style.display = show ? '' : 'none';
 		});
 
-		// RVP filtry zvýrazni v classroom režimu
-		const rvpSection = document.getElementById('rvp-filters-section');
-		if (rvpSection) {
-			rvpSection.style.opacity = mode === 'classroom' ? '1' : '0.6';
-		}
+		// RVP filtre: namiesto stlmenia (opacity 0.6, zlý kontrast) badge
+		// "Najmä pre režim Trieda" mimo režimu Trieda.
+		const rvpBadge = document.getElementById('rvp-classroom-badge');
+		if (rvpBadge) rvpBadge.hidden = mode === 'classroom';
 
 		// Aktualizuj mode badge na game kartě
 		renderModeBadge();
@@ -1012,16 +1015,14 @@ const App = (() => {
 
 			isPlaying = !isPlaying;
 			const btn = document.getElementById('btn-music');
-			const icon = document.getElementById('music-icon');
+			// The pixel music icon stays the same; .playing styles the button.
 
 			if (isPlaying) {
 				btn.classList.add('playing');
-				icon.className = 'bi bi-music-note-beamed';
 				startLoop();
 				GameUI.toast(`🎵 ${t('toast_music_on', 'Music on')}`);
 			} else {
 				btn.classList.remove('playing');
-				icon.className = 'bi bi-music-note';
 				stopLoop();
 				GameUI.toast(`🔇 ${t('toast_music_off', 'Music off')}`);
 			}
