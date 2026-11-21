@@ -169,13 +169,16 @@ describe('RpgNet', () => {
 describe('RpgTalents states', () => {
 	const files = ['public/js/rpg-net.js', 'public/js/rpg-talents.js'];
 
-	test('parallel loads share one request', async () => {
-		const { ctx, calls } = makeContext({ responses: [{ status: 200, body: MEMBER }] });
+	test('parallel loads collapse into at most one follow-up request', async () => {
+		// A load requested while one is running waits for it and fetches once more
+		// (Phase 5 HUD reload race), so three callers cost two requests, not three.
+		const { ctx, calls } = makeContext({ responses: [{ status: 200, body: MEMBER }, { status: 200, body: MEMBER }] });
 		load(ctx, files);
-		const [a, b] = await Promise.all([ctx.RpgTalents.load(), ctx.RpgTalents.load()]);
-		assert.equal(calls.length, 1);
+		const [a, b, c] = await Promise.all([ctx.RpgTalents.load(), ctx.RpgTalents.load(), ctx.RpgTalents.load()]);
+		assert.equal(calls.length, 2);
 		assert.equal(a.class_id, 7);
-		assert.equal(b, a);
+		assert.equal(b.class_id, 7);
+		assert.equal(c, b);
 	});
 
 	test('503 shows "Server nedostupný" with a retry that reloads', async () => {

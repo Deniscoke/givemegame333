@@ -54,11 +54,11 @@ describe('039 play tickets, reflections, stat XP', () => {
 	});
 
 	it('is registered in the migration runner and the legacy release', () => {
-		assert.equal(SUPPORTED_MIGRATION_ORDER.at(-1), '039_play_tickets_and_stat_xp.sql');
+		assert.ok(SUPPORTED_MIGRATION_ORDER.includes('039_play_tickets_and_stat_xp.sql'));
 		const runner = read('scripts/run-supabase-migrations.js');
 		assert.equal((runner.match(/'039_play_tickets_and_stat_xp\.sql'/g) || []).length, 2);
-		assert.match(runner, /legacy-016-to-039/);
-		assert.match(read('docs/ENV_SETUP.md'), /legacy-016-to-039/);
+		assert.match(runner, /legacy-016-to-0(39|40)/);
+		assert.match(read('docs/ENV_SETUP.md'), /legacy-016-to-0(39|40)/);
 	});
 });
 

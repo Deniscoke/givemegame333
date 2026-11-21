@@ -216,19 +216,23 @@ describe('RpgTalents.load reload race', () => {
 		const sb = {
 			window: { supabaseClient: { auth: { getSession: async () => ({ data: { session: { access_token: 't' } } }) } } },
 			document: { createElement: () => ({ textContent: '', innerHTML: '' }), addEventListener() {} },
-			fetch: () => new Promise((resolve) => {
-				const id = ++n;
-				pending.push(() => resolve({ ok: true, json: async () => ({ version: id }) }));
-			}),
+			fetch: null,
 			AbortController, setTimeout, clearTimeout, console, Promise,
 		};
+		sb.window.fetch = () => new Promise((resolve) => {
+			const id = ++n;
+			pending.push(() => resolve({ ok: true, status: 200, json: async () => ({ version: id }) }));
+		});
 		vm.createContext(sb);
+		vm.runInContext(read('public/js/rpg-net.js'), sb);
 		vm.runInContext(read('public/js/rpg-talents.js'), sb);
 		const R = sb.window.RpgTalents;
-		const first = R.load();
-		const second = R.load();
-		const third = R.load();
-		assert.equal(second, third, 'callers during one in-flight load share the follow-up');
+		const firstR = R.loadResult();
+		const secondR = R.loadResult();
+		const thirdR = R.loadResult();
+		assert.equal(secondR, thirdR, 'callers during one in-flight load share the follow-up');
+		const first = firstR.then((r) => r.data);
+		const second = secondR.then((r) => r.data);
 		while (pending.length < 1) await new Promise((r) => setImmediate(r));
 		pending.shift()();
 		assert.equal((await first).version, 1);

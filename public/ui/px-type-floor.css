@@ -200,3 +200,5 @@ body.px-v2 .rpg-stat-bonus { font-size: 12px; } /* was 8px */
 	body.px-v2 .rpg-level-badge { font-size: 14px; } /* was 10px */
 }
 body.px-v2 .px-btn { font-size: 14px; } /* was 9px */
+body.px-v2 .rpg-attr-why { font-size: 14px; } /* was 12px */
+body.px-v2 .game-rpg-statxp-note { font-size: 14px; } /* was 13px */

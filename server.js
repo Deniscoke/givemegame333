@@ -15,6 +15,7 @@ const fs = require('fs');
 const { Pool } = require('pg');
 const { createEduRouter } = require('./lib/edu-routes');
 const { createSessionsRouter } = require('./lib/routes/sessions');
+const { validateDurationGate } = require('./lib/reward-validation');
 const { createAssessmentRouter } = require('./lib/assessment-routes');
 const { createInstitutionRouter } = require('./lib/institution-routes');
 const { buildSupabasePublicConfig, renderSupabaseConfigScript, extraCspOrigin } = require('./lib/supabase-public-config');
