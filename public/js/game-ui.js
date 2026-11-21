@@ -19,7 +19,15 @@ const GameUI = (() => {
 	}
 
 	// ─── Překlady nastavení ───
-	const settingLabels = { indoor: 'Uvnitř', outdoor: 'Venku', any: 'Kdekoli' };
+	// Preklad v čase volania (script.js nastaví window.givemegame_t), SK ako fallback
+	const tr = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
+	const settingLabels = {
+		get indoor() { return tr('setting_label_indoor', 'Vnútri'); },
+		get outdoor() { return tr('setting_label_outdoor', 'Vonku'); },
+		get any() { return tr('setting_label_any', 'Kdekoľvek'); }
+	};
+	const playersBadge = (game) => tr('badge_players', '{min}–{max} hráčov')
+		.replace('{min}', game.playerCount.min).replace('{max}', game.playerCount.max);
 
 	function renderGame(game) {
 		// Název
@@ -30,9 +38,9 @@ const GameUI = (() => {
 		badges.innerHTML = '';
 		const settingLabel = settingLabels[game.setting] || game.setting;
 		addBadge(badges, settingLabel, 'setting', game.setting === 'outdoor' ? 'bi-tree' : game.setting === 'indoor' ? 'bi-house' : 'bi-globe2');
-		addBadge(badges, `${game.playerCount.min}–${game.playerCount.max} hráčů`, 'players', 'bi-people');
+		addBadge(badges, playersBadge(game), 'players', 'bi-people');
 		addBadge(badges, `${game.duration.min}–${game.duration.max} min`, 'duration', 'bi-clock');
-		addBadge(badges, `Věk ${game.ageRange.min}–${game.ageRange.max}`, 'age', 'bi-person');
+		addBadge(badges, `${tr('export_age', 'Vek')} ${game.ageRange.min}–${game.ageRange.max}`, 'age', 'bi-person');
 
 		// Popis
 		document.getElementById('game-pitch').textContent = game.pitch;
@@ -40,10 +48,10 @@ const GameUI = (() => {
 		// Meta řádek
 		const metaRow = document.getElementById('game-meta-row');
 		metaRow.innerHTML = '';
-		addMeta(metaRow, 'bi-people-fill', `${game.playerCount.min}–${game.playerCount.max}`, 'Hráči');
-		addMeta(metaRow, 'bi-clock-fill', `${game.duration.min}–${game.duration.max}m`, 'Délka');
-		addMeta(metaRow, 'bi-geo-alt-fill', settingLabel, 'Prostředí');
-		addMeta(metaRow, 'bi-person-fill', `${game.ageRange.min}–${game.ageRange.max}`, 'Věk');
+		addMeta(metaRow, 'bi-people-fill', `${game.playerCount.min}–${game.playerCount.max}`, tr('export_players', 'Hráči'));
+		addMeta(metaRow, 'bi-clock-fill', `${game.duration.min}–${game.duration.max}m`, tr('export_duration', 'Dĺžka'));
+		addMeta(metaRow, 'bi-geo-alt-fill', settingLabel, tr('export_setting', 'Prostredie'));
+		addMeta(metaRow, 'bi-person-fill', `${game.ageRange.min}–${game.ageRange.max}`, tr('export_age', 'Vek'));
 
 		// Pomůcky
 		renderList('game-materials', game.materials);
@@ -289,7 +297,7 @@ const GameUI = (() => {
 		item.innerHTML = `
 			<div class="history-item-title">${game.title}</div>
 			<div class="history-item-meta">
-				${settingLabel} · ${game.playerCount.min}–${game.playerCount.max} hráčů · ${game.duration.min}–${game.duration.max}m
+				${settingLabel} · ${playersBadge(game)} · ${game.duration.min}–${game.duration.max}m
 			</div>
 		`;
 		item.addEventListener('click', () => renderGame(game));
@@ -302,7 +310,12 @@ const GameUI = (() => {
 		list.innerHTML = '';
 		const empty = document.createElement('div');
 		empty.className = 'history-empty';
-		empty.innerHTML = '<i class="bi bi-hourglass"></i><span data-i18n="history_empty">Vygenerované hry se zobrazí zde</span>';
+		const icon = document.createElement('i');
+		icon.className = 'bi bi-hourglass';
+		const label = document.createElement('span');
+		label.setAttribute('data-i18n', 'history_empty');
+		label.textContent = tr('history_empty', 'Quest log je prázdny. Let\'s go!');
+		empty.append(icon, label);
 		list.appendChild(empty);
 	}
 
