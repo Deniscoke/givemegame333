@@ -52,6 +52,7 @@ const {
 	billingEventUserId,
 	getStripe,
 	FREE_LIMITS,
+	applyLevelCap,
 	hasIntegrationOwnershipEvidence,
 	ensureCustomer,
 	normalizeConsentIp,
@@ -96,15 +97,8 @@ const {
 } = require('./lib/game-prompt');
 const { selectMethodologies } = require('./lib/methodologies');
 
-// Free-tier soft cap: level grows from XP, but is displayed/enforced at FREE_LIMITS.maxLevel.
-// Talents/perks gated by level will therefore remain locked past the cap until user upgrades.
-function applyLevelCap(progression, tier) {
-	if (!progression) return progression;
-	if (tier && tier !== 'free') return progression;
-	const cap = FREE_LIMITS.maxLevel;
-	if ((progression.level || 0) <= cap) return progression;
-	return { ...progression, level: cap, capped: true, capReason: 'free_tier' };
-}
+// Free-tier soft cap (M7): applyLevelCap from lib/billing.js. Talents/perks gated by level
+// stay locked past the cap until the user upgrades.
 
 const SESSION_JOIN_COST = 100;
 const COMPLETION_BONUS  = 100;
