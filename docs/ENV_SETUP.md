@@ -65,7 +65,7 @@ k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `032`, pričom
 `026` zachová staré `billing_events` riadky a doplní novú schému:
 
 ```powershell
-npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-033
+npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-034
 ```
 
 Po kontrolovanom DBA baseline alebo legacy upgrade používaj release selector

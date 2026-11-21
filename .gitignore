@@ -14,3 +14,7 @@ VERCEL_KEYS.md
 *_KEYS.txt
 *key-dump*
 *secret-dump*
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/
