@@ -103,7 +103,7 @@ describe('filter-presets: enforceConstraints with every preset', () => {
 		it(`age band ${key} → ageRange ${b.min}-${b.max}, stupen ${b.stupen}`, () => {
 			const g = enforceConstraints(baseGame(), { ageMin: String(b.min), ageMax: String(b.max) });
 			assert.deepEqual(g.ageRange, { min: b.min, max: b.max });
-			assert.equal(g.rvp.stupen, b.stupen);
+			assert.deepEqual(g.rvp.stupen, [b.stupen]);
 		});
 	}
 
@@ -112,13 +112,13 @@ describe('filter-presets: enforceConstraints with every preset', () => {
 		assert.ok(g.duration.max <= 10);
 		assert.deepEqual(g.ageRange, { min: 15, max: 19 });
 		assert.deepEqual(g.playerCount, { min: 2, max: 2 });
-		assert.equal(g.rvp.stupen, 'stredni');
+		assert.deepEqual(g.rvp.stupen, ['stredni']);
 		assert.equal(g.mode, 'classroom');
 	});
 
 	it('explicit stupen filter wins over the age-derived one', () => {
 		const g = enforceConstraints(baseGame(), { stupen: 'prvni', ageMin: '15', ageMax: '19' });
-		assert.equal(g.rvp.stupen, 'prvni');
+		assert.deepEqual(g.rvp.stupen, ['prvni']);
 	});
 
 	it('drops invented stupen values and creates rvp when missing', () => {
@@ -127,7 +127,15 @@ describe('filter-presets: enforceConstraints with every preset', () => {
 		const g2 = enforceConstraints({ rvp: { stupen: ['prvni', 'x'] } }, {});
 		assert.deepEqual(g2.rvp.stupen, ['prvni']);
 		const g3 = enforceConstraints({}, { ageMin: '6', ageMax: '8' });
-		assert.equal(g3.rvp.stupen, 'prvni');
+		assert.deepEqual(g3.rvp.stupen, ['prvni']);
+		const g4 = enforceConstraints({ rvp: { stupen: 'druhy' } }, {});
+		assert.deepEqual(g4.rvp.stupen, ['druhy'], 'a single string from the model is normalised to an array');
+	});
+
+	it('party game with an age band gets rvp.stupen as an array (public viewer calls forEach on it)', () => {
+		const g = enforceConstraints({ title: 'x', mode: 'party' }, { mode: 'party', ageMin: '8', ageMax: '11' });
+		assert.ok(Array.isArray(g.rvp.stupen));
+		assert.deepEqual(g.rvp.stupen, ['prvni']);
 	});
 
 	it('circus activity solo/pair applies only without a squad preset', () => {
