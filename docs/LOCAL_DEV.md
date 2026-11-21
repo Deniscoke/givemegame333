@@ -76,8 +76,9 @@ zobrazí iba lokálne — na živom webe ho nikto neuvidí.
 | Žiak | student@givemegame.local |
 | Žiak 2 | student2@givemegame.local |
 
-**Heslo** je pre všetky účty rovnaké. Nájdeš ho v súbore
-`scripts/seed-local.js` na riadku `LOCAL_TEST_PASSWORD`. Je to iba
+**Heslo** je pre všetky účty rovnaké. Vytvorí sa náhodne pri prvom
+`npm run db:local:seed` a uloží sa do súboru `.env.local` na riadok
+`LOCAL_TEST_PASSWORD` (ten súbor sa nikdy nedostane na GitHub). Je to iba
 testovacie heslo pre tvoj počítač — nikde inde ho nepoužívaj.
 
 ## Prezeranie databázy (Supabase Studio)

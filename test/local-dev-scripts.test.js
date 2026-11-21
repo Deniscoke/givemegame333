@@ -77,3 +77,25 @@ test('local Supabase config is isolated from other projects and leaves migration
 	assert.doesNotMatch(pkg.scripts['db:local:stop'], /--all/);
 	assert.match(pkg.scripts['dev:local'], /load-local-env\.js server\.js/);
 });
+
+test('seed-local never hard-codes the test password: env, then .env.local, else generated and saved', () => {
+  const os = require('os');
+  const fsx = require('fs');
+  const pathx = require('path');
+  const { getLocalTestPassword } = require('../scripts/seed-local');
+  const dir = fsx.mkdtempSync(pathx.join(os.tmpdir(), 'gmg-seed-'));
+  const file = pathx.join(dir, '.env.local');
+  try {
+    assert.equal(getLocalTestPassword({ LOCAL_TEST_PASSWORD: 'from-env' }, file), 'from-env');
+    assert.equal(fsx.existsSync(file), false);
+    fsx.writeFileSync(file, 'SUPABASE_URL=http://127.0.0.1:55321');
+    const generated = getLocalTestPassword({}, file);
+    assert.match(generated, /^Gmg-[A-Za-z0-9_-]{16}$/);
+    assert.match(fsx.readFileSync(file, 'utf8'), /^SUPABASE_URL=.*\n#.*\nLOCAL_TEST_PASSWORD=Gmg-/);
+    assert.equal(getLocalTestPassword({}, file), generated);
+    const src = fsx.readFileSync(pathx.join(__dirname, '..', 'scripts', 'seed-local.js'), 'utf8');
+    assert.doesNotMatch(src, /LOCAL_TEST_PASSWORD\s*=\s*['"]/);
+  } finally {
+    fsx.rmSync(dir, { recursive: true, force: true });
+  }
+});

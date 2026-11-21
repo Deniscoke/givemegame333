@@ -14,14 +14,32 @@
    The service_role key is never printed or written anywhere.
    ═══════════════════════════════════════════════════════════════════ */
 
+const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 
 const REPO_ROOT = path.join(__dirname, '..');
+const LOCAL_ENV_PATH = path.join(REPO_ROOT, '.env.local');
 
-// Local-only test password shared by every seeded account. It exists only in
-// the local Docker stack; never reuse it anywhere else.
-const LOCAL_TEST_PASSWORD = 'Gmg-local-EqLPk0N-7l-Z';
+/**
+ * Local-only test password shared by every seeded account. It is never
+ * committed: it comes from env LOCAL_TEST_PASSWORD, else from the git-ignored
+ * .env.local, else a random one is generated and appended to .env.local.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @param {string} [envFile]
+ * @returns {string}
+ */
+function getLocalTestPassword(env = process.env, envFile = LOCAL_ENV_PATH) {
+	if (env.LOCAL_TEST_PASSWORD) return env.LOCAL_TEST_PASSWORD;
+	const text = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf8') : '';
+	const m = /^LOCAL_TEST_PASSWORD=(.+)$/m.exec(text);
+	if (m) return m[1].trim().replace(/^"|"$/g, '');
+	const generated = `Gmg-${crypto.randomBytes(12).toString('base64url')}`;
+	const prefix = text && !text.endsWith('\n') ? '\n' : '';
+	fs.appendFileSync(envFile, `${prefix}# Password for the seeded local test accounts (local only)\nLOCAL_TEST_PASSWORD=${generated}\n`, { encoding: 'utf8', mode: 0o600 });
+	return generated;
+}
 
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
@@ -136,12 +154,13 @@ async function adminFetch(cfg, method, route, body) {
 async function ensureUsers(cfg) {
 	const list = await adminFetch(cfg, 'GET', '/admin/users?page=1&per_page=1000');
 	const existing = new Map((list.users || []).map((u) => [String(u.email).toLowerCase(), u]));
+	const password = getLocalTestPassword();
 	const ids = {};
 	for (const acc of ACCOUNTS) {
 		const found = existing.get(acc.email);
 		if (found) {
 			await adminFetch(cfg, 'PUT', `/admin/users/${found.id}`, {
-				password: LOCAL_TEST_PASSWORD,
+				password,
 				email_confirm: true,
 				user_metadata: { full_name: acc.name }
 			});
@@ -150,7 +169,7 @@ async function ensureUsers(cfg) {
 		} else {
 			const created = await adminFetch(cfg, 'POST', '/admin/users', {
 				email: acc.email,
-				password: LOCAL_TEST_PASSWORD,
+				password,
 				email_confirm: true,
 				user_metadata: { full_name: acc.name }
 			});
@@ -277,7 +296,7 @@ async function main() {
 		await client.end();
 	}
 
-	console.log('\nLocal seed complete. Test accounts (password = LOCAL_TEST_PASSWORD in scripts/seed-local.js):');
+	console.log('\nLocal seed complete. Test accounts (password = LOCAL_TEST_PASSWORD in .env.local):');
 	for (const acc of ACCOUNTS) console.log(`  ${acc.schoolRole.padEnd(8)} ${acc.email}`);
 }
 
@@ -288,4 +307,4 @@ if (require.main === module) {
 	});
 }
 
-module.exports = { isLocalUrl, parseEnvOutput, resolveConfig, ACCOUNTS, LOCAL_TEST_PASSWORD };
+module.exports = { isLocalUrl, parseEnvOutput, resolveConfig, ACCOUNTS, getLocalTestPassword };
