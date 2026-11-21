@@ -13,7 +13,11 @@ const RpgTalents = (() => {
 
   // ─── State ──────────────────────────────────────────────────────
   let _data = null;   // { class_id, talents, unlocked[], coins }
-  let _loading = false;
+  // Phase 5 (HUD reload race): a load() during an in-flight load used to return
+  // the stale cached data, so the HUD missed the XP just awarded. Now it waits
+  // for the running request and then fetches once more.
+  let _inflight = null;
+  let _queued = null;
 
   // ─── Helpers (mirrored from rpg-avatar.js) ──────────────────────
   async function _token() {
@@ -41,9 +45,18 @@ const RpgTalents = (() => {
   }
 
   // ─── Load ───────────────────────────────────────────────────────
-  async function load() {
-    if (_loading) return _data;
-    _loading = true;
+  function load() {
+    if (_inflight) {
+      if (!_queued) {
+        _queued = _inflight.catch(() => null).then(() => { _queued = null; return load(); });
+      }
+      return _queued;
+    }
+    _inflight = _loadOnce().finally(() => { _inflight = null; });
+    return _inflight;
+  }
+
+  async function _loadOnce() {
     try {
       const token = await _token();
       if (!token) { _data = null; return null; }
@@ -57,8 +70,6 @@ const RpgTalents = (() => {
     } catch {
       _data = null;
       return null;
-    } finally {
-      _loading = false;
     }
   }
 
