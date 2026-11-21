@@ -805,8 +805,8 @@ const App = (() => {
 	// ─── Režimy aplikace ───
 	let currentMode = 'party';
 	let isInitializing = true; // Skip coin award + cursor burst on first setMode
-	const MODES = ['party', 'classroom', 'reflection', 'circus', 'cooking', 'meditation'];
-	const MODE_EMOJIS = { party: '🎉', classroom: '📚', reflection: '🪞', circus: '🎪', cooking: '🍳', meditation: '🧘' };
+	const MODES = ['party', 'classroom', 'reflection', 'circus', 'cooking', 'meditation', 'online'];
+	const MODE_EMOJIS = { party: '🎉', classroom: '📚', reflection: '🪞', circus: '🎪', cooking: '🍳', meditation: '🧘', online: '🌐' };
 
 	// Badge na karte hry — volá sa zo setMode() aj po zmene jazyka (setLang).
 	function renderModeBadge() {
