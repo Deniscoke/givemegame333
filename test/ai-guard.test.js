@@ -163,10 +163,11 @@ describe('ai-guard: sanitizeGenerateFilters', () => {
 		}
 	});
 
-	it('accepts numeric ages as strings', () => {
-		const r = sanitizeGenerateFilters({ ageMin: 8, ageMax: '12' });
-		assert.deepEqual(r.filters, { ageMin: '8', ageMax: '12' });
+	it('accepts numeric ages, players and duration as strings', () => {
+		const r = sanitizeGenerateFilters({ ageMin: 8, ageMax: '12', players: 4, duration: 15 });
+		assert.deepEqual(r.filters, { ageMin: '8', ageMax: '12', players: '4', duration: '15' });
 		assert.equal(sanitizeGenerateFilters({ ageMin: NaN }).ok, false);
+		assert.equal(sanitizeGenerateFilters({ players: Infinity }).ok, false);
 	});
 
 	it('clamps strings to 300 chars and trims', () => {
