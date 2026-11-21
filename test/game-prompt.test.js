@@ -137,6 +137,13 @@ describe('game-prompt: user prompt', () => {
 		assert.match(u, /Original game: "Old"/);
 	});
 
+	it('server default max_tokens leaves room for the Game Pack fields', () => {
+		const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+		const m = server.match(/OPENAI_MAX_TOKENS\) \|\| (\d+)/);
+		assert.ok(m && Number(m[1]) >= 3000, m && m[1]);
+		assert.match(server, /formatUsageLog\(response\.usage\)/);
+	});
+
 	it('every language has a task block', () => {
 		for (const code of ['sk', 'cs', 'en', 'de', 'es', 'tr']) assert.ok(G.TASK_BLOCKS[code], code);
 	});

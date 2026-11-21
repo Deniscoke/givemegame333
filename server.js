@@ -819,7 +819,8 @@ NEPREHÁŇAJ personalizáciu — jemne uprednostni aktivity ladené s najvyšš�
 	const REPAIR_MODEL = 'gpt-4o-mini';
 	const model = process.env.OPENAI_MODEL || 'gpt-4o';
 	const fallbackModel = model !== FALLBACK_MODEL ? FALLBACK_MODEL : 'gpt-4o';
-	const maxTokens = parseInt(process.env.OPENAI_MAX_TOKENS) || 2000;
+	// 3000: room for the Game Pack fields (playerBrief, lessonFlow) without truncated JSON.
+	const maxTokens = parseInt(process.env.OPENAI_MAX_TOKENS) || 3000;
 	const temperature = parseFloat(process.env.OPENAI_TEMPERATURE) || 0.8;
 
 	console.log(`[API] Generujem hru: model=${model}, filters:`, JSON.stringify(filters, null, 0));
