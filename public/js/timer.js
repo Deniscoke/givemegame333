@@ -22,6 +22,8 @@ const Timer = (() => {
 	/** When set, tick() derives remaining from wall clock (handles tab throttling). */
 	let _deadlineMs = null;
 	let _onCompleteCallback = null;
+	/** Phase 5: called when READY starts the timer (script.js starts the play ticket). */
+	let _onStartCallback = null;
 
 	const _t = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
 
@@ -123,6 +125,9 @@ const Timer = (() => {
 		GameUI.toast(`⏱️ ${_t('timer_started', 'Timer started!')} — ${formatTime(remainingSeconds)}`);
 
 		timerId = setInterval(tick, 1000);
+		if (_onStartCallback) {
+			try { _onStartCallback(); } catch (e) { console.warn('[Timer] onStart failed', e?.message); }
+		}
 	}
 
 	function tick() {
@@ -175,6 +180,15 @@ const Timer = (() => {
 
 	function setOnComplete(fn) {
 		_onCompleteCallback = typeof fn === 'function' ? fn : null;
+	}
+
+	function setOnStart(fn) {
+		_onStartCallback = typeof fn === 'function' ? fn : null;
+	}
+
+	/** Re-save the running solo game (e.g. after the play ticket id arrived). */
+	function persist() {
+		if (_deadlineMs != null && _soloPersistOk()) _persistSoloRun();
 	}
 
 	function formatTime(sec) {
@@ -259,6 +273,8 @@ const Timer = (() => {
 		start,
 		stop,
 		setOnComplete,
+		setOnStart,
+		persist,
 		addTime,
 		setRemaining,
 		clearSoloPersistence,

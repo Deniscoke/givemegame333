@@ -5098,3 +5098,25 @@ body.light-mode #levelup-feedback {
   from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
   to   { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
 }
+
+/* ─── Phase 5: training from play (RPG stats panel, game card, reflection) ─── */
+.rpg-play-attrs .rpg-stat-row { grid-template-columns: 22px 110px 1fr 72px; }
+.rpg-play-attrs .rpg-stat-value { white-space: nowrap; }
+.rpg-subtag-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 8px;
+  margin-left: 30px;
+  font-size: 14px;
+  color: #cbd5e1;
+}
+.rpg-stats-subheading { margin: 14px 0 6px; font-size: 14px; color: #e2e8f0; }
+.rpg-play-comp-list { margin: 0; padding-left: 18px; font-size: 14px; line-height: 1.5; color: #cbd5e1; }
+.rpg-play-attrs .rpg-attr-map-row { grid-template-columns: 100px 1fr; }
+.rpg-attr-why { grid-column: 1 / -1; opacity: 0.75; font-size: 12px; line-height: 1.4; }
+.game-rpg-statxp-note { margin-top: 6px; font-size: 13px; line-height: 1.4; color: #a5f3fc; text-align: center; }
+.reflection-bonus-hint { margin: 8px 0 0; font-size: 14px; line-height: 1.4; color: #fde68a; }
+@media (max-width: 480px) {
+  .rpg-play-attrs .rpg-stat-row { grid-template-columns: 20px 80px 1fr 64px; gap: 6px; }
+  .rpg-subtag-row { margin-left: 20px; }
+}
