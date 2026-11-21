@@ -17,6 +17,11 @@
       "nazev": "2. stupeň ZŠ",
       "rocniky": [6, 7, 8, 9],
       "vek": { "min": 11, "max": 15 }
+    },
+    "stredni": {
+      "nazev": "Střední škola",
+      "rocniky": [1, 2, 3, 4],
+      "vek": { "min": 15, "max": 19 }
     }
   },
 

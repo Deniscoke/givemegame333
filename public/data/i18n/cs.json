@@ -412,5 +412,18 @@
   "ana_rpg_xp": "RPG XP (celkem)",
   "ana_rpg_level": "RPG level",
   "rpg_hud_title": "⚔️ RPG postup",
-  "profile_rpg_title": "⚔️ RPG postup a statistiky"
+  "profile_rpg_title": "⚔️ RPG postup a statistiky",
+
+  "age_band_6_8": "6–8 let",
+  "age_band_8_11": "8–11 let",
+  "age_band_11_15": "11–15 let",
+  "age_band_15_19": "15–19 let",
+  "age_band_custom": "Vlastní rozsah",
+  "players_pair": "Dvojice (2)",
+  "players_group": "Skupinka (3–6)",
+  "players_class": "Celá třída (15–30)",
+  "duration_speedrun": "Speedrun (5–10 min)",
+  "duration_classic": "Classic (15–25 min)",
+  "duration_marathon": "Marathon (30–60 min)",
+  "methodology_badge": "Metodika"
 }

@@ -410,5 +410,18 @@
   "players_solo": "Solo (1)",
   "description_label": "Description",
   "rpg_hud_title": "⚔️ RPG progress",
-  "profile_rpg_title": "⚔️ RPG progress and stats"
+  "profile_rpg_title": "⚔️ RPG progress and stats",
+
+  "age_band_6_8": "6–8 years",
+  "age_band_8_11": "8–11 years",
+  "age_band_11_15": "11–15 years",
+  "age_band_15_19": "15–19 years",
+  "age_band_custom": "Custom range",
+  "players_pair": "Pair (2)",
+  "players_group": "Small group (3–6)",
+  "players_class": "Whole class (15–30)",
+  "duration_speedrun": "Speedrun (5–10 min)",
+  "duration_classic": "Classic (15–25 min)",
+  "duration_marathon": "Marathon (30–60 min)",
+  "methodology_badge": "Methodology"
 }

@@ -126,50 +126,78 @@
 					<label class="panel-label"><i class="bi bi-sliders"></i> <span data-i18n="filters">Filtry</span></label>
 
 					<div class="filter-group">
-						<label class="filter-label" data-i18n="age">Věk</label>
+						<label class="filter-label" id="filter-age-label" for="filter-age-band" data-i18n="age">Vek</label>
+						<!-- Age band presets (lib/filter-presets.js AGE_BANDS); js/filter-band.js copies the band into the free 6-19 range below -->
+						<select id="filter-age-band" class="form-select form-select-sm">
+							<option value="" data-i18n="any_option">Akýkoľvek</option>
+							<option value="6-8" data-min="6" data-max="8" data-i18n="age_band_6_8">6–8 rokov</option>
+							<option value="8-11" data-min="8" data-max="11" data-i18n="age_band_8_11">8–11 rokov</option>
+							<option value="11-15" data-min="11" data-max="15" data-i18n="age_band_11_15">11–15 rokov</option>
+							<option value="15-19" data-min="15" data-max="19" data-i18n="age_band_15_19">15–19 rokov</option>
+							<option value="custom" data-i18n="age_band_custom">Vlastný rozsah</option>
+						</select>
 						<div class="filter-row">
-							<select id="filter-age-min" class="form-select form-select-sm">
-								<option value="" data-i18n="from">Od</option>
-								<option value="3">3+</option>
-								<option value="5">5+</option>
-								<option value="6">6+</option>
-								<option value="8">8+</option>
-								<option value="10">10+</option>
-								<option value="12">12+</option>
+							<select id="filter-age-min" class="form-select form-select-sm" aria-labelledby="filter-age-label">
+								<option value="" data-i18n="from">od</option>
+								<option value="6">6</option>
+								<option value="7">7</option>
+								<option value="8">8</option>
+								<option value="9">9</option>
+								<option value="10">10</option>
+								<option value="11">11</option>
+								<option value="12">12</option>
+								<option value="13">13</option>
+								<option value="14">14</option>
+								<option value="15">15</option>
+								<option value="16">16</option>
+								<option value="17">17</option>
+								<option value="18">18</option>
+								<option value="19">19</option>
 							</select>
 							<span class="filter-dash">—</span>
-							<select id="filter-age-max" class="form-select form-select-sm">
-								<option value="" data-i18n="to">Do</option>
+							<select id="filter-age-max" class="form-select form-select-sm" aria-labelledby="filter-age-label">
+								<option value="" data-i18n="to">do</option>
 								<option value="6">6</option>
+								<option value="7">7</option>
 								<option value="8">8</option>
+								<option value="9">9</option>
 								<option value="10">10</option>
+								<option value="11">11</option>
 								<option value="12">12</option>
+								<option value="13">13</option>
 								<option value="14">14</option>
-								<option value="16">16+</option>
+								<option value="15">15</option>
+								<option value="16">16</option>
+								<option value="17">17</option>
+								<option value="18">18</option>
+								<option value="19">19</option>
 							</select>
 						</div>
 					</div>
 
 					<div class="filter-group">
-						<label class="filter-label" data-i18n="players">Počet hráčů</label>
+						<label class="filter-label" for="filter-players" data-i18n="players">Squad</label>
 						<select id="filter-players" class="form-select">
-							<option value="" data-i18n="any_option">Libovolný</option>
+							<option value="" data-i18n="any_option">Akýkoľvek</option>
 							<option value="solo" data-i18n="players_solo">Sólo (1)</option>
-							<option value="small" data-i18n="players_small">Malý (2–5)</option>
-							<option value="medium" data-i18n="players_medium">Střední (6–15)</option>
-							<option value="large" data-i18n="players_large">Velký (16–30)</option>
+							<option value="pair" data-i18n="players_pair">Dvojica (2)</option>
+							<option value="group" data-i18n="players_group">Skupinka (3–6)</option>
+							<option value="class" data-i18n="players_class">Celá trieda (15–30)</option>
 						</select>
 					</div>
 
 					<div class="filter-group">
-						<label class="filter-label" data-i18n="duration">Délka</label>
+						<label class="filter-label" for="filter-duration" data-i18n="duration">Timer</label>
 						<select id="filter-duration" class="form-select">
-							<option value="" data-i18n="any_option_f">Libovolná</option>
-							<option value="quick" data-i18n="duration_quick">Krátká (5–15 min)</option>
-							<option value="medium" data-i18n="duration_medium">Střední (15–30 min)</option>
-							<option value="long" data-i18n="duration_long">Dlouhá (30–60 min)</option>
+							<option value="" data-i18n="any_option_f">Akákoľvek</option>
+							<option value="speedrun" data-i18n="duration_speedrun">Speedrun (5–10 min)</option>
+							<option value="classic" data-i18n="duration_classic">Classic (15–25 min)</option>
+							<option value="marathon" data-i18n="duration_marathon">Marathon (30–60 min)</option>
 						</select>
 					</div>
+					<!-- Shared presets + band/range wiring (kept inside the filter block on purpose; loads before game-data.js) -->
+					<script src="js/filter-presets.js?v=1"></script>
+					<script src="js/filter-band.js?v=1" defer></script>
 
 					<div class="filter-group">
 						<label class="filter-label" data-i18n="setting">Prostředí</label>

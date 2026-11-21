@@ -358,5 +358,18 @@
   "ana_rpg_level": "RPG-Level",
   "description_label": "Beschreibung",
   "rpg_hud_title": "⚔️ RPG-Fortschritt",
-  "profile_rpg_title": "⚔️ RPG-Fortschritt und Statistiken"
+  "profile_rpg_title": "⚔️ RPG-Fortschritt und Statistiken",
+
+  "age_band_6_8": "6–8 Jahre",
+  "age_band_8_11": "8–11 Jahre",
+  "age_band_11_15": "11–15 Jahre",
+  "age_band_15_19": "15–19 Jahre",
+  "age_band_custom": "Eigener Bereich",
+  "players_pair": "Paar (2)",
+  "players_group": "Kleingruppe (3–6)",
+  "players_class": "Ganze Klasse (15–30)",
+  "duration_speedrun": "Speedrun (5–10 min)",
+  "duration_classic": "Classic (15–25 min)",
+  "duration_marathon": "Marathon (30–60 min)",
+  "methodology_badge": "Methode"
 }
