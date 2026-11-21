@@ -401,5 +401,9 @@
   "ana_rpg_xp": "RPG XP (celkom)",
   "ana_rpg_level": "RPG level",
   "rpg_hud_title": "⚔️ RPG postup",
-  "profile_rpg_title": "⚔️ RPG Postup a štatistiky"
+  "profile_rpg_title": "⚔️ RPG Postup a štatistiky",
+  "coins_daily_cap": "Denný limit coinov z tejto aktivity je vyčerpaný. Skús to zajtra.",
+  "coins_tx_starter_grant": "🎁 Štartovací bonus",
+  "refl_verify_daily_cap": "Dnes si už vyčerpal/a limit overení fotky. Skús to zajtra.",
+  "refl_verify_reward_capped": "Fotka je overená, ale dnešné foto bonusy sú už vyčerpané."
 }

@@ -358,5 +358,9 @@
   "players_solo": "Solo (1)",
   "description_label": "Descripción",
   "rpg_hud_title": "⚔️ Progreso RPG",
-  "profile_rpg_title": "⚔️ Progreso y estadísticas RPG"
+  "profile_rpg_title": "⚔️ Progreso y estadísticas RPG",
+  "coins_daily_cap": "Has alcanzado el límite diario de monedas de esta actividad. Inténtalo mañana.",
+  "coins_tx_starter_grant": "🎁 Bono de inicio",
+  "refl_verify_daily_cap": "Ya has usado las verificaciones de foto de hoy. Inténtalo mañana.",
+  "refl_verify_reward_capped": "Foto verificada, pero los bonos de foto de hoy ya se agotaron."
 }

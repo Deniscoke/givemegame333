@@ -237,7 +237,8 @@ const App = (() => {
 							}
 							throw new Error(data.error || 'Chyba servera');
 						}
-					if (xpBoost && data.rpg_xp_gained > 0) Coins.consumePowerup?.('xp_boost');
+					// The server decides whether the boost applied (H3); only then use it up.
+					if (xpBoost && data.xp_multiplier_applied > 1) Coins.consumePowerup?.('xp_boost');
 					const trainedCount = Array.isArray(data.trained_stats) ? data.trained_stats.length : 0;
 					const trainedSuffix = trainedCount > 1 ? ` · trénovaných ${trainedCount} statov` : '';
 					GameUI.toast(t('solo_comp_awarded', '🎮 Hra dokončená! +{coins} 🪙 · +{xp} XP{trained}')
@@ -276,7 +277,13 @@ const App = (() => {
 							let vData = {};
 							try { vData = await vRes.json(); } catch { /* empty */ }
 							if (!vRes.ok) {
-								GameUI.toast(`📸 ${vData.error || t('refl_verify_failed', 'Overenie fotky zlyhalo (server). Skús znova alebo menšiu fotku.')}`);
+								if (vData.code === 'PHOTO_VERIFY_DAILY_CAP') {
+									GameUI.toast(`📸 ${t('refl_verify_daily_cap', 'Dnes si už vyčerpal/a limit overení fotky. Skús to zajtra.')}`);
+								} else {
+									GameUI.toast(`📸 ${vData.error || t('refl_verify_failed', 'Overenie fotky zlyhalo (server). Skús znova alebo menšiu fotku.')}`);
+								}
+							} else if (vData.verified && vData.reward_capped) {
+								GameUI.toast(`📸 ${t('refl_verify_reward_capped', 'Fotka je overená, ale dnešné foto bonusy sú už vyčerpané.')}`);
 							} else if (vData.verified) {
 								const bc = vData.bonus_coins > 0 ? ` +${vData.bonus_coins} 🪙` : '';
 								GameUI.toast(`📸 ${t('refl_verified', 'Foto bonus!')} +${vData.bonus_xp || 0} XP${bc} · ${vData.feedback || ''}`);
@@ -762,7 +769,9 @@ const App = (() => {
 		// Restart music with new mode's audio profile
 		Music.onModeChange();
 
-		// Award coin for mode click (farming mechanic) — skip during init
+		// Award coin for mode click (farming mechanic) — skip during init.
+		// H9: for signed-in users Coins.award('mode_click') calls the capped
+		// POST /api/coins/award-mode-click (not the generic /api/coins/log).
 		if (!isInitializing) {
 			Coins.award('mode_click');
 			// Dispatch CustomEvent for cursor effect (ESM module bridge)

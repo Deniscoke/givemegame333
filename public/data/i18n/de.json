@@ -358,5 +358,9 @@
   "ana_rpg_level": "RPG-Level",
   "description_label": "Beschreibung",
   "rpg_hud_title": "⚔️ RPG-Fortschritt",
-  "profile_rpg_title": "⚔️ RPG-Fortschritt und Statistiken"
+  "profile_rpg_title": "⚔️ RPG-Fortschritt und Statistiken",
+  "coins_daily_cap": "Tageslimit für Coins aus dieser Aktivität erreicht. Versuch es morgen wieder.",
+  "coins_tx_starter_grant": "🎁 Startbonus",
+  "refl_verify_daily_cap": "Du hast die Foto-Prüfungen für heute aufgebraucht. Versuch es morgen wieder.",
+  "refl_verify_reward_capped": "Foto bestätigt, aber die Foto-Boni für heute sind aufgebraucht."
 }

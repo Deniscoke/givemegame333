@@ -36,22 +36,22 @@ test('requiring the migration runner does not start the CLI', () => {
 });
 
 describe('supported migration catalog', () => {
-  test('covers every active SQL migration through 035 in deterministic order', () => {
+  test('covers every active SQL migration through 036 in deterministic order', () => {
     const filesOnDisk = fs.readdirSync(migrationsDir);
     const plan = validateMigrationCatalog(SUPPORTED_MIGRATION_ORDER, filesOnDisk);
 
     assert.equal(plan[0], '001_profiles_and_follows.sql');
-    assert.equal(plan.at(-1), '035_session_realtime.sql');
+    assert.equal(plan.at(-1), '036_revoke_client_economy_writes.sql');
     assert.deepEqual(
       plan.filter((name) => name.startsWith('018_')),
       ['018_edu_core.sql', '018_plan_usage_daily.sql']
     );
     assert.equal(plan.some((name) => name.startsWith('019_')), false);
     assert.deepEqual(plan.filter((name) => name.startsWith('023_')), ['023_rpg_talents.sql']);
-    assert.equal(plan.length, 35);
+    assert.equal(plan.length, 36);
   });
 
-  test('--from 026 selects the 026-035 release without replaying older migrations', () => {
+  test('--from 026 selects the 026-036 release without replaying older migrations', () => {
     const options = parseCliArgs(['--from', '026']);
     const selected = selectMigrations(SUPPORTED_MIGRATION_ORDER, options);
 
@@ -65,7 +65,8 @@ describe('supported migration catalog', () => {
       '032_assessment_scope_evidence.sql',
       '033_security_lockdown.sql',
       '034_assessment_writes_and_tier_scope.sql',
-      '035_session_realtime.sql'
+      '035_session_realtime.sql',
+      '036_revoke_client_economy_writes.sql'
     ]);
   });
 
@@ -115,21 +116,21 @@ describe('supported migration catalog', () => {
 
   test('uses a legacy-specific confirmation flag and rejects the removed adoption confirmation', () => {
     assert.throws(
-      () => parseCliArgs(['--confirm-adoption', 'legacy-016-to-035']),
+      () => parseCliArgs(['--confirm-adoption', 'legacy-016-to-036']),
       /Unknown argument: --confirm-adoption/
     );
 
     const options = parseCliArgs([
       '--upgrade-legacy-016', '--from', '026',
-      '--confirm-legacy-upgrade', 'legacy-016-to-035'
+      '--confirm-legacy-upgrade', 'legacy-016-to-036'
     ]);
-    assert.equal(options.confirmation, 'legacy-016-to-035');
+    assert.equal(options.confirmation, 'legacy-016-to-036');
   });
 
   test('requires the complete release selector and confirmation for a legacy 016 upgrade', () => {
     const options = parseCliArgs([
       '--upgrade-legacy-016', '--from', '026',
-      '--confirm-legacy-upgrade', 'legacy-016-to-035'
+      '--confirm-legacy-upgrade', 'legacy-016-to-036'
     ]);
     const selected = selectMigrations(SUPPORTED_MIGRATION_ORDER, options);
 
@@ -146,7 +147,7 @@ describe('supported migration catalog', () => {
       () => validateExecutionMode({
         upgradeLegacy016: true,
         from: '026',
-        confirmation: 'legacy-016-to-035',
+        confirmation: 'legacy-016-to-036',
         dryRun: true
       }, release),
       /cannot be combined with --dry-run or --list/

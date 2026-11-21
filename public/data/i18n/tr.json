@@ -355,5 +355,9 @@
   "ana_rpg_xp": "RPG XP (toplam)",
   "ana_rpg_level": "RPG seviyesi",
   "rpg_hud_title": "⚔️ RPG ilerlemesi",
-  "profile_rpg_title": "⚔️ RPG ilerlemesi ve istatistikler"
+  "profile_rpg_title": "⚔️ RPG ilerlemesi ve istatistikler",
+  "coins_daily_cap": "Bu etkinlik için günlük coin sınırına ulaşıldı. Yarın tekrar dene.",
+  "coins_tx_starter_grant": "🎁 Başlangıç bonusu",
+  "refl_verify_daily_cap": "Bugünkü fotoğraf doğrulama hakkını kullandın. Yarın tekrar dene.",
+  "refl_verify_reward_capped": "Fotoğraf doğrulandı, ancak bugünkü fotoğraf bonusları tükendi."
 }

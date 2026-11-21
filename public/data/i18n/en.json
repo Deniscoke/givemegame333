@@ -410,5 +410,9 @@
   "players_solo": "Solo (1)",
   "description_label": "Description",
   "rpg_hud_title": "⚔️ RPG progress",
-  "profile_rpg_title": "⚔️ RPG progress and stats"
+  "profile_rpg_title": "⚔️ RPG progress and stats",
+  "coins_daily_cap": "Daily coin limit for this activity reached. Try again tomorrow.",
+  "coins_tx_starter_grant": "🎁 Starter bonus",
+  "refl_verify_daily_cap": "You have used up today's photo checks. Try again tomorrow.",
+  "refl_verify_reward_capped": "Photo verified, but today's photo bonuses are used up."
 }
