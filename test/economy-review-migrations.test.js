@@ -36,24 +36,19 @@ describe('037 gIVEME donations are server-only', () => {
 	});
 });
 
-describe('038 one-time balance reconciliation', () => {
-	it('runs once, guarded by a marker row', () => {
-		assert.match(m038, /CREATE TABLE IF NOT EXISTS public\.economy_migration_markers/);
-		assert.match(m038, /IF EXISTS \(SELECT 1 FROM public\.economy_migration_markers WHERE key = '038_reconcile_browser_only_balances'\)/);
-		assert.match(m038, /INSERT INTO public\.economy_migration_markers/);
-		assert.match(m038, /REVOKE ALL ON public\.economy_migration_markers FROM authenticated/);
+describe('038 balance reconciliation candidates (review only)', () => {
+	it('records candidates in a service-only table', () => {
+		assert.match(m038, /CREATE TABLE IF NOT EXISTS public\.coin_reconcile_candidates/);
+		assert.match(m038, /REVOKE ALL ON public\.coin_reconcile_candidates FROM authenticated/);
+		assert.match(m038, /REVOKE ALL ON public\.coin_reconcile_candidates FROM anon/);
+		assert.match(m038, /INSERT INTO public\.coin_reconcile_candidates/);
 	});
 
-	it('uses ledger evidence with donations, never lowers and never exceeds the ceiling', () => {
+	it('uses ledger evidence with donations and never changes a balance', () => {
 		assert.match(m038, /SUM\(amount\)[\s\S]*FROM public\.coin_transactions/);
 		assert.match(m038, /ledger_sum - donated \+ received/);
-		assert.match(m038, /reconcile_ceiling CONSTANT integer := 25000/);
-		assert.match(m038, /LEAST\(ledger_sum - donated \+ received, reconcile_ceiling\) > previous_coins/);
+		assert.doesNotMatch(m038, /UPDATE public\.profiles/i, 'browser-reported ledger rows must not mint coins');
+		assert.doesNotMatch(m038, /INSERT INTO public\.coin_transactions/i);
 		assert.doesNotMatch(m038, /localStorage/i);
-	});
-
-	it('records every raise as an auditable balance_reconcile ledger row', () => {
-		assert.match(m038, /'balance_reconcile'/);
-		assert.match(m038, /'previous_coins', previous_coins/);
 	});
 });

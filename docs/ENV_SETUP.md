@@ -97,14 +97,11 @@ institutions neexistuje.
 Od `036` prehliadač nezapisuje `profiles.coins` a zostatok prihláseného
 používateľa sa číta len zo servera; hodnota v `localStorage` sa ignoruje.
 `037` zakazuje prehliadaču vkladať gIVEME dary (darca platí cez
-`POST /api/giveme/donate`). `038` jednorazovo dorovná zostatky, ktoré pred
-`036` existovali len v prehliadači (napr. databázy s `030` bez `033`, kde
-zápis coinov zlyhával): zostatok sa zvýši na súčet z `coin_transactions`
-(mínus odoslané a plus prijaté dary), nikdy nie nad 25 000 a nikdy sa nezníži.
-Každé dorovnanie zapíše riadok `balance_reconcile` s pôvodnou hodnotou
-v `metadata`. Pred produkčným nasadením porovnaj na staging kópii
-`profiles.coins` so `SUM(coin_transactions.amount)` na používateľa a skontroluj
-počet dorovnaní v `public.economy_migration_markers`. V poznámkach k vydaniu
+`POST /api/giveme/donate`). `038` žiadny zostatok nemení: používateľov, ktorých súčet v `coin_transactions`
+(mínus odoslané a plus prijaté dary) je vyšší ako `profiles.coins`, iba zapíše
+do `public.coin_reconcile_candidates` na ručnú kontrolu. Staré riadky ledgeru
+posielal prehliadač, preto sa automaticky nepripisujú. Po kontrole oprav
+zostatok ručne a zapíš riadok `balance_reconcile` s pôvodnou hodnotou v `metadata`. V poznámkach k vydaniu
 používateľom oznám, že zostatok coinov sa odteraz počíta na serveri a coiny
 nazbierané len v prehliadači (alebo ako hosť) sa môžu líšiť od zobrazeného
 čísla.

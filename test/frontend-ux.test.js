@@ -13,7 +13,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 const LANGS = ['sk', 'cs', 'en', 'de', 'es', 'tr'];
 const dicts = Object.fromEntries(LANGS.map((l) => [l, JSON.parse(read(`public/data/i18n/${l}.json`))]));
 
