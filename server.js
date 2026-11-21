@@ -26,8 +26,21 @@ const {
 	getAvatarById,
 	RPG_AVATAR_SWITCH_COST,
 } = require('./lib/rpg-avatars');
-const { getTalentManifest, getTalentById, validatePrerequisite } = require('./lib/rpg-talents');
+const { getTalentManifest, getTalentById, talentIdsToTalents, validatePrerequisite } = require('./lib/rpg-talents');
 const { computeRpgLevel, getEffectiveStats, awardXpInTransaction, computeSoloXpFromDurationMax } = require('./lib/rpg-progression');
+const {
+	XP_BOOST_ITEM_ID,
+	XP_BOOST_MULTIPLIER,
+	XP_BOOST_USES,
+	PHOTO_VERIFY_DAILY_ATTEMPTS,
+	PHOTO_VERIFY_DAILY_REWARDS,
+	buildCompletionValidation,
+	startSessionAndCharge,
+	resolveSoloXpMultiplier,
+	countRemainingBoostUses,
+	photoVerifyAttemptAllowed,
+	photoVerifyRewardAllowed,
+} = require('./lib/session-economy');
 const {
 	getUserBillingState,
 	hasPaidAccess,
@@ -67,7 +80,8 @@ const {
 	createCachedProbe,
 	cacheControlForPath,
 } = require('./lib/ai-guard');
-const { validateCoinLog } = require('./lib/coin-log-policy');
+const { validateCoinLog, STARTER_GRANT_COINS } = require('./lib/coin-log-policy');
+const { applyCoinLogEntry, grantStarterCoins } = require('./lib/coin-ledger');
 
 // Free-tier soft cap: level grows from XP, but is displayed/enforced at FREE_LIMITS.maxLevel.
 // Talents/perks gated by level will therefore remain locked past the cap until user upgrades.
@@ -1417,7 +1431,7 @@ app.get('/api/coins/history', async (req, res) => {
 	const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 20, 100));
 	try {
 		const { rows } = await queryCoinsDb(
-			`SELECT id, amount, action, metadata, created_at\n			 FROM public.coin_transactions\n			 WHERE user_id = $1\n			 ORDER BY created_at DESC\n			 LIMIT $2`,
+			`SELECT id, amount, action, metadata, created_at\n			 FROM public.coin_transactions\n			 WHERE user_id = $1 AND action <> 'photo_verify_attempt'\n			 ORDER BY created_at DESC\n			 LIMIT $2`,
 			[user.id, limit]
 		);
 		res.json({
@@ -1463,28 +1477,67 @@ app.post('/api/coins/log', async (req, res) => {
 			console.warn('[Coins] robot_challenge plan check:', e.message);
 		}
 	}
+	// C2: the server applies the event to profiles.coins (the browser can no
+	// longer write it). Rewards are capped per day, spends need the balance.
+	let client;
 	try {
-		await queryCoinsDb(
-			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
-			[user.id, amount, actionTrim, metadata || null]
-		);
-
-		// Award RPG XP for robot_challenge completions (best-effort, non-blocking)
-		if (actionTrim === 'robot_challenge') {
-			const xpClient = await coinsDbPool.connect();
-			try {
-				await awardXpInTransaction(xpClient, user.id, ROBOT_XP_AWARD, 'robot_challenge');
-			} catch (xpErr) {
-				console.error('[Coins] robot_challenge XP award failed:', xpErr.message);
-			} finally {
-				xpClient.release();
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		const result = await applyCoinLogEntry(client, {
+			userId: user.id, action: actionTrim, amount, metadata: metadata || null,
+		});
+		if (result.status !== 'ok') {
+			await client.query('ROLLBACK');
+			if (result.status === 'capped') {
+				return res.status(429).json({
+					error: 'Denný limit odmien z tejto aktivity dosiahnutý',
+					code: 'COIN_DAILY_CAP', balance: result.balance, cap: result.cap
+				});
 			}
+			if (result.status === 'insufficient') {
+				return res.status(402).json({
+					error: 'Nedostatok coinov', code: 'INSUFFICIENT_COINS',
+					balance: result.balance, required: result.required
+				});
+			}
+			return res.status(409).json({ error: 'Profil nenájdený', code: 'NO_PROFILE' });
 		}
 
-		res.json({ ok: true });
+		// Robot challenge XP in the same transaction as the coin credit (M5 part).
+		if (actionTrim === 'robot_challenge') {
+			await awardXpInTransaction(client, user.id, ROBOT_XP_AWARD, 'robot_challenge');
+		}
+		await client.query('COMMIT');
+
+		res.json({ ok: true, credited: result.credited, balance: result.balance });
 	} catch (err) {
+		if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ } }
 		console.error('[Coins] log insert failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa zaznamenať transakciu', code: 'LOG_ERROR' });
+	} finally {
+		if (client) client.release();
+	}
+});
+
+// One-time starter coins for a brand-new signed-in account. The guest
+// practice wallet (localStorage) is never merged into the server balance.
+app.post('/api/coins/starter-grant', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	let client;
+	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		const result = await grantStarterCoins(client, user.id, STARTER_GRANT_COINS);
+		await client.query('COMMIT');
+		res.json({ granted: result.granted, balance: result.balance });
+	} catch (err) {
+		if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ } }
+		console.error('[Coins] starter grant failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa pripísať štartovacie coiny', code: 'STARTER_GRANT_ERROR' });
+	} finally {
+		if (client) client.release();
 	}
 });
 
@@ -2006,9 +2059,22 @@ app.post('/api/coins/award-mode-click', async (req, res) => {
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
 
+	let client;
 	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		// The profile row lock serialises parallel clicks so the cap holds.
+		const { rows: prof } = await client.query(
+			'SELECT COALESCE(coins, 0)::int AS coins FROM public.profiles WHERE id = $1 FOR UPDATE',
+			[user.id]
+		);
+		if (!prof.length) {
+			await client.query('ROLLBACK');
+			return res.status(409).json({ error: 'Profil nenájdený', code: 'NO_PROFILE' });
+		}
+
 		// Sum today's mode_click earnings for this user (UTC day boundary)
-		const { rows } = await queryCoinsDb(
+		const { rows } = await client.query(
 			`SELECT COALESCE(SUM(amount), 0)::int AS daily_total
 			 FROM public.coin_transactions
 			 WHERE user_id = $1 AND action = 'mode_click'
@@ -2018,48 +2084,52 @@ app.post('/api/coins/award-mode-click', async (req, res) => {
 		const dailyTotal = rows[0]?.daily_total || 0;
 
 		if (dailyTotal >= MODE_CLICK_DAILY_CAP) {
-			console.log(`[Coins] mode_click cap hit for user ${user.id} (${dailyTotal}/${MODE_CLICK_DAILY_CAP})`);
+			await client.query('ROLLBACK');
 			return res.status(429).json({
 				awarded: false,
 				reason: 'Daily cap reached',
 				code: 'MODE_CLICK_DAILY_CAP',
 				daily_total: dailyTotal,
-				cap: MODE_CLICK_DAILY_CAP
+				cap: MODE_CLICK_DAILY_CAP,
+				balance: prof[0].coins
 			});
 		}
 
-		// Atomically log transaction + credit profile
-		const client = await coinsDbPool.connect();
-		try {
-			await client.query('BEGIN');
-			await client.query(
-				'INSERT INTO public.coin_transactions (user_id, amount, action) VALUES ($1, $2, $3)',
-				[user.id, MODE_CLICK_AMOUNT, 'mode_click']
-			);
-			await client.query(
-				'UPDATE public.profiles SET coins = COALESCE(coins, 0) + $1 WHERE id = $2',
-				[MODE_CLICK_AMOUNT, user.id]
-			);
-			await client.query('COMMIT');
-		} catch (txErr) {
-			await client.query('ROLLBACK');
-			throw txErr;
-		} finally {
-			client.release();
-		}
+		await client.query(
+			'INSERT INTO public.coin_transactions (user_id, amount, action) VALUES ($1, $2, $3)',
+			[user.id, MODE_CLICK_AMOUNT, 'mode_click']
+		);
+		const { rows: upd } = await client.query(
+			'UPDATE public.profiles SET coins = COALESCE(coins, 0) + $1 WHERE id = $2 RETURNING coins',
+			[MODE_CLICK_AMOUNT, user.id]
+		);
+		await client.query('COMMIT');
 
-		const newTotal = dailyTotal + MODE_CLICK_AMOUNT;
-		console.log(`[Coins] mode_click awarded to ${user.id} (${newTotal}/${MODE_CLICK_DAILY_CAP})`);
-		res.json({ awarded: true, amount: MODE_CLICK_AMOUNT, daily_total: newTotal, cap: MODE_CLICK_DAILY_CAP });
+		res.json({
+			awarded: true,
+			amount: MODE_CLICK_AMOUNT,
+			daily_total: dailyTotal + MODE_CLICK_AMOUNT,
+			cap: MODE_CLICK_DAILY_CAP,
+			balance: upd[0]?.coins ?? null
+		});
 	} catch (err) {
+		if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ } }
 		console.error('[Coins] award-mode-click failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa udeliť mode_click coin', code: 'AWARD_ERROR' });
+	} finally {
+		if (client) client.release();
 	}
 });
 
 // ─── Shop purchase — server-validated items (XP potions, etc.) ───
 const SHOP_SERVER_ITEMS = {
 	xp_potion_500: { cost: 5000, xp: 500, label: 'XP Potion (+500 XP)' },
+	// H3: sold on the server so solo completion can prove the boost from the
+	// ledger (metadata.boost_uses); /api/coins/log refuses this action.
+	[XP_BOOST_ITEM_ID]: {
+		cost: 1500, xp: 0, label: '2× XP Boost',
+		boost: { multiplier: XP_BOOST_MULTIPLIER, uses: XP_BOOST_USES },
+	},
 };
 
 app.post('/api/shop/purchase', async (req, res) => {
@@ -2068,7 +2138,8 @@ app.post('/api/shop/purchase', async (req, res) => {
 	if (!user) return;
 
 	const { item_id } = req.body || {};
-	const item = SHOP_SERVER_ITEMS[item_id];
+	const item = typeof item_id === 'string' && Object.hasOwn(SHOP_SERVER_ITEMS, item_id)
+		? SHOP_SERVER_ITEMS[item_id] : null;
 	if (!item) return res.status(400).json({ error: 'Neznámy item', code: 'UNKNOWN_ITEM' });
 
 	let client;
@@ -2091,7 +2162,11 @@ app.post('/api/shop/purchase', async (req, res) => {
 		await client.query('UPDATE public.profiles SET coins = coins - $1 WHERE id = $2', [item.cost, user.id]);
 		await client.query(
 			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
-			[user.id, -item.cost, `shop_${item_id}`, JSON.stringify({ item_id, label: item.label })]
+			[user.id, -item.cost, `shop_${item_id}`, JSON.stringify({
+				item_id,
+				label: item.label,
+				...(item.boost ? { boost_uses: item.boost.uses, boost_multiplier: item.boost.multiplier } : {}),
+			})]
 		);
 
 		let rpgXpGained = 0, rpgLevel = levelBefore, rpgLevelUp = false;
@@ -2142,6 +2217,35 @@ app.post('/api/verify-completion', async (req, res) => {
 		return res.status(400).json({ error: 'Fotka je príliš veľká (max 5 MB)', code: 'PHOTO_TOO_LARGE' });
 	}
 
+	// H4: every call is a paid gpt-4o vision request. Record the attempt first,
+	// then count today's attempts including this one (insert-then-count is
+	// safe under parallel requests). Without the DB there is no way to cap
+	// per user, so the route refuses instead of running uncapped.
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	try {
+		await queryCoinsDb(
+			`INSERT INTO public.coin_transactions (user_id, amount, action, metadata)
+			 VALUES ($1, 0, 'photo_verify_attempt', $2)`,
+			[user.id, JSON.stringify({ game_title: game_title || null })]
+		);
+		const { rows: attemptRows } = await queryCoinsDb(
+			`SELECT COUNT(*)::int AS cnt FROM public.coin_transactions
+			 WHERE user_id = $1 AND action = 'photo_verify_attempt' AND created_at >= CURRENT_DATE`,
+			[user.id]
+		);
+		const attempts = attemptRows[0]?.cnt || 0;
+		if (!photoVerifyAttemptAllowed(attempts)) {
+			return res.status(429).json({
+				error: `Denný limit overení fotky dosiahnutý (${PHOTO_VERIFY_DAILY_ATTEMPTS}). Skús to zajtra.`,
+				code: 'PHOTO_VERIFY_DAILY_CAP',
+				limit: PHOTO_VERIFY_DAILY_ATTEMPTS
+			});
+		}
+	} catch (err) {
+		console.error('[Verify] attempt cap check failed:', err.message);
+		return res.status(500).json({ error: 'Kontrola limitu zlyhala', code: 'COOLDOWN_CHECK_ERROR' });
+	}
+
 	try {
 		const visionResp = await openai.chat.completions.create({
 			model: 'gpt-4o',
@@ -2178,14 +2282,26 @@ Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "
 		let bonusCoins = 0;
 		let rpgLevel = null;
 		let rpgLevelUp = false;
+		let rewardCapped = false;
 		if (result.verified && coinApiReady()) {
 			try {
 				const client = await coinsDbPool.connect();
 				try {
 					await client.query('BEGIN');
+					// FOR UPDATE serialises parallel verifications of one user so the
+					// daily reward count below cannot be exceeded.
 					const { rows: pre } = await client.query(
-						'SELECT COALESCE(rpg_xp,0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
+						'SELECT COALESCE(rpg_xp,0)::int AS rpg_xp FROM public.profiles WHERE id = $1 FOR UPDATE', [user.id]
 					);
+					const { rows: rewardRows } = await client.query(
+						`SELECT COUNT(*)::int AS cnt FROM public.coin_transactions
+						 WHERE user_id = $1 AND action = 'photo_verify_bonus' AND created_at >= CURRENT_DATE`,
+						[user.id]
+					);
+					if (!photoVerifyRewardAllowed(rewardRows[0]?.cnt || 0)) {
+						rewardCapped = true;
+						throw Object.assign(new Error('photo reward daily cap'), { rewardCapped: true });
+					}
 					const levelBefore = computeRpgLevel(pre[0]?.rpg_xp || 0).level;
 					const xpResult = await awardXpInTransaction(client, user.id, VERIFICATION_XP_BONUS, 'photo_verify');
 					bonusXp = VERIFICATION_XP_BONUS;
@@ -2208,7 +2324,9 @@ Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "
 					await client.query('COMMIT');
 				} catch (e) {
 					try { await client.query('ROLLBACK'); } catch (_) {}
-					console.error('[Verify] XP/coin award failed:', e.message);
+					// Nothing was committed, so nothing may be reported as awarded.
+					bonusXp = 0; bonusCoins = 0; rpgLevel = null; rpgLevelUp = false;
+					if (!e.rewardCapped) console.error('[Verify] XP/coin award failed:', e.message);
 				} finally { client.release(); }
 			} catch (e) { console.error('[Verify] DB connection failed:', e.message); }
 		}
@@ -2219,6 +2337,8 @@ Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "
 			feedback: result.feedback || '',
 			bonus_xp: bonusXp,
 			bonus_coins: bonusCoins,
+			reward_capped: rewardCapped,
+			reward_daily_limit: PHOTO_VERIFY_DAILY_REWARDS,
 			rpg_level: rpgLevel,
 			rpg_level_up: rpgLevelUp,
 		});
@@ -2271,11 +2391,20 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		soloClient = await coinsDbPool.connect();
 		await soloClient.query('BEGIN');
 
+		// FOR UPDATE serialises parallel completions of the same user, so the
+		// boost-use count below cannot be spent twice.
 		const { rows: preRows } = await soloClient.query(
-			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1',
+			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1 FOR UPDATE',
 			[user.id]
 		);
 		const levelBefore = computeRpgLevel(preRows[0]?.rpg_xp || 0).level;
+
+		// H3 (short term): the client's xp_multiplier only applies while the
+		// ledger holds unused, server-sold xp_boost_2x uses; otherwise it is 1.
+		const remainingBoostUses = parseInt(req.body.xp_multiplier, 10) > 1
+			? await countRemainingBoostUses(soloClient, user.id)
+			: 0;
+		const xpMul = resolveSoloXpMultiplier(req.body.xp_multiplier, remainingBoostUses);
 
 		// Award completion bonus coins
 		await soloClient.query(
@@ -2287,6 +2416,7 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			[user.id, COMPLETION_BONUS, 'solo_complete', JSON.stringify({
 				kompetence_keys: validKomps,
 				duration_max: game_json?.duration?.max ?? null,
+				xp_multiplier: xpMul,
 			})]
 		);
 
@@ -2295,7 +2425,6 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		const rawXp = computeSoloXpFromDurationMax(game_json?.duration?.max);
 		const kompBonus = 1 + 0.15 * Math.max(0, validKomps.length - 1);
 		const scaledXp = Math.min(150, Math.round(rawXp * kompBonus));
-		const xpMul = Math.min(5, Math.max(1, parseInt(req.body.xp_multiplier) || 1));
 		const soloXpAward = scaledXp * xpMul;
 		const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
 			soloClient, user.id, soloXpAward, xpMul > 1 ? 'solo_complete_boosted' : 'solo_complete'
@@ -2305,6 +2434,8 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		// Compute which stats this game trains and the user's effective stats after XP
 		const trainedStats = [...new Set(validKomps.map(k => GAME_KOMP_TO_STAT[k]).filter(Boolean))];
 		let statsAfter = {};
+		// Cosmetic reads run in a savepoint so a failure cannot abort the award.
+		await soloClient.query('SAVEPOINT solo_stats');
 		try {
 			const { rows: profileAfter } = await soloClient.query(
 				'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1', [user.id]
@@ -2314,15 +2445,21 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 				const { rows: tRows } = await soloClient.query(
 					'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [user.id]
 				);
-				statsAfter = getEffectiveStats(classId, tRows.map(r => r.talent_id));
+				// M4: map ids to talent objects; the card reads flat stat values.
+				statsAfter = getEffectiveStats(classId, talentIdsToTalents(tRows.map(r => r.talent_id))).effective;
 			}
-		} catch (_) { /* non-critical — stats are cosmetic */ }
+			await soloClient.query('RELEASE SAVEPOINT solo_stats');
+		} catch (_) {
+			/* non-critical — stats are cosmetic */
+			await soloClient.query('ROLLBACK TO SAVEPOINT solo_stats');
+		}
 
 		await soloClient.query('COMMIT');
 
 		res.json({
 			ok: true,
 			rpg_xp_gained: soloXpAward,
+			xp_multiplier_applied: xpMul,
 			rpg_xp,
 			rpg_level,
 			rpg_level_up,
@@ -2434,20 +2571,22 @@ app.post('/api/sessions', async (req, res) => {
 		return res.status(400).json({ error: 'game_json je povinné', code: 'MISSING_GAME' });
 	}
 
-	// Generate unique join code (retry on collision)
-	let join_code;
-	for (let attempt = 0; attempt < 10; attempt++) {
-		const candidate = generateJoinCode();
-		const { rows } = await queryCoinsDb(
-			'SELECT id FROM public.sessions WHERE join_code = $1', [candidate]
-		);
-		if (rows.length === 0) { join_code = candidate; break; }
-	}
-	if (!join_code) {
-		return res.status(500).json({ error: 'Nepodarilo sa vygenerovať unikátny kód', code: 'CODE_GEN_ERROR' });
-	}
-
+	// M9: the join-code lookup hits the DB too, so it must sit inside the try —
+	// Express 4 does not catch a rejected async handler and the request hangs.
 	try {
+		// Generate unique join code (retry on collision)
+		let join_code;
+		for (let attempt = 0; attempt < 10; attempt++) {
+			const candidate = generateJoinCode();
+			const { rows } = await queryCoinsDb(
+				'SELECT id FROM public.sessions WHERE join_code = $1', [candidate]
+			);
+			if (rows.length === 0) { join_code = candidate; break; }
+		}
+		if (!join_code) {
+			return res.status(500).json({ error: 'Nepodarilo sa vygenerovať unikátny kód', code: 'CODE_GEN_ERROR' });
+		}
+
 		const { rows } = await queryCoinsDb(
 			`INSERT INTO public.sessions (host_id, game_json, join_code)
 			 VALUES ($1, $2, $3)
@@ -2541,6 +2680,7 @@ app.post('/api/sessions/:code/start', async (req, res) => {
 	if (!user) return;
 
 	const code = (req.params.code || '').toUpperCase().trim();
+	let client;
 	try {
 		const { rows } = await queryCoinsDb(
 			'SELECT id, host_id, game_json, status FROM public.sessions WHERE join_code = $1', [code]
@@ -2557,35 +2697,36 @@ app.post('/api/sessions/:code/start', async (req, res) => {
 		const durationMin = sess.game_json?.duration?.max || 15;
 		const timerEndsAt = new Date(Date.now() + durationMin * 60 * 1000).toISOString();
 
-		// Deduct coins from all participants
-		const { rows: parts } = await queryCoinsDb(
-			'SELECT user_id FROM public.session_participants WHERE session_id = $1 AND coins_paid = 0', [sess.id]
-		);
-
-		for (const p of parts) {
-			await queryCoinsDb(
-				'UPDATE public.profiles SET coins = GREATEST(0, COALESCE(coins,0) - $1) WHERE id = $2',
-				[SESSION_JOIN_COST, p.user_id]
-			);
-			await queryCoinsDb(
-				'UPDATE public.session_participants SET coins_paid = $1 WHERE session_id = $2 AND user_id = $3',
-				[SESSION_JOIN_COST, sess.id, p.user_id]
-			);
-			await queryCoinsDb(
-				'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
-				[p.user_id, -SESSION_JOIN_COST, 'session_join', JSON.stringify({ session_code: code })]
-			);
+		// M1 + H1: status compare-and-swap and conditional charges in one
+		// transaction. A second /start charges nobody; a participant without
+		// enough coins is skipped and stays unpaid (never rewarded).
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		const result = await startSessionAndCharge(client, {
+			sessionId: sess.id,
+			hostId: user.id,
+			code,
+			cost: SESSION_JOIN_COST,
+			timerEndsAt,
+		});
+		if (!result.started) {
+			await client.query('ROLLBACK');
+			return res.status(409).json({ error: 'Session už beží', code: 'ALREADY_STARTED' });
 		}
+		await client.query('COMMIT');
 
-		await queryCoinsDb(
-			`UPDATE public.sessions SET status = 'active', timer_ends_at = $1, started_at = NOW() WHERE id = $2`,
-			[timerEndsAt, sess.id]
-		);
-
-		res.json({ ok: true, timer_ends_at: timerEndsAt, participants_charged: parts.length });
+		res.json({
+			ok: true,
+			timer_ends_at: timerEndsAt,
+			participants_charged: result.charged.length,
+			participants_unpaid: result.unpaid.length,
+		});
 	} catch (err) {
+		if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ } }
 		console.error('[Sessions] start failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa štartovať session', code: 'START_ERROR', detail: err.message });
+		res.status(500).json({ error: 'Nepodarilo sa štartovať session', code: 'START_ERROR' });
+	} finally {
+		if (client) client.release();
 	}
 });
 
@@ -2664,7 +2805,6 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 				validation: durResult.validation
 			});
 		}
-		const actualMin = durResult.validation.duration_actual_min;
 
 		// ─── VALIDATION GATE 2: Participant count ──────────────────────
 		const { rows: paidParts } = await queryCoinsDb(
@@ -2731,9 +2871,12 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 		try {
 			await client.query('BEGIN');
 
+			// M2: only participants who actually paid at /start are rewarded; a
+			// join that raced the start (or a skipped, unpaid player) is not.
 			const { rows: parts } = await client.query(
 				`SELECT user_id FROM public.session_participants
-				 WHERE session_id = $1 AND reflection_done = true AND awarded_competencies IS NULL`,
+				 WHERE session_id = $1 AND reflection_done = true AND awarded_competencies IS NULL
+				   AND coins_paid > 0`,
 				[sess.id]
 			);
 
@@ -2774,17 +2917,15 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 			participantsRewarded = parts.length;
 
 			// Write audit trail + mark completed (inside transaction)
-			const validation = {
-				duration_actual_min: Math.round(actualMin * 10) / 10,
-				duration_required_min: requiredMin,
-				participants_actual: actualPlayers,
-				participants_required: requiredPlayers,
-				host_sessions_last_hour: hostSessionsLastHour,
-				competencies_awarded: kompetence,
-				participants_rewarded: parts.length,
-				passed: true,
-				validated_at: new Date().toISOString()
-			};
+			// C1: required values come from the gate results (requiredMin /
+			// requiredPlayers only exist inside lib/reward-validation.js).
+			const validation = buildCompletionValidation({
+				durationValidation: durResult.validation,
+				participantValidation: partResult.validation,
+				hostSessionsLastHour,
+				competencies: kompetence,
+				participantsRewarded: parts.length,
+			});
 			await client.query(
 				`UPDATE public.sessions SET status = 'completed', completed_at = NOW(), reward_validation = $1 WHERE id = $2`,
 				[JSON.stringify(validation), sess.id]
@@ -2804,7 +2945,9 @@ app.post('/api/sessions/:code/complete', async (req, res) => {
 					const { rows: hTalRows } = await queryCoinsDb(
 						'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [user.id]
 					);
-					sessionStatsAfter = getEffectiveStats(hClassId, hTalRows.map(r => r.talent_id));
+					// M4: getEffectiveStats needs talent objects, not ids; the card
+					// reads flat stat values.
+					sessionStatsAfter = getEffectiveStats(hClassId, talentIdsToTalents(hTalRows.map(r => r.talent_id))).effective;
 				}
 			} catch (_) { /* non-critical */ }
 
@@ -3665,6 +3808,14 @@ app.post('/api/rpg/perks/:key/use', async (req, res) => {
 			perk_title: perk.title
 		});
 	} catch (err) {
+		// M6: the partial unique index (migration 036) rejects a second
+		// pending claim that raced past the check above.
+		if (err.code === '23505') {
+			return res.status(409).json({
+				error: 'Žiadosť o tento perk ešte čaká na učiteľa.',
+				code: 'ALREADY_PENDING'
+			});
+		}
 		console.error('[Perks] POST use failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa uplatniť perk', code: 'PERK_USE_ERROR' });
 	}
