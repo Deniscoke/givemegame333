@@ -68,6 +68,16 @@ const {
 	cacheControlForPath,
 } = require('./lib/ai-guard');
 const { validateCoinLog } = require('./lib/coin-log-policy');
+const {
+	enforceConstraints,
+	applyMethodologyFallback,
+	validateGame,
+	buildRepairPrompt,
+	buildSystemPrompt,
+	buildUserPrompt,
+	formatUsageLog
+} = require('./lib/game-prompt');
+const { selectMethodologies } = require('./lib/methodologies');
 
 // Free-tier soft cap: level grows from XP, but is displayed/enforced at FREE_LIMITS.maxLevel.
 // Talents/perks gated by level will therefore remain locked past the cap until user upgrades.
@@ -551,230 +561,7 @@ const SCHEMA_FALLBACK = `{
   "facilitatorNotes": "Keep energy up — encourage everyone to participate, no pressure."
 }`;
 
-// Compact schema for AI format reference (~85 tokens vs ~600 for a full example).
-// Field names + types are sufficient — sample values add noise, not signal.
-const COMPACT_GAME_SCHEMA = `{"id":"ai-XXXXXX","title":"string","pitch":"string","playerCount":{"min":2,"max":15},"ageRange":{"min":8,"max":15},"duration":{"min":15,"max":30},"setting":"indoor|outdoor|any","mode":"party|classroom|reflection|circus|cooking|meditation","energyLevel":"low|medium|high","materials":["string"],"instructions":["string"],"learningGoals":["string"],"reflectionPrompts":["string"],"safetyNotes":["string"],"adaptationTips":["string"],"facilitatorNotes":"string","verificationChallenge":{"description":"what to photograph as proof","hint":"short tip for a good photo"},"rvp":{"kompetence":["k-uceni"],"oblasti":["string"],"stupen":"prvni|druhy","prurezova_temata":["string"],"ocekavane_vystupy":["string"],"doporucene_hodnoceni":"string"}}`;
-
-// ─── Strict constraint mapping for AI ───
-function buildFilterDescription(filters) {
-	const constraints = [];
-
-	// ── Mode → THEME directive (most important) ──
-	if (filters.mode) {
-		const modeThemes = {
-			party: 'THEME: Party / teambuilding game. MUST be high-energy, fun, group-oriented with celebration atmosphere. Think team challenges, laughter, movement, social bonding.',
-			classroom: 'THEME: Educational classroom activity tied to curriculum. MUST include clear learning outcomes and structured facilitation. Constructive, focused tone.',
-			reflection: 'THEME: Reflective / calm activity. MUST be introspective, emotionally safe, gentle. Think journaling, paired sharing, mindfulness circles.',
-			circus: 'THEME: Circus / performance activity. MUST involve circus-inspired mechanics — juggling metaphors, acrobatics, performance, audience, ring, clowning, balance. Activities MUST involve body movement and creativity inspired by circus arts.',
-			cooking: 'THEME: Cooking / recipe-based activity. MUST involve food preparation, tasting, nutrition education, or culinary creativity. Kitchen and food themes are MANDATORY.',
-			meditation: 'THEME: Mindfulness / meditation exercise. MUST focus on breathing, body awareness, visualization, or gentle yoga. The tone MUST be calm, safe, and health-focused. NO competitive elements.'
-		};
-		constraints.push(modeThemes[filters.mode] || `THEME: ${filters.mode}`);
-		constraints.push(`JSON field "mode" MUST be "${filters.mode}".`);
-	}
-
-	// ── Age → exact range ──
-	if (filters.ageMin || filters.ageMax) {
-		const min = filters.ageMin || '5';
-		const max = filters.ageMax || '99';
-		constraints.push(`CONSTRAINT ageRange: "ageRange.min" MUST be >= ${min} and "ageRange.max" MUST be <= ${max}. Do NOT generate a game for children outside ${min}–${max} years.`);
-	}
-
-	// ── Players → exact numeric range ──
-	if (filters.players && filters.players !== 'any') {
-		const playerRanges = {
-			solo:   { min: 1, max: 1,  label: '1 player (solo)' },
-			small:  { min: 2, max: 5,  label: '2–5 players (small group)' },
-			medium: { min: 6, max: 15, label: '6–15 players (medium group)' },
-			large:  { min: 16, max: 30, label: '16–30 players (large group)' }
-		};
-		const pr = playerRanges[filters.players];
-		if (pr) {
-			constraints.push(`CONSTRAINT playerCount: "playerCount.min" MUST be >= ${pr.min} and "playerCount.max" MUST be <= ${pr.max}. This is a ${pr.label}. Do NOT generate a game requiring more than ${pr.max} players.`);
-		}
-	}
-
-	// ── Activity type → solo override ──
-	if (filters.activity && filters.activity !== 'any') {
-		const actConstraints = {
-			solo: 'CONSTRAINT activity: This MUST be a SOLO / individual activity. "playerCount.min" MUST be 1, "playerCount.max" MUST be 1. ONE person plays alone.',
-			pair: 'CONSTRAINT activity: This MUST be a PAIR activity. "playerCount.min" MUST be 2, "playerCount.max" MUST be 2.',
-			group: 'CONSTRAINT activity: This MUST be a GROUP activity for 3–10 players.',
-			mass: 'CONSTRAINT activity: This MUST be a MASS activity for 10+ players.'
-		};
-		constraints.push(actConstraints[filters.activity] || `CONSTRAINT activity: ${filters.activity}`);
-	}
-
-	// ── Duration → exact minute range ──
-	if (filters.duration && filters.duration !== 'any') {
-		const durationRanges = {
-			quick:  { min: 5,  max: 15, label: '5–15 minutes' },
-			medium: { min: 15, max: 30, label: '15–30 minutes' },
-			long:   { min: 30, max: 60, label: '30–60 minutes' }
-		};
-		const dr = durationRanges[filters.duration];
-		if (dr) {
-			constraints.push(`CONSTRAINT duration: "duration.min" MUST be >= ${dr.min} and "duration.max" MUST be <= ${dr.max}. Game MUST fit in ${dr.label}.`);
-		}
-	}
-
-	// ── Setting ──
-	if (filters.setting && filters.setting !== 'any') {
-		constraints.push(`CONSTRAINT setting: "setting" MUST be "${filters.setting}". Do NOT suggest ${filters.setting === 'indoor' ? 'outdoor' : 'indoor'} activities.`);
-	}
-
-	// ── Energy ──
-	if (filters.energy && filters.energy !== 'any') {
-		constraints.push(`CONSTRAINT energyLevel: "energyLevel" MUST be "${filters.energy}".`);
-	}
-
-	// ── Reflection depth ──
-	if (filters.depth && filters.depth !== 'any') {
-		const depthLabels = { light: 'light/playful', medium: 'moderate depth', deep: 'deep/emotional' };
-		constraints.push(`CONSTRAINT emotionalDepth: "emotionalDepth" MUST be "${filters.depth}" (${depthLabels[filters.depth]}).`);
-	}
-
-	// ── Cuisine type (cooking mode) ──
-	if (filters.cuisine && filters.cuisine !== 'any') {
-		const cuisineLabels = { sweet: 'sweet/dessert', savory: 'savory/main course', healthy: 'healthy/nutritious', international: 'international/world cuisine' };
-		constraints.push(`CONSTRAINT cuisine: The cooking activity MUST focus on ${cuisineLabels[filters.cuisine] || filters.cuisine} food.`);
-	}
-
-	// ── Focus type (meditation mode) ──
-	if (filters.focus && filters.focus !== 'any') {
-		const focusLabels = { breath: 'breathing exercises', body: 'body scan / body awareness', visualization: 'guided visualization', movement: 'gentle movement / yoga' };
-		constraints.push(`CONSTRAINT focus: The meditation MUST focus on ${focusLabels[filters.focus] || filters.focus}.`);
-	}
-
-	// ── RVP (classroom mode) ──
-	if (filters.stupen && filters.stupen !== 'any') {
-		constraints.push(`CONSTRAINT rvp.stupen: MUST include "${filters.stupen === 'prvni' ? 'prvni' : 'druhy'}" (${filters.stupen === 'prvni' ? '1st level / grades 1-5' : '2nd level / grades 6-9'}).`);
-	}
-	if (filters.kompetence && filters.kompetence !== 'any') {
-		constraints.push(`CONSTRAINT rvp.kompetence: MUST include "${filters.kompetence}" AND 1–2 additional keys from [k-uceni, k-reseni-problemu, komunikativni, socialni-personalni, obcanske, pracovni, digitalni] that this activity GENUINELY trains. Total 2–3 keys. Do NOT list competencies the activity does not authentically develop.`);
-	} else {
-		constraints.push(`CONSTRAINT rvp.kompetence: ANALYZE the activity and include 1–3 keys from [k-uceni, k-reseni-problemu, komunikativni, socialni-personalni, obcanske, pracovni, digitalni] that this activity GENUINELY trains. Pick the ones that truly match — DO NOT default to "k-uceni" for every game. Different activities train different competencies: movement games often train socialni-personalni + obcanske; puzzle games train k-reseni-problemu; discussion games train komunikativni; etc.`);
-	}
-	if (filters.oblast && filters.oblast !== 'any') {
-		constraints.push(`CONSTRAINT rvp.oblasti: MUST include "${filters.oblast}" in the oblasti array.`);
-	}
-
-	// ── Setting "any" → explicit flexibility ──
-	if (filters.setting === 'any' || !filters.setting) {
-		constraints.push(`CONSTRAINT setting: "setting" MAY be "indoor" OR "outdoor" — user chose ANYWHERE, so game can work in either. Prefer the one that fits the activity best.`);
-	}
-
-	// ── Facilitator description / custom instructions ──
-	if (filters.description && filters.description.trim()) {
-		constraints.push(`FACILITATOR NOTE — the person creating this activity wrote the following custom instructions. You MUST incorporate this into the game design:\n"${filters.description.trim()}"\nAdapt these notes using sound pedagogical approaches. Make the game attractive for Gen Z — gamified, authentic, relatable. Do NOT just copy the text literally; weave it creatively into the activity design.`);
-	}
-
-	return constraints.join('\n');
-}
-
-// ─── EXACT values AI MUST output (pre prompt) ───
-function buildExactValuesBlock(filters) {
-	const lines = [];
-	const f = filters || {};
-
-	const playerRanges = { solo: [1,1], small: [2,5], medium: [6,15], large: [16,30] };
-	const pr = f.players && playerRanges[f.players] ? playerRanges[f.players] : null;
-	if (pr) lines.push(`playerCount: { min: ${pr[0]}, max: ${pr[1]} }`);
-
-	const durationRanges = { quick: [5,15], medium: [15,30], long: [30,60] };
-	const dr = f.duration && durationRanges[f.duration] ? durationRanges[f.duration] : null;
-	if (dr) lines.push(`duration: { min: ${dr[0]}, max: ${dr[1]} }`);
-
-	if (f.ageMin || f.ageMax) {
-		const min = f.ageMin || '5', max = f.ageMax || '99';
-		lines.push(`ageRange: { min: ${min}, max: ${max} }`);
-	}
-
-	if (f.setting && f.setting !== 'any') lines.push(`setting: "${f.setting}"`);
-
-	if (lines.length === 0) return '';
-	return `\n⚠️ EXACT JSON VALUES (copy these — no other values allowed):\n${lines.join('\n')}\n`;
-}
-
-// ─── Server-side enforcement: oprava výstupu podľa panelu ───
-function enforceConstraints(game, filters) {
-	const f = filters || {};
-	const playerRanges = { solo: [1,1], small: [2,5], medium: [6,15], large: [16,30] };
-	const durationRanges = { quick: [5,15], medium: [15,30], long: [30,60] };
-
-	if (f.players && playerRanges[f.players]) {
-		const [min, max] = playerRanges[f.players];
-		game.playerCount = { min, max };
-	}
-	if (f.duration && durationRanges[f.duration]) {
-		const [min, max] = durationRanges[f.duration];
-		game.duration = { min, max };
-	}
-	if (f.ageMin || f.ageMax) {
-		game.ageRange = {
-			min: parseInt(f.ageMin) || game.ageRange?.min || 5,
-			max: parseInt(f.ageMax) || game.ageRange?.max || 99
-		};
-	}
-	if (f.setting && f.setting !== 'any') {
-		game.setting = f.setting;
-	}
-	if (f.energy && f.energy !== 'any') game.energyLevel = f.energy;
-
-	return game;
-}
-
-// ─── Game JSON validation ───
-// Returns [] if valid, or an array of human-readable error strings.
-function validateGame(game) {
-	const errors = [];
-
-	// Required non-empty string fields
-	for (const field of ['id', 'title', 'pitch', 'mode', 'setting', 'energyLevel', 'facilitatorNotes']) {
-		if (typeof game[field] !== 'string' || !game[field].trim()) {
-			errors.push(`Missing or empty field: ${field}`);
-		}
-	}
-
-	// Required numeric range objects: { min: number, max: number }
-	for (const field of ['playerCount', 'ageRange', 'duration']) {
-		const obj = game[field];
-		if (!obj || typeof obj.min !== 'number' || typeof obj.max !== 'number') {
-			errors.push(`Invalid range object: ${field} (must be { min: number, max: number })`);
-		}
-	}
-
-	// Required non-empty arrays
-	for (const field of ['materials', 'instructions', 'learningGoals', 'reflectionPrompts', 'safetyNotes']) {
-		if (!Array.isArray(game[field]) || game[field].length === 0) {
-			errors.push(`Missing or empty array: ${field}`);
-		}
-	}
-
-	// Content sanity: title must be a real name, not a placeholder
-	if (game.title && game.title.trim().length < 3) {
-		errors.push('Title too short (min 3 characters)');
-	}
-
-	// Content sanity: first instruction must be a real sentence
-	if (Array.isArray(game.instructions) && game.instructions.length > 0) {
-		if (String(game.instructions[0]).trim().length < 10) {
-			errors.push('First instruction is too short to be meaningful');
-		}
-	}
-
-	// Content sanity: array items must not be empty or trivially short strings
-	for (const field of ['instructions', 'learningGoals', 'reflectionPrompts']) {
-		if (Array.isArray(game[field])) {
-			const hollow = game[field].filter(item => !item || String(item).trim().length < 5);
-			if (hollow.length > 0) {
-				errors.push(`Array "${field}" contains ${hollow.length} empty or trivially short item(s)`);
-			}
-		}
-	}
-
-	return errors;
-}
+// Prompt building, validation and enforcement live in lib/game-prompt.js (Phase 4).
 
 // ─── Safety validation ───
 // Checks generated game text for content inappropriate for educational/youth contexts.
@@ -821,20 +608,7 @@ function validateSafety(game) {
 // ─── One-shot repair call for structurally invalid AI output ───
 // Uses low temperature and a minimal focused prompt — not a full regeneration.
 async function callRepairAPI(brokenOutput, errors, useModel, aiLanguage, requestOptions) {
-	const prompt = `The following game JSON has validation errors. Fix ALL errors listed below and return ONLY a corrected valid JSON object.
-
-ERRORS TO FIX:
-${errors.join('\n')}
-
-BROKEN OUTPUT:
-${String(brokenOutput).substring(0, 4000)}
-
-RULES:
-- Return ONLY the fixed JSON. No markdown, no code fences, no explanation.
-- Required string fields: id, title, pitch, mode, setting, energyLevel, facilitatorNotes
-- Required range objects (must have min and max as numbers): playerCount, ageRange, duration
-- Required non-empty arrays: materials, instructions, learningGoals, reflectionPrompts, safetyNotes
-- Write ALL text content in ${aiLanguage}`;
+	const prompt = buildRepairPrompt(brokenOutput, errors, aiLanguage);
 
 	return openai.chat.completions.create({
 		model: useModel,
@@ -845,95 +619,6 @@ RULES:
 			{ role: 'user', content: prompt }
 		]
 	}, requestOptions);
-}
-
-// ─── Didaktická navigácia (research-backed) ───
-function buildDidacticGuidance(filters) {
-	const tips = [];
-	const mode = filters?.mode || 'party';
-	const depth = filters?.depth || '';
-	const energy = filters?.energy || '';
-	const setting = filters?.setting || '';
-
-	// Brain-based & experiential learning (research-backed)
-	tips.push(`PEDAGOGICAL FOUNDATION: Use evidence-based approaches — experiential learning (Kolb), active learning (neuroscience shows it outperforms passive instruction), gamification that supports intrinsic motivation. Avoid extrinsic rewards that undermine engagement.`);
-
-	// Mode-specific didactics
-	const modeDidactics = {
-		party: 'Collaborative learning, team-building (Tuckman), playful competition, social bonding. Use ice-breaker mechanics, low stakes, high energy.',
-		classroom: 'Structured facilitation, clear learning outcomes (Bloom), scaffolding, formative assessment. Align with curriculum (RVP ZV). Use inquiry-based or problem-based learning where appropriate.',
-		reflection: 'Reflective practice (Schön), emotional safety, paired/group sharing. Depth levels: light=playful check-ins; medium=guided reflection; deep=safe-space circles, journaling.',
-		circus: 'Circus pedagogy: body awareness, risk-taking in safe context, performance as learning. Progressive skill-building, peer feedback.',
-		cooking: 'Hands-on experiential learning, sensory engagement, practical life skills. Recipe as scaffold, tasting as assessment.',
-		meditation: 'Mindfulness-based approaches (MBSR-inspired), body scan, breath awareness. No competition — contemplative, inclusive.'
-	};
-	tips.push(`MODE DIDACTIC: ${modeDidactics[mode] || modeDidactics.party}`);
-
-	if (depth === 'deep') tips.push('EMOTIONAL DEPTH: Create safe space for vulnerability. Use prompts that invite sharing without pressure. Facilitator notes should emphasize consent and opt-out.');
-	if (depth === 'light') tips.push('EMOTIONAL DEPTH: Keep tone playful, avoid heavy topics. Quick check-ins, not deep dives.');
-	if (energy === 'high') tips.push('ENERGY: Design for movement, quick transitions, physical engagement. Avoid long seated phases.');
-	if (energy === 'low') tips.push('ENERGY: Calm, seated or slow movement. Allow thinking time, no rush.');
-	if (setting === 'outdoor') tips.push('SETTING: Leverage nature — spatial awareness, sensory input, natural materials. Consider weather.');
-	if (setting === 'indoor') tips.push('SETTING: Optimize for classroom/room — clear boundaries, minimal setup, furniture as props.');
-	if (filters?.cuisine) tips.push(`CUISINE: Focus on ${filters.cuisine} — connect to nutrition, culture, or sensory learning.`);
-	if (filters?.focus) tips.push(`MEDITATION FOCUS: ${filters.focus} — use evidence-based techniques (breath work, body scan, etc.).`);
-
-	return tips.join('\n');
-}
-
-// ─── Systémový prompt ───
-function buildSystemPrompt() {
-	return `You are a CREATIVE GAME DESIGNER who speaks like a Gen Z friend — casual, relatable, fun. You design original educational games for facilitators (teachers, trainers, youth workers). You know pedagogy (Kolb, Bloom, experiential learning) but you EXPLAIN things simply, like you're talking to a mate.
-
-CRITICAL — OUTPUT LANGUAGE:
-The user message specifies the target language. You MUST write ALL JSON text fields (title, pitch, instructions, goals, reflection, safety, adaptation, facilitatorNotes, etc.) in THAT language. Never mix languages. Never default to English unless explicitly told "English".
-
-IDENTITY:
-- Game designer with solid pedagogy knowledge — but you NEVER sound like a textbook
-- You respond ONLY based on the user's PANEL INPUT — every filter above "Spawnuj hru" is your mandatory brief
-- You can use professional/technical content from knowledge base — but you INTERPRET it simply and add EXAMPLES
-
-CONTEXT — PANEL INPUT IS YOUR BRIEF:
-The user configures a left panel with: MÓD (mode), VĚK (age), SQUAD (players), TIMER (duration), MAPA (setting), ENERGY, mode-specific filters (activity/depth/cuisine/focus), RVP filters (classroom), POPIS (custom description). EVERY value from that panel is your INPUT. You MUST use ALL of them. Do NOT invent values the user did not choose. Do NOT forget or ignore any panel input.
-
-VOICE & STYLE — GEN Z, NOT ACADEMIC:
-- Write like a chill friend explaining a game — NOT like a professor or academic paper
-- Use casual, relatable language. Gaming slang where it fits: "spawn", "quest", "level up", "grind", "vibe", "lowkey", "no cap", "fr"
-- CZ/SK: "v pohodě", "lit", "based", "to je vibe", "žádný cap", "lowkey", "prostě"
-- AVOID: stiff phrases, formal jargon, long academic sentences, "pedagogically sound", "facilitate", "scaffolding" — say it simply!
-- ALWAYS include CONCRETE EXAMPLES in instructions (e.g. "např. Honza hází míč Zuzce a říká její jméno")
-- Learning goals: keep them clear but phrase them like "co si odnesou" — not like curriculum bullet points
-- Reflection prompts: ask like a friend would — "Co ti šlo nejlíp? Co bys příště udělal jinak?"
-- facilitatorNotes: tips for the leader, written like a buddy giving advice — "Prostě nech je to baví, netlač na výkon"
-
-RULES:
-- Generate ONE UNIQUE, ORIGINAL game — do not recreate well-known games.
-- The game must be practical, immediately playable, and described in detail.
-- Instructions: clear, step-by-step, with CONCRETE EXAMPLES (e.g. "První hráč hodí míč a řekne jméno — např. 'Petra!' — chytající odpoví 'Díky, Honzo!' a hodí dál").
-- Materials must be commonly available (paper, ball, markers...).
-- Always include reflection prompts (casual, friend-like) and safety notes (simple, no jargon).
-- If mode is "classroom", include full RVP ZV mapping (competences, areas, cross-topics).
-- If mode is "cooking", the game MUST be a cooking/recipe activity.
-- If mode is "meditation", the game MUST be a mindfulness/wellness exercise.
-- Respond ONLY with a valid JSON object — no markdown, no comments.
-- Language is specified in the user message — write ALL output in that language.
-- ALWAYS include "verificationChallenge" with "description" (what players should photograph as proof they did the activity — be specific: finished result, group pose, materials used, etc.) and "hint" (short tip for a good photo).
-
-CRITICAL — PANEL INPUT COMPLIANCE:
-The user specifies MANDATORY constraints below. You MUST satisfy ALL of them. Before outputting JSON, verify:
-✓ playerCount.min and playerCount.max fall within the specified player range
-✓ duration.min and duration.max fall within the specified time range
-✓ setting matches the specified environment (indoor/outdoor)
-✓ mode matches the specified mode
-✓ The game's THEME and AESTHETIC match the mode (circus=circus theme, cooking=food theme, etc.)
-✓ If activity is "solo", playerCount MUST be {min:1, max:1}
-✓ If facilitator wrote a POPIS (description), you MUST weave it into the game design
-If ANY constraint fails, regenerate before responding.
-
-RESPONSE FORMAT — exactly this JSON shape:
-${COMPACT_GAME_SCHEMA}
-
-IMPORTANT: Generate "id" as "ai-" + random 6-character code. All fields are required.`;
 }
 
 // Computed once at startup — identical string every call → OpenAI prompt cache activates.
@@ -1080,8 +765,6 @@ app.post('/api/generate-game', async (req, res, next) => {
 	}
 
 	const f = filters;
-	const filterDescription = buildFilterDescription(f);
-	const didacticGuidance = buildDidacticGuidance(f);
 	// Output language: honour lang / language code from the request, default sk.
 	const { code: langCode, name: aiLanguage } = resolveOutputLanguage(f);
 
@@ -1125,87 +808,11 @@ NEPREHÁŇAJ personalizáciu — jemne uprednostni aktivity ladené s najvyšš�
 		}
 	} catch (e) { /* non-critical — generate without personalization */ }
 
-	// Panel summary — uses English labels to avoid confusing the AI about the output language
-	const modeLabels = { party: 'Party/teambuilding', classroom: 'Classroom/education', reflection: 'Reflection', circus: 'Circus', cooking: 'Cooking', meditation: 'Meditation' };
-	const playerLabels = { solo: '1 player', small: '2–5 players', medium: '6–15 players', large: '16–30 players' };
-	const durationLabels = { quick: '5–15 min', medium: '15–30 min', long: '30–60 min' };
-	const settingLabels = { any: 'anywhere', indoor: 'indoor', outdoor: 'outdoor' };
-	const energyLabels = { low: 'low', medium: 'medium', high: 'high' };
-	const activityLabels = { solo: 'solo', pair: 'pairs', group: 'small group', mass: 'mass' };
-	const depthLabels = { light: 'light', medium: 'medium', deep: 'deep' };
-	const cuisineLabels = { sweet: 'sweet', savory: 'savory', healthy: 'healthy', international: 'international' };
-	const focusLabels = { breath: 'breath', body: 'body', visualization: 'visualization', movement: 'movement/yoga' };
-
-	const panelSummary = [
-		`═══ LEFT PANEL INPUT (use ALL of these — they are your mandatory brief) ═══`,
-		``,
-		`MODE: ${modeLabels[f.mode] || f.mode || 'party'} — game MUST match this style`,
-		`AGE: ${f.ageMin || '?'}–${f.ageMax || '?'} years`,
-		`PLAYERS: ${playerLabels[f.players] || f.players || 'any'}`,
-		`DURATION: ${durationLabels[f.duration] || f.duration || 'any'}`,
-		`SETTING: ${settingLabels[f.setting] || f.setting || 'any'}`,
-		`ENERGY: ${energyLabels[f.energy] || f.energy || 'any'}`,
-		f.activity ? `ACTIVITY TYPE (circus): ${activityLabels[f.activity] || f.activity}` : null,
-		f.depth ? `EMOTIONAL DEPTH (reflection): ${depthLabels[f.depth] || f.depth}` : null,
-		f.cuisine ? `CUISINE TYPE (cooking): ${cuisineLabels[f.cuisine] || f.cuisine}` : null,
-		f.focus ? `FOCUS (meditation): ${focusLabels[f.focus] || f.focus}` : null,
-		f.stupen ? `RVP LEVEL: ${f.stupen === 'prvni' ? '1st grade (6–11)' : '2nd grade (11–15)'}` : null,
-		f.kompetence ? `RVP COMPETENCE: ${f.kompetence}` : null,
-		f.oblast ? `RVP AREA: ${f.oblast}` : null,
-		f.description ? `USER DESCRIPTION (MUST incorporate): "${f.description}"` : null
-	].filter(Boolean).join('\n');
-
-	const exactValues = buildExactValuesBlock(f);
-	const langInstructions = {
-		sk: 'ÚLOHA: Vygeneruj jednu originálnu hru/aktivitu.\nPOUŽI VŠETKY vstupy z panelu vyššie — každý filter je tvoj brief.\nŠTÝL: Piš Gen Z — jednoducho, uvolnene, s príkladmi. Žiadny akademický žargón.\nPRÍKLADY: V inštrukciách, reflexných otázkach a poznámkach vždy uveď konkrétne príklady (napr. "Honza hádže loptu Zuzke a povie jej meno").\nPred odpoveďou skontroluj, či si splnil VŠETKY obmedzenia.\nOdpovedz JEDNÝM JSON objektom.',
-		cs: 'ÚKOL: Vygeneruj jednu originální hru/aktivitu.\nPOUŽIJ VŠECHNY vstupy z panelu výše — každý filtr je tvůj brief.\nSTYL: Piš Gen Z — jednoduše, uvolněně, s příklady. Žádný akademický žargon.\nPŘÍKLADY: V instrukcích, reflexních otázkách a poznámkách vždy uveď konkrétní příklady (např. "Honza hází míč Zuzce a říká její jméno").\nPřed odpovědí zkontroluj, zda jsi splnil VŠECHNA omezení.\nOdpověz JEDNÍM JSON objektem.',
-		en: 'TASK: Generate one original game/activity.\nUSE ALL inputs from the panel above — every filter is your brief.\nSTYLE: Write Gen Z — simple, relaxed, with examples. No academic jargon.\nEXAMPLES: In instructions, reflection prompts, and notes always include concrete examples (e.g. "John throws the ball to Sarah and says her name").\nBefore responding, verify you met ALL constraints.\nRespond with ONE JSON object.',
-		de: 'AUFGABE: Generiere ein originelles Spiel/Aktivität.\nVERWENDE ALLE Eingaben aus dem Panel oben — jeder Filter ist dein Brief.\nSTIL: Schreibe Gen Z — einfach, locker, mit Beispielen. Kein akademischer Jargon.\nBEISPIELE: In Anweisungen, Reflexionsfragen und Notizen immer konkrete Beispiele angeben (z.B. "Hans wirft den Ball zu Petra und sagt ihren Namen").\nVor der Antwort prüfe, ob du ALLE Einschränkungen erfüllt hast.\nAntworte mit EINEM JSON-Objekt.',
-		tr: 'GÖREV: Orijinal bir oyun/etkinlik oluştur.\nYukarıdaki paneldeki TÜM girdileri KULLAN — her filtre senin brifindir.\nSTİL: Gen Z tarzında yaz — basit, rahat, örneklerle. Akademik jargon yok.\nÖRNEKLER: Talimatlarda, yansıtma sorularında ve notlarda her zaman somut örnekler ver (ör. "Ali topu Ayşe\'ye atar ve onun adını söyler").\nYanıtlamadan önce TÜM kısıtlamalara uyduğunu kontrol et.\nTEK bir JSON nesnesiyle yanıt ver.',
-		es: 'TAREA: Genera un juego/actividad original.\nUSA TODAS las entradas del panel de arriba — cada filtro es tu brief.\nESTILO: Escribe Gen Z — simple, relajado, con ejemplos. Sin jerga académica.\nEJEMPLOS: En instrucciones, preguntas de reflexión y notas siempre incluye ejemplos concretos (ej. "Juan lanza la pelota a María y dice su nombre").\nAntes de responder, verifica que cumpliste TODAS las restricciones.\nResponde con UN objeto JSON.',
-	};
-	const taskBlock = langInstructions[langCode] || langInstructions.sk;
-
-	const userContent = `🌐 LANGUAGE: ${aiLanguage}. Write EVERY text field in ${aiLanguage}. Do NOT use English unless the language IS English.
-══════════════════════════════════════
-${panelSummary}
-${exactValues}
-══════════════════════════════════════
-MANDATORY CONSTRAINTS (do NOT forget):
-══════════════════════════════════════
-
-${filterDescription}
-
-══════════════════════════════════════
-DIDACTIC GUIDANCE (research-backed):
-══════════════════════════════════════
-
-${didacticGuidance}
-${rpgProfileBlock}
-──────────────────────────────────────
-${taskBlock}
-──────────────────────────────────────
-🌐 REMINDER: ALL output text MUST be in ${aiLanguage}. Title, pitch, instructions, goals, reflection — everything in ${aiLanguage}.${knowledgeSummary ? `
-──────────────────────────────────────
-═══ SOURCE OF KNOWLEDGE ═══
-The following reference material was uploaded by the facilitator. Use it to ENRICH and CUSTOMIZE the generated game.
-- You MAY use professional/technical content from these files — themes, facts, scenarios
-- BUT: INTERPRET everything SIMPLY. Explain like you're telling a friend, not citing a textbook
-- Add CONCRETE EXAMPLES based on the content
-- Always respect the MANDATORY CONSTRAINTS above.
-- WRITE THE OUTPUT IN ${aiLanguage}.
-
-${knowledgeSummary}
-═══ END SOURCE OF KNOWLEDGE ═══` : ''}${remix ? `
-──────────────────────────────────────
-REMIX — Create a VARIATION (don't plagiarize, just get inspired):
-Original game: "${remix.title}"
-Original mode: ${remix.mode || 'not specified'}
-Original competences: ${remix.kompetence.join(', ') || 'not specified'}
-Original learning goals: ${remix.learningGoals.join(' | ') || 'not specified'}
-Keep mode, learning goals and competences. Change mechanics, materials, title, and procedure SIGNIFICANTLY.
-Write the remix in ${aiLanguage}.
-──────────────────────────────────────` : ''}`;
+	// Methodology pick: 1-2 catalogue entries per mode/duration/age (random tie-break for variety).
+	const methodologyPicks = selectMethodologies(f, { rng: Math.random });
+	const userContent = buildUserPrompt({
+		filters: f, aiLanguage, langCode, picks: methodologyPicks, rpgProfileBlock, knowledgeSummary, remix
+	});
 
 	const FALLBACK_MODEL = 'gpt-4o-mini';
 	// Repair always uses the cheaper mini model — fast, low-cost, sufficient for structural fixes.
@@ -1278,6 +885,10 @@ Write the remix in ${aiLanguage}.
 			}
 		}
 
+		// Token usage incl. prompt-cache hits (static system prompt prefix).
+		const usageLine = formatUsageLog(response.usage);
+		if (usageLine) console.log(`[API] usage ${usageLine} (model: ${usedModel})`);
+
 		const content = response.choices[0]?.message?.content;
 		if (!content) {
 			throw new Error('Prázdna odpoveď z OpenAI');
@@ -1295,6 +906,11 @@ Write the remix in ${aiLanguage}.
 			game = JSON.parse(extractJSON(repairContent)); // throws SyntaxError if still broken
 		}
 
+		// Cheap server-side fixes first (preset ranges, stupeň, methodology) so
+		// they never cost a repair call.
+		applyMethodologyFallback(game, methodologyPicks);
+		enforceConstraints(game, f);
+
 		// ── Step 3: Validate schema — if invalid, try one repair call ──
 		let validationErrors = validateGame(game);
 		if (validationErrors.length > 0) {
@@ -1302,6 +918,8 @@ Write the remix in ${aiLanguage}.
 			const repairResp = await callRepairAPI(gameJSON, validationErrors, REPAIR_MODEL, aiLanguage, genRequestOptions());
 			const repairContent = repairResp.choices[0]?.message?.content || '';
 			const repairedGame = JSON.parse(extractJSON(repairContent));
+			applyMethodologyFallback(repairedGame, methodologyPicks);
+			enforceConstraints(repairedGame, f);
 			validationErrors = validateGame(repairedGame);
 			if (validationErrors.length > 0) {
 				console.error('[API] Repair zlyhala — vraciam VALIDATION_ERROR.', validationErrors);
