@@ -341,7 +341,7 @@ class FakeDb {
 			if (t) t.reflection_id = params[0];
 			return ok([], t ? 1 : 0);
 		}
-		if (sql.startsWith('INSERT INTO public.user_stat_xp (user_id, stat, xp) SELECT $1, s.stat, s.xp FROM unnest($2::text[], $3::int[]) AS s(stat, xp) ON CONFLICT (user_id, stat) DO UPDATE')) {
+		if (sql.startsWith('INSERT INTO public.user_stat_xp (user_id, stat, xp) SELECT $1::uuid, s.stat, s.xp FROM unnest($2::text[], $3::int[]) AS s(stat, xp) ON CONFLICT (user_id, stat) DO UPDATE')) {
 			const allowed = ['insight', 'focus', 'creativity', 'resilience', 'communication', 'strategy', 'motorika', 'vyziva', 'digitalna'];
 			const mine = (statXp[params[0]] = statXp[params[0]] || {});
 			params[1].forEach((stat, i) => {
