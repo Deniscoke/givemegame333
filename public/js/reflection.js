@@ -18,6 +18,17 @@ const Reflection = (() => {
 	// Resolve translation at call-time so language changes are respected
 	const _t = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
 
+	// M15: challenge text and question labels can come from the game JSON
+	// (AI, library, shared session) — escape before innerHTML.
+	function _esc(value) {
+		return String(value ?? '')
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+	}
+
 	// Question labels per competency key — resolved via _t() at open() time
 	function _kompQuestions() {
 		return {
@@ -34,7 +45,10 @@ const Reflection = (() => {
 	function buildQuestions(game) {
 		const kompQuestions = _kompQuestions();
 		const questions = [];
-		const komps = (game?.rvp?.kompetence || []).slice(0, 3);
+		// Keys become data-id attributes and querySelector values: keep them plain.
+		const komps = (Array.isArray(game?.rvp?.kompetence) ? game.rvp.kompetence : [])
+			.filter(k => typeof k === 'string' && /^[a-z0-9_-]{1,40}$/i.test(k))
+			.slice(0, 3);
 		komps.forEach(key => {
 			questions.push({
 				id: key,
@@ -95,8 +109,8 @@ const Reflection = (() => {
 					<div class="reflection-photo-icon">📸</div>
 					<div class="reflection-photo-text">
 						<strong>${_t('refl_photo_title', 'Foto dôkaz (bonus XP + gIVEMECOIN)')}</strong>
-						<p>${vc.description}</p>
-						${vc.hint ? `<small class="reflection-photo-hint">💡 ${vc.hint}</small>` : ''}
+						<p>${_esc(vc.description)}</p>
+						${vc.hint ? `<small class="reflection-photo-hint">💡 ${_esc(vc.hint)}</small>` : ''}
 						<p class="reflection-photo-bonus">${bonusLine}</p>
 					</div>
 				</div>
@@ -118,7 +132,7 @@ const Reflection = (() => {
 
 			if (q.type === 'rating') {
 				div.innerHTML = `
-					<label class="reflection-label">${q.label}</label>
+					<label class="reflection-label">${_esc(q.label)}</label>
 					<div class="reflection-rating" data-id="${q.id}">
 						${[1,2,3,4,5].map(n =>
 							`<button type="button" class="rating-btn" data-val="${n}">${n}</button>`
@@ -133,7 +147,7 @@ const Reflection = (() => {
 				});
 			} else {
 				div.innerHTML = `
-					<label class="reflection-label">${q.label}</label>
+					<label class="reflection-label">${_esc(q.label)}</label>
 					<textarea data-id="${q.id}" rows="2" maxlength="300"
 						placeholder="${_t('refl_placeholder', 'Napíš pár viet...')}"></textarea>`;
 				if (q.id === 'darilo') {

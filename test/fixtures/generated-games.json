@@ -1,0 +1,54 @@
+{
+  "valid": [
+    {
+      "id": "ai-sp4r01",
+      "title": "Zrkadlový duel",
+      "pitch": "Jeden robí pohyb, druhý ho zrkadlí — kto prvý zaváha, mení rolu.",
+      "methodology": "Energizer + Cooperative games",
+      "playerCount": { "min": 2, "max": 2 },
+      "ageRange": { "min": 15, "max": 19 },
+      "duration": { "min": 5, "max": 10 },
+      "setting": "any",
+      "mode": "classroom",
+      "energyLevel": "medium",
+      "materials": ["žiadne"],
+      "instructions": [
+        "Postavte sa oproti sebe, napr. Ema a Tomáš na krok od seba.",
+        "Ema robí pomalé pohyby, Tomáš ich zrkadlí ako v zrkadle.",
+        "Po 30 sekundách si vymeňte roly."
+      ],
+      "playerBrief": { "goal": "Zrkadli presne", "rules": ["Pomaly", "Bez dotyku"], "roles": ["vodca", "zrkadlo"], "winCondition": "Dvojica vydrží 2 minúty bez chyby" },
+      "lessonFlow": [{ "phase": "Hra", "minutes": 8, "teacherActions": ["Meria čas"], "studentActions": ["Zrkadlia"] }],
+      "learningGoals": ["Hráči trénujú pozornosť a neverbálnu komunikáciu."],
+      "reflectionPrompts": ["Kedy sa vám darilo najviac?", "Čo vám pomohlo udržať synchron?"],
+      "safetyNotes": ["Dostatok miesta okolo dvojíc."],
+      "adaptationTips": ["Sediaca verzia: zrkadlite len ruky."],
+      "facilitatorNotes": "Začni ukážkou s jedným žiakom, nech vidia tempo.",
+      "verificationChallenge": { "description": "Fotka dvojice v zrkadlovej póze", "hint": "Celé postavy v zábere" },
+      "rvp": { "kompetence": ["komunikativni", "socialni-personalni"], "oblasti": ["clovek-zdravi"], "stupen": "stredni", "prurezova_temata": [], "ocekavane_vystupy": [], "doporucene_hodnoceni": "Sebahodnotenie" }
+    },
+    {
+      "id": "ai-onl001",
+      "title": "Modrá výprava",
+      "pitch": "Kto prvý ukáže do kamery niečo modré z domu, získa bod pre celý tím.",
+      "methodology": "Energizer",
+      "playerCount": { "min": 3, "max": 6 },
+      "ageRange": { "min": 8, "max": 11 },
+      "duration": { "min": 5, "max": 10 },
+      "setting": "indoor",
+      "mode": "online",
+      "energyLevel": "high",
+      "materials": ["predmety z domu"],
+      "instructions": [
+        "Vedúci povie farbu, napr. modrá, a odpočíta do troch.",
+        "Každý donesie predmet tej farby a ukáže ho do kamery.",
+        "Tím zbiera body spoločne, kým všetci neukážu predmet."
+      ],
+      "learningGoals": ["Deti si precvičia farby a rýchle rozhodovanie."],
+      "reflectionPrompts": ["Čo ste našli najrýchlejšie?", "Ktorý predmet vás prekvapil?"],
+      "safetyNotes": ["Nebehajte po schodoch."],
+      "facilitatorNotes": "Nechaj deťom čas, nie každý má veľa vecí poruke.",
+      "rvp": { "kompetence": ["komunikativni"], "oblasti": ["jazyk"], "stupen": ["prvni"] }
+    }
+  ]
+}

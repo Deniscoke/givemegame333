@@ -758,6 +758,55 @@ function toggleCoinPopup(btn) {
     popup.classList.toggle('show');
 }
 
+function givemeT(key, fallback) {
+    try {
+        const t = (window.parent !== window && window.parent.givemegame_t) || window.givemegame_t;
+        if (typeof t === 'function') return t(key, fallback);
+    } catch (e) { /* cross-origin */ }
+    return fallback;
+}
+
+/** @returns {Promise<{ok: boolean, code?: string, balance?: number}>} */
+async function donateOnServer(postId, amount) {
+    try {
+        const { data: { session } } = await Promise.race([
+            socialSupabase.auth.getSession(),
+            new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+        ]);
+        const token = session?.access_token;
+        if (!token) return { ok: false, code: 'NO_SESSION' };
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        try {
+            const res = await fetch('/api/giveme/donate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ post_id: postId, amount }),
+                signal: controller.signal
+            });
+            let data = {};
+            try { data = await res.json(); } catch (e) { /* empty body */ }
+            const balance = parseInt(data?.balance, 10);
+            return { ok: res.ok, code: data?.code, balance: Number.isFinite(balance) ? balance : undefined };
+        } finally { clearTimeout(timer); }
+    } catch (e) {
+        console.warn('[gIVEME] donate:', e);
+        return { ok: false, code: 'NETWORK' };
+    }
+}
+
+/** Adopt the balance the server reports (also in the parent app's wallet). */
+function applyServerCoinBalance(balance) {
+    if (!Number.isFinite(balance)) return;
+    totalCoins = balance;
+    try {
+        if (window.parent !== window && window.parent.App?.Coins?.syncServerBalance) {
+            window.parent.App.Coins.syncServerBalance(balance);
+        }
+    } catch (e) { /* cross-origin */ }
+    updateCoinDisplay();
+}
+
 async function sendCoins(event, postId, recipientId, amount) {
     event.stopPropagation();
     amount = parseInt(amount) || 0;
@@ -769,50 +818,18 @@ async function sendCoins(event, postId, recipientId, amount) {
         return;
     }
 
-    // Check balance BEFORE deducting
-    let hasViaParent = false;
-    try {
-        if (window.parent !== window && window.parent.App?.Coins?.getBalance) {
-            hasViaParent = window.parent.App.Coins.getBalance() >= amount;
-        }
-    } catch (e) {}
-    if (!hasViaParent && totalCoins < amount) {
-        alert('Nemáš dostatok coinov!');
+    // Server debits the donor, records the donation and credits the author in
+    // one transaction (POST /api/giveme/donate). The browser only shows the
+    // balance the server returns; it can no longer insert donations itself.
+    const result = await donateOnServer(postId, amount);
+    if (!result.ok) {
+        if (result.code === 'INSUFFICIENT_COINS') alert('Nemáš dostatok coinov!');
+        else if (result.code === 'DONATION_DAILY_CAP') alert(givemeT('giveme_donate_daily_cap', 'Dnešný limit darovania coinov je vyčerpaný. Skús to zajtra.'));
+        else alert('Nepodarilo sa odoslať coiny. Skús znova.');
+        if (Number.isFinite(result.balance)) applyServerCoinBalance(result.balance);
         return;
     }
-
-    // Persist to Supabase FIRST — deduct only on success
-    if (me && socialSupabase && recipientId) {
-        try {
-            await Promise.race([
-                socialSupabase.from('giveme_coin_donations').insert({
-                    post_id: postId,
-                    donor_id: me.uid,
-                    recipient_id: recipientId,
-                    amount
-                }),
-                new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
-            ]);
-        } catch (e) {
-            console.warn('[gIVEME] sendCoins insert:', e);
-            alert('Nepodarilo sa odoslať coiny. Skús znova.');
-            return;
-        }
-    }
-
-    // Deduct only after confirmed insert
-    let deducted = false;
-    try {
-        if (window.parent !== window && window.parent.App?.Coins?.spendAmount) {
-            deducted = window.parent.App.Coins.spendAmount(amount);
-            if (deducted) totalCoins = window.parent.App.Coins.getBalance();
-        }
-    } catch (e) {}
-    if (!deducted) {
-        totalCoins -= amount;
-        try { localStorage.setItem(COINS_STORAGE_KEY, String(totalCoins)); } catch (e) {}
-    }
-    updateCoinDisplay();
+    applyServerCoinBalance(result.balance);
 
     const safeId = String(postId).replace(/-/g, '');
     const received = document.getElementById('coins-received-' + safeId);

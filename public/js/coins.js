@@ -9,10 +9,19 @@
    Exposes: window.Coins  (also bridged inside App as `const Coins = window.Coins`)
    ═══════════════════════════════════════════════════════════════════ */
 
-// ─── Coin systém — gIVEMECOIN (localStorage = hlavný zdroj, Supabase = sync pre prihlásených) ───
+// ─── Coin systém — gIVEMECOIN ───
+// Prihlásený používateľ: zostatok vlastní server (profiles.coins). Prehliadač
+// ho len číta a hlási udalosti na /api/coins/log, /api/coins/award-mode-click
+// a /api/shop/purchase; server pripisuje a odpočítava (denné limity, žiadne
+// prečerpanie). Prehliadač profiles.coins nikdy nezapisuje (migrácia 036).
+// Hosť: lokálna „cvičná peňaženka“ v localStorage, nikdy sa nesynchronizuje
+// a pri registrácii sa nespája so serverom (server dá jednorazový štartovací grant).
 const Coins = (() => {
 	const STORAGE_KEY = 'givemegame_coins';
 	let balance = 0;
+	let serverWallet = false;
+
+	const _t = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
 
 	const rewards = {
 		timer: 500,
@@ -32,83 +41,144 @@ const Coins = (() => {
 	// Starter coins — enough for several generations without earning first
 	const STARTER_COINS = 500;
 
-	async function load() {
-		// 1. VŽDY načítaj z localStorage (pretrvá pri refreshi)
-		let fromStorage = Math.max(0, parseInt(localStorage.getItem(STORAGE_KEY)) || 0);
-		// Starter coiny pre nových používateľov (aby mohli generovať prvé hry)
-		if (fromStorage === 0 && !localStorage.getItem(STORAGE_KEY + '_init')) {
-			fromStorage = STARTER_COINS;
-			localStorage.setItem(STORAGE_KEY, String(STARTER_COINS));
-			localStorage.setItem(STORAGE_KEY + '_init', '1');
-		}
-
+	function _isSignedIn() {
 		const user = getCurrentUser();
-		if (user && user.uid !== 'guest' && supabaseClient && supabaseProfilesOk) {
-			try {
-				const { data, error } = await supabaseClient.from('profiles').select('coins').eq('id', user.uid).single();
-				if (error) { balance = fromStorage; }
-				else {
-					const fromSupabase = Math.max(0, parseInt(data?.coins) || 0);
-					balance = Math.max(fromSupabase, fromStorage);
-					if (balance > fromSupabase) save();
-				}
-			} catch (e) {
-				balance = fromStorage;
+		return !!(user && user.uid !== 'guest' && supabaseClient);
+	}
+
+	/** Hosťova cvičná peňaženka — len localStorage, nikdy sa neposiela na server. */
+	function _loadGuestWallet() {
+		let stored = 0;
+		try {
+			stored = Math.max(0, parseInt(localStorage.getItem(STORAGE_KEY)) || 0);
+			// Starter coiny pre nových hostí (aby mohli generovať prvé hry)
+			if (stored === 0 && !localStorage.getItem(STORAGE_KEY + '_init')) {
+				stored = STARTER_COINS;
+				localStorage.setItem(STORAGE_KEY, String(STARTER_COINS));
+				localStorage.setItem(STORAGE_KEY + '_init', '1');
 			}
-		} else {
-			balance = fromStorage;
+		} catch (e) {}
+		return stored;
+	}
+
+	async function _apiJson(url, token, { method = 'GET', body } = {}) {
+		const controller = new AbortController();
+		const timer = setTimeout(() => controller.abort(), 10000);
+		try {
+			const res = await fetch(url, {
+				method,
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: body === undefined ? undefined : JSON.stringify(body),
+				signal: controller.signal
+			});
+			let data = {};
+			try { data = await res.json(); } catch (e) {}
+			return { ok: res.ok, status: res.status, data };
+		} finally { clearTimeout(timer); }
+	}
+
+	/** Prevezme zostatok zo servera, ak ho odpoveď obsahuje. */
+	function _applyServerBalance(data) {
+		const b = parseInt(data?.balance ?? data?.new_balance, 10);
+		if (Number.isFinite(b) && b >= 0) {
+			balance = b;
+			updateDisplay();
+			_updateShopBalance();
 		}
-		// DÔLEŽITÉ: Vždy ulož balance do localStorage ako zálohu — inak pri ďalšom načítaní
-		// (ak Supabase zlyhá alebo session nie je ešte pripravená) by sa coiny stratili
-		try { localStorage.setItem(STORAGE_KEY, String(balance)); } catch (e) {}
+	}
+
+	async function _readServerBalance(token) {
+		try {
+			const r = await _apiJson('/api/coins/balance', token);
+			if (r.ok && Number.isFinite(parseInt(r.data?.balance, 10))) return parseInt(r.data.balance, 10);
+		} catch (e) {}
+		// Záloha: priame čítanie (SELECT coins je povolený, zápis nie).
+		try {
+			const user = getCurrentUser();
+			const { data, error } = await supabaseClient.from('profiles').select('coins').eq('id', user.uid).single();
+			if (!error) return Math.max(0, parseInt(data?.coins) || 0);
+		} catch (e) {}
+		return null;
+	}
+
+	async function load() {
+		if (_isSignedIn()) {
+			serverWallet = true;
+			const token = await _getAuthToken();
+			if (token) {
+				const fromServer = await _readServerBalance(token);
+				if (fromServer != null) {
+					balance = fromServer;
+					// Úplne nový účet: jednorazový štartovací grant zo servera (bez spájania s hosťovou peňaženkou).
+					if (balance === 0) {
+						try {
+							const g = await _apiJson('/api/coins/starter-grant', token, { method: 'POST' });
+							if (g.ok) _applyServerBalance(g.data);
+						} catch (e) {}
+					}
+				}
+			}
+			updateDisplay();
+			return;
+		}
+		serverWallet = false;
+		balance = _loadGuestWallet();
 		updateDisplay();
 	}
 
 	function save() {
-		// 1. VŽDY ulož do localStorage (okamžite — pretrvá pri refreshi)
+		// Ukladá sa len hosťova cvičná peňaženka; zostatok prihláseného vlastní server.
+		if (serverWallet) return;
 		try { localStorage.setItem(STORAGE_KEY, String(balance)); } catch (e) {}
-
-		const user = getCurrentUser();
-		if (user && user.uid !== 'guest' && supabaseClient && supabaseProfilesOk) {
-			supabaseClient.from('profiles').upsert({
-				id: user.uid,
-				coins: balance,
-				display_name: user.name || null,
-				avatar_url: user.photo || null,
-				updated_at: new Date().toISOString()
-			}, { onConflict: 'id' }).then(({ error }) => {
-				if (error) console.warn('[Coins] save error:', error.message);
-			}).catch(() => {});
-		}
 	}
 
+	/**
+	 * Nahlási udalosť serveru (prihlásený používateľ). Server ju pripíše alebo
+	 * odpočíta a vráti skutočný zostatok, ktorý sa prevezme.
+	 * @returns {Promise<{ok:boolean, status:number, data:object}|null>}
+	 */
 	async function logTransaction(amount, action) {
-		if (!supabaseClient) return;
+		if (!serverWallet) return null;
 		try {
-			const { data: { session } } = await Promise.race([
-				supabaseClient.auth.getSession(),
-				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
-			]);
-			if (!session?.access_token) return;
-			fetch('/api/coins/log', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-				body: JSON.stringify({ amount, action })
-			}).catch(() => {});
-		} catch {}
+			const token = await _getAuthToken();
+			if (!token) return null;
+			const r = await _apiJson('/api/coins/log', token, { method: 'POST', body: { amount, action } });
+			_applyServerBalance(r.data);
+			// 429: nič sa nepripísalo; capped: udalosť sa započítala (napr. Robot Challenge XP), coiny už nie.
+			if (amount > 0 && ((r.status === 429 && r.data?.code === 'COIN_DAILY_CAP') || (r.ok && r.data?.capped))) {
+				GameUI.toast(`🪙 ${_t('coins_daily_cap', 'Denný limit coinov z tejto aktivity je vyčerpaný. Skús to zajtra.')}`);
+			}
+			return r;
+		} catch (e) { return null; }
+	}
+
+	/** H9: mode-click coiny len cez serverovú trasu s denným limitom. */
+	async function _awardModeClickOnServer() {
+		try {
+			const token = await _getAuthToken();
+			if (!token) return;
+			const r = await _apiJson('/api/coins/award-mode-click', token, { method: 'POST' });
+			_applyServerBalance(r.data);
+		} catch (e) {}
 	}
 
 	function award(source) {
 		let amount = rewards[source] || 1;
-		const dc = getActivePowerup('double_coins');
-		if (dc) {
-			amount *= dc.value;
-			consumePowerup('double_coins');
+		if (serverWallet && source === 'mode_click') {
+			// Bez double_coins: server pripíše presne 1 coin a stráži denný limit.
+			_awardModeClickOnServer();
+		} else {
+			const dc = getActivePowerup('double_coins');
+			if (dc) {
+				amount *= dc.value;
+				consumePowerup('double_coins');
+			}
+			// Okamžitá odozva; pri prihlásení server zostatok potvrdí alebo opraví.
+			balance += amount;
+			save();
+			updateDisplay();
+			logTransaction(amount, source);
 		}
-		balance += amount;
-		save();
-		updateDisplay();
-		logTransaction(amount, source);
 
 		// Pop animation
 		const display = document.getElementById('coin-display');
@@ -233,7 +303,14 @@ const Coins = (() => {
 
 	function getBalance() { return balance; }
 
+	/**
+	 * Lokálne odpočítanie — len hosťova cvičná peňaženka. Prihlásený používateľ
+	 * daruje cez POST /api/giveme/donate (server odpočíta a vráti zostatok,
+	 * ten sa prevezme cez syncServerBalance); lokálne zníženie čísla by inak
+	 * po obnovení stránky zmizlo a dar by bol zadarmo.
+	 */
 	function spendAmount(amount) {
+		if (serverWallet) return false;
 		const amt = parseInt(amount) || 0;
 		if (amt <= 0 || balance < amt) return false;
 		balance -= amt;
@@ -259,6 +336,14 @@ const Coins = (() => {
 		shop_xp_potion_500: '🧪 XP Potion',
 		solo_complete_boosted: '⚡ Solo (boosted)',
 		photo_verify_bonus: '📸 Foto výzva (overené)',
+	};
+
+	/** Server-side ledger actions with translated labels: action → [i18n key, Slovak fallback]. */
+	const I18N_ACTION_LABELS = {
+		starter_grant: ['coins_tx_starter_grant', '🎁 Štartovací bonus'],
+		giveme_donation_sent: ['coins_tx_donation_sent', '🎁 Darované coiny (gIVEME)'],
+		donation_received: ['coins_tx_donation_received', '🎁 Prijatý dar (gIVEME)'],
+		balance_reconcile: ['coins_tx_balance_reconcile', '🧾 Obnovený zostatok'],
 	};
 
 	function formatRelativeTime(isoString) {
@@ -331,8 +416,9 @@ const Coins = (() => {
 			return;
 		}
 
-		// Instant-use items that need server call (XP potion)
-		if (item.type === 'instant_xp') {
+		// Items sold by the server: XP potion and the XP boost (solo completion
+		// only applies a multiplier the server sold — see /api/shop/purchase).
+		if (item.type === 'instant_xp' || item.type === 'xp_boost') {
 			const token = await _getAuthToken();
 			if (!token) { GameUI.toast('⚠️ Prihlás sa pre nákup'); return; }
 			try {
@@ -346,6 +432,13 @@ const Coins = (() => {
 				balance = data.new_balance ?? (balance - item.cost);
 				save(); updateDisplay();
 				_updateShopBalance();
+				if (item.type === 'xp_boost') {
+					_addPowerup(item);
+					playCoinSound();
+					GameUI.toast(`${item.icon} ${item.name} kúpený!`);
+					_renderShop();
+					return;
+				}
 				GameUI.toast(`${item.icon} ${item.name} aktivovaný! +${item.value} XP`);
 				if (window.RpgTalents?.load) {
 					const td = await RpgTalents.load();
@@ -359,11 +452,21 @@ const Coins = (() => {
 			} catch (e) { GameUI.toast(`❌ ${e.message}`); return; }
 		}
 
+		// Signed in: the server debits first; the item is granted only if it did.
+		if (serverWallet) {
+			const r = await logTransaction(-item.cost, `shop_${itemId}`);
+			if (!r || !r.ok) {
+				GameUI.toast(`❌ ${r?.data?.error || 'Nákup zlyhal'}`);
+				return;
+			}
+		} else {
+			balance -= item.cost;
+			save();
+		}
+		updateDisplay();
+
 		// Timer extend — instant effect, no stored powerup
 		if (item.type === 'timer_extend') {
-			balance -= item.cost;
-			save(); updateDisplay();
-			logTransaction(-item.cost, `shop_${itemId}`);
 			if (window.Timer?.addTime) Timer.addTime(item.value);
 			else GameUI.toast('⏱️ Najprv spusti timer!');
 			playCoinSound();
@@ -372,10 +475,16 @@ const Coins = (() => {
 			return;
 		}
 
-		// Client-side powerup items — deduct locally and log server-side
-		balance -= item.cost;
-		save(); updateDisplay();
+		// Client-side powerup items (already paid above)
+		_addPowerup(item);
 
+		playCoinSound();
+		GameUI.toast(`${item.icon} ${item.name} kúpený!`);
+		_updateShopBalance();
+		_renderShop();
+	}
+
+	function _addPowerup(item) {
 		const p = _loadPowerups();
 		if (item.uses) {
 			if (p[item.type]) {
@@ -388,12 +497,6 @@ const Coins = (() => {
 			p[item.type] = { value: item.value, uses: item.value };
 		}
 		_savePowerups(p);
-
-		logTransaction(-item.cost, `shop_${itemId}`);
-		playCoinSound();
-		GameUI.toast(`${item.icon} ${item.name} kúpený!`);
-		_updateShopBalance();
-		_renderShop();
 	}
 
 	function _updateShopBalance() {
@@ -506,7 +609,10 @@ const Coins = (() => {
 				return;
 			}
 			listEl.innerHTML = transactions.map(tx => {
-				const label = ACTION_LABELS[tx.action] || tx.action;
+				const i18nLabel = I18N_ACTION_LABELS[tx.action];
+				const label = i18nLabel
+					? _t(i18nLabel[0], i18nLabel[1])
+					: (ACTION_LABELS[tx.action] || tx.action);
 				const sign = tx.amount >= 0 ? '+' : '';
 				const cls = tx.amount >= 0 ? 'positive' : 'negative';
 				return `<div class="coin-history-row">
@@ -534,6 +640,8 @@ const Coins = (() => {
 
 	return {
 		load, award, spend, spendAmount, canAfford, getCost, getBalance,
+		isServerWallet: () => serverWallet,
+		syncServerBalance: (b) => { if (serverWallet) _applyServerBalance({ balance: b }); },
 		toggleHistory, switchTab, purchaseItem,
 		getActivePowerup, consumePowerup
 	};

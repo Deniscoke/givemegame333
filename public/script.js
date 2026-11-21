@@ -162,6 +162,10 @@ const App = (() => {
 	// ─── Inicializace ───
 	async function init() {
 		document.body.classList.add('generator-shell');
+		// i18n first: the static JSON is the only thing we wait for before the
+		// database calls below, so Slovak (or the saved language) is on screen
+		// immediately even when Supabase is slow or paused.
+		await applyInitialLanguage();
 		GameUI.initTools?.();
 		try {
 			const raw = sessionStorage.getItem('givemegame_user');
@@ -237,7 +241,8 @@ const App = (() => {
 							}
 							throw new Error(data.error || 'Chyba servera');
 						}
-					if (xpBoost && data.rpg_xp_gained > 0) Coins.consumePowerup?.('xp_boost');
+					// The server decides whether the boost applied (H3); only then use it up.
+					if (xpBoost && data.xp_multiplier_applied > 1) Coins.consumePowerup?.('xp_boost');
 					const trainedCount = Array.isArray(data.trained_stats) ? data.trained_stats.length : 0;
 					const trainedSuffix = trainedCount > 1 ? ` · trénovaných ${trainedCount} statov` : '';
 					GameUI.toast(t('solo_comp_awarded', '🎮 Hra dokončená! +{coins} 🪙 · +{xp} XP{trained}')
@@ -276,7 +281,13 @@ const App = (() => {
 							let vData = {};
 							try { vData = await vRes.json(); } catch { /* empty */ }
 							if (!vRes.ok) {
-								GameUI.toast(`📸 ${vData.error || t('refl_verify_failed', 'Overenie fotky zlyhalo (server). Skús znova alebo menšiu fotku.')}`);
+								if (vData.code === 'PHOTO_VERIFY_DAILY_CAP') {
+									GameUI.toast(`📸 ${t('refl_verify_daily_cap', 'Dnes si už vyčerpal/a limit overení fotky. Skús to zajtra.')}`);
+								} else {
+									GameUI.toast(`📸 ${vData.error || t('refl_verify_failed', 'Overenie fotky zlyhalo (server). Skús znova alebo menšiu fotku.')}`);
+								}
+							} else if (vData.verified && vData.reward_capped) {
+								GameUI.toast(`📸 ${t('refl_verify_reward_capped', 'Fotka je overená, ale dnešné foto bonusy sú už vyčerpané.')}`);
 							} else if (vData.verified) {
 								const bc = vData.bonus_coins > 0 ? ` +${vData.bonus_coins} 🪙` : '';
 								GameUI.toast(`📸 ${t('refl_verified', 'Foto bonus!')} +${vData.bonus_xp || 0} XP${bc} · ${vData.feedback || ''}`);
@@ -330,10 +341,10 @@ const App = (() => {
 		// Load persisted narrator prefs from server (overrides localStorage defaults).
 		// Falls back silently for guests or if the API is unavailable.
 		const prefsLoaded = await UserPreferences.load();
-		// Ak prefs zo servera nezmenili jazyk, setLang sa nevolá — translationCache ostane prázdna
-		// a getFilters() padne na fallback "English". Vždy načítaj JSON pre aktuálny jazyk.
+		// Záloha: ak úvodné načítanie prekladov zlyhalo (sieť), skús to znova potichu,
+		// inak getFilters() padne na fallback "English".
 		if (!translationCache[currentLang]) {
-			await setLang(currentLang);
+			await setLang(currentLang, { silent: true, persist: false });
 		}
 
 		// Vždy AI engine — skontroluj stav servera pre info
@@ -580,94 +591,126 @@ const App = (() => {
 	}
 
 	function settingLabel(setting) {
-		const labels = { indoor: 'Uvnitř', outdoor: 'Venku', any: 'Kdekoli' };
+		const labels = {
+			indoor: t('setting_label_indoor', 'Vnútri'),
+			outdoor: t('setting_label_outdoor', 'Vonku'),
+			any: t('setting_label_any', 'Kdekoľvek')
+		};
 		return labels[setting] || setting;
 	}
 
+	// Popisky exportu — preložené cez t(), SK ako fallback
+	function exportLabels() {
+		return {
+			players: t('export_players', 'Hráči'),
+			age: t('export_age', 'Vek'),
+			duration: t('export_duration', 'Dĺžka'),
+			setting: t('export_setting', 'Prostredie'),
+			materials: t('export_materials', 'Pomôcky'),
+			instructions: t('export_instructions', 'Inštrukcie'),
+			goals: t('export_goals', 'Vzdelávacie ciele'),
+			reflection: t('export_reflection', 'Reflexné otázky'),
+			safety: t('export_safety', 'Bezpečnostné poznámky'),
+			adaptation: t('export_adaptation', 'Tipy na úpravy'),
+			facilitator: t('export_facilitator', 'Poznámky pre vedúceho'),
+			rvp: t('export_rvp', 'RVP mapovanie'),
+			competences: t('export_competences', 'Kompetencie'),
+			areas: t('export_areas', 'Oblasti'),
+			eduAreas: t('export_edu_areas', 'Vzdelávacie oblasti'),
+			outcomes: t('export_outcomes', 'Očakávané výstupy'),
+			field: t('export_field', 'Údaj'),
+			value: t('export_value', 'Hodnota'),
+			generatedBy: t('export_generated_by', 'Vygenerované pomocou gIVEMEGAME.IO')
+		};
+	}
+
 	function gameToText(game) {
-		let t = '';
-		t += `═══ ${game.title.toUpperCase()} ═══\n\n`;
-		t += `${game.pitch}\n\n`;
-		t += `Hráči: ${game.playerCount.min}–${game.playerCount.max}\n`;
-		t += `Věk: ${game.ageRange.min}–${game.ageRange.max}\n`;
-		t += `Délka: ${game.duration.min}–${game.duration.max} min\n`;
-		t += `Prostředí: ${settingLabel(game.setting)}\n\n`;
-		t += `─── POMŮCKY ───\n`;
-		game.materials.forEach(m => t += `• ${m}\n`);
-		t += `\n─── INSTRUKCE ───\n`;
-		game.instructions.forEach((inst, i) => t += `${i + 1}. ${inst}\n`);
-		t += `\n─── VZDĚLÁVACÍ CÍLE ───\n`;
-		game.learningGoals.forEach(g => t += `• ${g}\n`);
-		t += `\n─── REFLEXNÍ OTÁZKY ───\n`;
-		game.reflectionPrompts.forEach(p => t += `• ${p}\n`);
-		t += `\n─── BEZPEČNOSTNÍ POZNÁMKY ───\n`;
-		game.safetyNotes.forEach(n => t += `• ${n}\n`);
-		t += `\n─── TIPY NA ÚPRAVY ───\n`;
-		game.adaptationTips.forEach(a => t += `• ${a}\n`);
-		t += `\n─── POZNÁMKY PRO VEDOUCÍHO ───\n`;
-		t += game.facilitatorNotes + '\n';
+		const L = exportLabels();
+		const up = (s) => String(s).toLocaleUpperCase(currentLang);
+		let out = '';
+		out += `═══ ${up(game.title)} ═══\n\n`;
+		out += `${game.pitch}\n\n`;
+		out += `${L.players}: ${game.playerCount.min}–${game.playerCount.max}\n`;
+		out += `${L.age}: ${game.ageRange.min}–${game.ageRange.max}\n`;
+		out += `${L.duration}: ${game.duration.min}–${game.duration.max} min\n`;
+		out += `${L.setting}: ${settingLabel(game.setting)}\n\n`;
+		out += `─── ${up(L.materials)} ───\n`;
+		game.materials.forEach(m => out += `• ${m}\n`);
+		out += `\n─── ${up(L.instructions)} ───\n`;
+		game.instructions.forEach((inst, i) => out += `${i + 1}. ${inst}\n`);
+		out += `\n─── ${up(L.goals)} ───\n`;
+		game.learningGoals.forEach(g => out += `• ${g}\n`);
+		out += `\n─── ${up(L.reflection)} ───\n`;
+		game.reflectionPrompts.forEach(p => out += `• ${p}\n`);
+		out += `\n─── ${up(L.safety)} ───\n`;
+		game.safetyNotes.forEach(n => out += `• ${n}\n`);
+		out += `\n─── ${up(L.adaptation)} ───\n`;
+		game.adaptationTips.forEach(a => out += `• ${a}\n`);
+		out += `\n─── ${up(L.facilitator)} ───\n`;
+		out += game.facilitatorNotes + '\n';
 
 		// RVP sekce v exportu
 		if (game.rvp) {
 			const rvp = GameData.getRvp();
-			t += `\n─── RVP MAPOVÁNÍ ───\n`;
+			out += `\n─── ${up(L.rvp)} ───\n`;
 			if (rvp && game.rvp.kompetence) {
-				t += `Kompetence: ${game.rvp.kompetence.map(k => rvp.kompetence[k] ? rvp.kompetence[k].nazev : k).join(', ')}\n`;
+				out += `${L.competences}: ${game.rvp.kompetence.map(k => rvp.kompetence[k] ? rvp.kompetence[k].nazev : k).join(', ')}\n`;
 			}
 			if (rvp && game.rvp.oblasti) {
-				t += `Oblasti: ${game.rvp.oblasti.map(o => rvp.vzdelavaci_oblasti[o] ? rvp.vzdelavaci_oblasti[o].nazev : o).join(', ')}\n`;
+				out += `${L.areas}: ${game.rvp.oblasti.map(o => rvp.vzdelavaci_oblasti[o] ? rvp.vzdelavaci_oblasti[o].nazev : o).join(', ')}\n`;
 			}
 			if (game.rvp.ocekavane_vystupy) {
-				t += `Očekávané výstupy:\n`;
-				game.rvp.ocekavane_vystupy.forEach(v => t += `  • ${v}\n`);
+				out += `${L.outcomes}:\n`;
+				game.rvp.ocekavane_vystupy.forEach(v => out += `  • ${v}\n`);
 			}
 		}
 
-		t += `\n═══ Vygenerováno pomocí gIVEMEGAME.IO ═══\n`;
-		return t;
+		out += `\n═══ ${L.generatedBy} ═══\n`;
+		return out;
 	}
 
 	function gameToMarkdown(game) {
+		const L = exportLabels();
 		let md = '';
 		md += `# ${game.title}\n\n`;
 		md += `> ${game.pitch}\n\n`;
-		md += `| Údaj | Hodnota |\n|------|--------|\n`;
-		md += `| Hráči | ${game.playerCount.min}–${game.playerCount.max} |\n`;
-		md += `| Věk | ${game.ageRange.min}–${game.ageRange.max} |\n`;
-		md += `| Délka | ${game.duration.min}–${game.duration.max} min |\n`;
-		md += `| Prostředí | ${settingLabel(game.setting)} |\n\n`;
-		md += `## Pomůcky\n`;
+		md += `| ${L.field} | ${L.value} |\n|------|--------|\n`;
+		md += `| ${L.players} | ${game.playerCount.min}–${game.playerCount.max} |\n`;
+		md += `| ${L.age} | ${game.ageRange.min}–${game.ageRange.max} |\n`;
+		md += `| ${L.duration} | ${game.duration.min}–${game.duration.max} min |\n`;
+		md += `| ${L.setting} | ${settingLabel(game.setting)} |\n\n`;
+		md += `## ${L.materials}\n`;
 		game.materials.forEach(m => md += `- ${m}\n`);
-		md += `\n## Instrukce\n`;
+		md += `\n## ${L.instructions}\n`;
 		game.instructions.forEach((inst, i) => md += `${i + 1}. ${inst}\n`);
-		md += `\n## Vzdělávací cíle\n`;
+		md += `\n## ${L.goals}\n`;
 		game.learningGoals.forEach(g => md += `- ${g}\n`);
-		md += `\n## Reflexní otázky\n`;
+		md += `\n## ${L.reflection}\n`;
 		game.reflectionPrompts.forEach(p => md += `- ${p}\n`);
-		md += `\n## Bezpečnostní poznámky\n`;
+		md += `\n## ${L.safety}\n`;
 		game.safetyNotes.forEach(n => md += `- ${n}\n`);
-		md += `\n## Tipy na úpravy\n`;
+		md += `\n## ${L.adaptation}\n`;
 		game.adaptationTips.forEach(a => md += `- ${a}\n`);
-		md += `\n## Poznámky pro vedoucího\n`;
+		md += `\n## ${L.facilitator}\n`;
 		md += game.facilitatorNotes + '\n';
 
 		// RVP sekce v exportu
 		if (game.rvp) {
 			const rvp = GameData.getRvp();
-			md += `\n## RVP Mapování\n`;
+			md += `\n## ${L.rvp}\n`;
 			if (rvp && game.rvp.kompetence) {
-				md += `**Kompetence:** ${game.rvp.kompetence.map(k => rvp.kompetence[k] ? rvp.kompetence[k].nazev : k).join(', ')}\n\n`;
+				md += `**${L.competences}:** ${game.rvp.kompetence.map(k => rvp.kompetence[k] ? rvp.kompetence[k].nazev : k).join(', ')}\n\n`;
 			}
 			if (rvp && game.rvp.oblasti) {
-				md += `**Vzdělávací oblasti:** ${game.rvp.oblasti.map(o => rvp.vzdelavaci_oblasti[o] ? rvp.vzdelavaci_oblasti[o].nazev : o).join(', ')}\n\n`;
+				md += `**${L.eduAreas}:** ${game.rvp.oblasti.map(o => rvp.vzdelavaci_oblasti[o] ? rvp.vzdelavaci_oblasti[o].nazev : o).join(', ')}\n\n`;
 			}
 			if (game.rvp.ocekavane_vystupy) {
-				md += `**Očekávané výstupy:**\n`;
+				md += `**${L.outcomes}:**\n`;
 				game.rvp.ocekavane_vystupy.forEach(v => md += `- ${v}\n`);
 			}
 		}
 
-		md += `\n---\n*Vygenerováno pomocí gIVEMEGAME.IO*\n`;
+		md += `\n---\n*${L.generatedBy}*\n`;
 		return md;
 	}
 
@@ -682,26 +725,71 @@ const App = (() => {
 	}
 
 	// ─── Klávesové zkratky ───
-	function bindKeyboard() {
-		document.addEventListener('keydown', (e) => {
-			const tag = e.target.tagName;
-			if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return;
+	// BEGIN keyboardAction (čistá funkcia — testuje test/i18n-keyboard.test.js)
+	// Space/Enter generuje hru LEN keď nič nemá fokus (fokus na <body>), aby
+	// Enter/Space na tlačidle, odkaze či <summary> fungovali normálne.
+	// Jednoklávesové skratky majú modifikátor Alt+Shift (WCAG 2.1.4); e.code,
+	// lebo Alt mení e.key (macOS) a nezávisí to od rozloženia klávesnice.
+	// Režimové tlačidlá (.btn-mode) a prepínače (.btn-toggle) si v Chrome/Firefoxe
+	// po kliknutí myšou nechajú fokus. Ak fokus prišiel z myši (ctx.pointerFocused),
+	// berieme ich ako „nič nemá fokus“, aby Space po kliknutí na režim generoval hru
+	// a neklikal znova na tlačidlo. Pri fokuse z klávesnice (Tab) Enter/Space tlačidlo
+	// normálne aktivuje.
+	function keyboardAction(e, ctx) {
+		const target = e.target || {};
+		const tag = target.tagName;
+		if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return null;
+		const active = ctx.activeElement;
+		const cls = active && active.classList;
+		const isChip = !!(cls && (cls.contains('btn-mode') || cls.contains('btn-toggle')));
+		const nothingFocused = !active || active === ctx.body || active === ctx.documentElement ||
+			(isChip && !!ctx.pointerFocused);
+		const noMods = !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
+		if ((e.key === ' ' || e.key === 'Enter') && noMods) {
+			return nothingFocused ? 'generate' : null;
+		}
+		if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey) {
+			if (e.code === 'KeyS') return 'surprise';
+			if (e.code === 'KeyT') return 'theme';
+			if (e.code === 'KeyM') return 'music';
+			return null;
+		}
+		// Ctrl/Cmd+C skopíruje hru, len ak používateľ nemá označený vlastný text
+		if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+			return (ctx.hasGame && !ctx.hasSelection) ? 'copy' : null;
+		}
+		return null;
+	}
+	// END keyboardAction
 
-			if (e.key === ' ' || e.key === 'Enter') {
-				e.preventDefault();
-				generate();
-			} else if (e.key === 's' || e.key === 'S') {
-				surprise();
-			} else if (e.key === 't' || e.key === 'T') {
-				GameUI.toggleTheme();
-			} else if (e.key === 'm' || e.key === 'M') {
-				Music.toggle();
-			} else if (e.ctrlKey && e.key === 'c') {
-				if (currentGame) {
-					e.preventDefault();
-					copyGame();
-				}
-			}
+	function bindKeyboard() {
+		// Prvok, ktorý dostal fokus kliknutím myšou/dotykom (nie z klávesnice).
+		let pointerFocusEl = null;
+		document.addEventListener('pointerdown', (e) => {
+			const t = e.target;
+			pointerFocusEl = (t && typeof t.closest === 'function') ? t.closest('.btn-mode, .btn-toggle') : null;
+		}, true);
+		document.addEventListener('focusout', (e) => {
+			if (e.target === pointerFocusEl) pointerFocusEl = null;
+		}, true);
+		document.addEventListener('keydown', (e) => {
+			const selection = window.getSelection ? String(window.getSelection() || '') : '';
+			const active = document.activeElement;
+			const action = keyboardAction(e, {
+				activeElement: active,
+				pointerFocused: !!pointerFocusEl && active === pointerFocusEl,
+				body: document.body,
+				documentElement: document.documentElement,
+				hasGame: !!currentGame,
+				hasSelection: selection.length > 0
+			});
+			if (!action) return;
+			e.preventDefault();
+			if (action === 'generate') generate();
+			else if (action === 'surprise') surprise();
+			else if (action === 'theme') GameUI.toggleTheme();
+			else if (action === 'music') Music.toggle();
+			else if (action === 'copy') copyGame();
 		});
 	}
 
@@ -718,9 +806,25 @@ const App = (() => {
 	let currentMode = 'party';
 	let isInitializing = true; // Skip coin award + cursor burst on first setMode
 	const MODES = ['party', 'classroom', 'reflection', 'circus', 'cooking', 'meditation'];
+	const MODE_EMOJIS = { party: '🎉', classroom: '📚', reflection: '🪞', circus: '🎪', cooking: '🍳', meditation: '🧘' };
+
+	// Badge na karte hry — volá sa zo setMode() aj po zmene jazyka (setLang).
+	function renderModeBadge() {
+		const badge = document.getElementById('game-mode-badge');
+		if (!badge) return;
+		const mode = currentMode;
+		const emoji = document.createElement('span');
+		emoji.className = 'mode-emoji-badge';
+		emoji.textContent = MODE_EMOJIS[mode] || '';
+		badge.replaceChildren(emoji, document.createTextNode(` ${t(`mode_${mode}`, mode)}`));
+		badge.className = `game-mode-badge badge-${mode}`;
+	}
 
 	function setMode(mode) {
 		if (!MODES.includes(mode)) return;
+		// Opakovaná aktivácia toho istého režimu (Enter auto-repeat, dvojklik) nesmie
+		// znova udeliť mode_click, ukázať toast ani reštartovať hudbu.
+		if (mode === currentMode && !isInitializing) return;
 		currentMode = mode;
 
 		// Přepni CSS třídu na body
@@ -751,18 +855,14 @@ const App = (() => {
 		}
 
 		// Aktualizuj mode badge na game kartě
-		const badge = document.getElementById('game-mode-badge');
-		if (badge) {
-			const modeEmojis = { party: '🎉', classroom: '📚', reflection: '🪞', circus: '🎪', cooking: '🍳', meditation: '🧘' };
-			const modeName = t(`mode_${mode}`, mode);
-			badge.innerHTML = `<span class="mode-emoji-badge">${modeEmojis[mode]}</span> ${modeName}`;
-			badge.className = `game-mode-badge badge-${mode}`;
-		}
+		renderModeBadge();
 
 		// Restart music with new mode's audio profile
 		Music.onModeChange();
 
-		// Award coin for mode click (farming mechanic) — skip during init
+		// Award coin for mode click (farming mechanic) — skip during init.
+		// H9: for signed-in users Coins.award('mode_click') calls the capped
+		// POST /api/coins/award-mode-click (not the generic /api/coins/log).
 		if (!isInitializing) {
 			Coins.award('mode_click');
 			// Dispatch CustomEvent for cursor effect (ESM module bridge)
@@ -1054,7 +1154,12 @@ const App = (() => {
 		const user = getCurrentUser();
 		if (user && user.uid !== 'guest' && supabaseClient && statsProfilesOk) {
 			try {
-				const { data, error } = await supabaseClient.from('profiles').select('games_generated, games_exported').eq('id', user.uid).single();
+				// Časový limit: pri pozastavenej / pomalej DB nesmie loadStats zablokovať init()
+				const { data, error } = await withTimeout(
+					supabaseClient.from('profiles').select('games_generated, games_exported').eq('id', user.uid).single(),
+					8000,
+					'loadStats'
+				);
 				if (error) { statsProfilesOk = false; }
 				else {
 					generated = Math.max(0, parseInt(data?.games_generated) || 0);
@@ -1189,14 +1294,35 @@ const App = (() => {
 			}
 		});
 
-		// 2) data-i18n-title — title atribút (tooltipy)
-		document.querySelectorAll('[data-i18n-title]').forEach(el => {
-			const key = el.getAttribute('data-i18n-title');
-			if (translations[key] !== undefined) {
-				el.title = translations[key];
-			}
-		});
+		// 2) data-i18n-title / -placeholder / -aria-label — atribúty
+		applyAttributeTranslations(document, translations);
 	}
+
+	// BEGIN applyAttributeTranslations (čistá funkcia — testuje test/i18n-keyboard.test.js)
+	function applyAttributeTranslations(root, translations) {
+		const ATTRS = [
+			['data-i18n-title', 'title'],
+			['data-i18n-placeholder', 'placeholder'],
+			['data-i18n-aria-label', 'aria-label']
+		];
+		for (const [dataAttr, target] of ATTRS) {
+			root.querySelectorAll(`[${dataAttr}]`).forEach(el => {
+				const key = el.getAttribute(dataAttr);
+				if (translations[key] !== undefined) el.setAttribute(target, translations[key]);
+			});
+		}
+	}
+	// END applyAttributeTranslations
+
+	// BEGIN withTimeout (čistá funkcia — testuje test/i18n-keyboard.test.js)
+	function withTimeout(promise, ms, label) {
+		let timer;
+		const timeout = new Promise((_, reject) => {
+			timer = setTimeout(() => reject(new Error(`${label || 'operation'} timeout`)), ms);
+		});
+		return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+	}
+	// END withTimeout
 
 	// Helper: preklad kľúča z cache (pre dynamické texty v JS)
 	function t(key, fallback) {
@@ -1205,10 +1331,19 @@ const App = (() => {
 	}
 	window.givemegame_t = t;
 
-	async function setLang(lang) {
+	/**
+	 * @param {string} lang
+	 * @param {{ silent?: boolean, persist?: boolean }} [opts]
+	 *   silent: no "🌐 language" toast (used on startup)
+	 *   persist: save the choice to localStorage (default true = explicit user choice)
+	 */
+	async function setLang(lang, opts = {}) {
+		const { silent = false, persist = true } = opts;
 		currentLang = lang;
 		window.givemegame_currentLang = lang;
-		try { localStorage.setItem('givemegame_preferred_lang', lang); } catch (e) {}
+		if (persist) {
+			try { localStorage.setItem('givemegame_preferred_lang', lang); } catch (e) {}
+		}
 		document.querySelectorAll('.btn-lang').forEach(btn => {
 			btn.classList.toggle('active', btn.dataset.lang === lang);
 		});
@@ -1218,9 +1353,23 @@ const App = (() => {
 		const translations = await loadTranslations(lang);
 		applyTranslations(translations);
 		if (typeof Narrator !== 'undefined' && Narrator.refreshHint) Narrator.refreshHint();
+		// Texty vykreslené z JS (badge na karte hry) sa musia prekresliť po načítaní prekladov
+		renderModeBadge();
 
-		const label = translations?._meta?.label || lang.toUpperCase();
-		GameUI.toast(`🌐 ${label}`);
+		if (!silent) {
+			const label = translations?._meta?.label || lang.toUpperCase();
+			GameUI.toast(`🌐 ${label}`);
+		}
+	}
+
+	// Úvodné preklady pri štarte: bez toastu, bez ukladania (jazyk prehliadača sa nezamkne)
+	// a s časovým limitom, aby pomalá sieť nezablokovala zvyšok init().
+	async function applyInitialLanguage() {
+		try {
+			await withTimeout(setLang(currentLang, { silent: true, persist: false }), 5000, 'i18n');
+		} catch (e) {
+			console.warn('[i18n] Úvodné preklady:', e?.message);
+		}
 	}
 
 	// ─── Bind jazykových tlačítek ───
@@ -1295,7 +1444,7 @@ const App = (() => {
 				const plan = window.__givemegamePlan;
 				const lim = plan?.entitlements?.robotCompletionsPer24h;
 				const used = plan?.usage?.robotCompletions24h ?? 0;
-				if (plan && !plan.hasPaidAccess && lim != null && used >= lim) {
+				if (plan && lim != null && used >= lim) {
 					GameUI.toast(t('robot_plan_limit', 'Bez Pro: limit Robot Challenge / 24 h — odmena dnes už nie. Skús neskôr alebo Pro učiteľ.'));
 				} else {
 					Coins.award('robot_challenge');

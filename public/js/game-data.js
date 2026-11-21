@@ -80,20 +80,19 @@ const GameData = (() => {
 			if (game.ageRange.max >= parseInt(filters.ageMax)) score += 2;
 		}
 
-		// Počet hráčů
-		if (filters.players) {
-			const max = game.playerCount.max;
-			if (filters.players === 'small' && max <= 8) score += 3;
-			else if (filters.players === 'medium' && max <= 20 && max >= 5) score += 3;
-			else if (filters.players === 'large' && max >= 15) score += 3;
+		// Počet hráčů — Squad / Timer: shared presets (js/filter-presets.js); a game fits when its range overlaps the preset
+		const presets = (typeof window !== 'undefined' && window.FilterPresets) || null;
+		const squad = presets ? presets.getSquad(filters.players) : null;
+		if (squad && game.playerCount) {
+			if (game.playerCount.min <= squad.max && game.playerCount.max >= squad.min) score += 3;
+			else score -= 1;
 		}
 
 		// Délka
-		if (filters.duration) {
-			const dur = game.duration.max;
-			if (filters.duration === 'quick' && dur <= 20) score += 3;
-			else if (filters.duration === 'medium' && dur <= 40 && dur >= 15) score += 3;
-			else if (filters.duration === 'long' && dur >= 30) score += 3;
+		const dur = presets ? presets.getDuration(filters.duration) : null;
+		if (dur && game.duration) {
+			if (game.duration.min <= dur.max && game.duration.max >= dur.min) score += 3;
+			else score -= 1;
 		}
 
 		// Typ aktivity (circus režim)
@@ -167,7 +166,7 @@ const GameData = (() => {
 	function getAll() { return [...sampleGames]; }
 	function getCount() { return sampleGames.length; }
 
-	return { load, generate, getAll, getCount, getRvp };
+	return { load, generate, getAll, getCount, getRvp, scoreMatch };
 })();
 
 // Expose globally so scripts loaded after this one can reference window.GameData
