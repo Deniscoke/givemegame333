@@ -143,4 +143,13 @@ describe('rate limiter', () => {
 		assert.ok(third.retryAfterSec >= 1);
 		assert.equal(rl.check('other').ok, true);
 	});
+
+	it('keeps memory bounded under a flood of fresh keys by evicting the oldest windows', () => {
+		const rl = createRateLimiter({ limit: 1, windowMs: 60000, maxKeys: 100 });
+		for (let i = 0; i < 5000; i++) rl.check(`flood-${i}`);
+		assert.ok(rl.size() <= 100, `size ${rl.size()}`);
+		// The newest keys are still tracked, the oldest were dropped.
+		assert.equal(rl.check('flood-4999').ok, false);
+		assert.equal(rl.check('flood-0').ok, true);
+	});
 });
