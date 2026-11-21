@@ -1,0 +1,66 @@
+/* ═══════════════════════════════════════════════════════════════════
+   gIVEMEGAME.IO — First-run tour (Phase 7)
+   Backdrop with a spotlight cut-out (box-shadow), pixel-style card.
+   Behaviour: public/js/tour.js. Fades off under reduced motion.
+   ═══════════════════════════════════════════════════════════════════ */
+.px-tour {
+	position: fixed;
+	inset: 0;
+	z-index: 30000;
+}
+.px-tour__spot {
+	position: fixed;
+	box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+	border: var(--px-bw) solid var(--mode-accent, #fff);
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 180ms ease;
+}
+.px-tour__spot.is-visible { opacity: 1; }
+.px-tour__card {
+	position: fixed;
+	width: min(340px, calc(100vw - 16px));
+	box-sizing: border-box;
+	padding: var(--px-space-3, 12px) var(--px-space-4, 16px);
+	background: var(--surface-raised, #333);
+	color: var(--on-surface, #fff);
+	border: var(--px-bw) solid var(--px-ink);
+	box-shadow: var(--px-shadow);
+	font-family: var(--font-body);
+	opacity: 0;
+	transition: opacity 180ms ease;
+}
+.px-tour__card.is-visible { opacity: 1; }
+.px-tour__card:focus { outline: none; }
+.px-tour__card:focus-visible { outline: 3px solid var(--px-focus); outline-offset: 2px; }
+.px-tour__counter {
+	margin: 0 0 4px;
+	font-size: 0.875rem;
+	color: var(--on-surface-muted, #ddd);
+}
+.px-tour__title {
+	margin: 0 0 8px;
+	font-family: var(--font-display);
+	font-size: 0.875rem;
+	line-height: 1.5;
+}
+.px-tour__text {
+	margin: 0 0 12px;
+	font-size: 1rem;
+	line-height: 1.5;
+}
+.px-tour__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: flex-end;
+}
+.px-tour__skip { margin-right: auto; }
+.px-tour__actions [hidden] { display: none; }
+@media (max-width: 480px) {
+	.px-tour__card { left: 8px !important; right: 8px; width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.px-tour__spot,
+	.px-tour__card { transition: none; }
+}

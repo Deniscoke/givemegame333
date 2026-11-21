@@ -175,3 +175,20 @@ body.px-v2.light-mode.mode-meditation { --mode-accent: #4338ca; --page-bg: #eef2
 	--shell-focus: var(--px-focus);
 	--shell-radius: var(--px-radius);
 }
+
+/* ─── Readable font option (Phase 7) ─────────────────────────────────
+   html.readable-font is set by public/js/readable-font.js (and an inline
+   <head> script before first paint). Pixel borders, icons and shadows
+   stay; only the text face changes and text is at least 16px. */
+html.readable-font {
+	--font-display: var(--font-body);
+	--font-pixel: var(--font-body);
+}
+html.readable-font body.px-v2 *:not(.bi):not([class*="bi-"]):not(svg):not(svg *) {
+	font-family: var(--font-body) !important;
+	letter-spacing: 0.01em;
+}
+html.readable-font body.px-v2 :where(p, li, label, span, button, a, summary, h1, h2, h3, h4, td, th, select, textarea, input, div) {
+	font-size: max(16px, 1em);
+	line-height: 1.5;
+}
