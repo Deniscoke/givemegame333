@@ -53,3 +53,14 @@ describe('039 play tickets, reflections, stat XP', () => {
 		assert.match(read('docs/ENV_SETUP.md'), /legacy-016-to-039/);
 	});
 });
+
+describe('Phase 5 rollout docs', () => {
+	it('documents the flag and the two-week legacy window', () => {
+		const env = read('docs/ENV_SETUP.md');
+		const { DEFAULT_LEGACY_UNTIL } = require('../lib/play-tickets');
+		assert.match(env, /PLAY_TICKETS_ENABLED/);
+		assert.match(env, /PLAY_TICKETS_LEGACY_UNTIL/);
+		assert.ok(env.includes(DEFAULT_LEGACY_UNTIL), 'docs name the default end date');
+		assert.match(read('.env.example'), /PLAY_TICKETS_ENABLED/);
+	});
+});

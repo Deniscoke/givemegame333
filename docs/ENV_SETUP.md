@@ -106,6 +106,33 @@ používateľom oznám, že zostatok coinov sa odteraz počíta na serveri a coi
 nazbierané len v prehliadači (alebo ako hosť) sa môžu líšiť od zobrazeného
 čísla.
 
+### Overiteľná hra a reflexia (039, Fáza 5) — prepínač a prechodné obdobie
+
+`039_play_tickets_and_stat_xp.sql` pridáva tabuľky `play_tickets`, `reflections`
+a `user_stat_xp`. Zapisuje do nich len server; prehliadač nemá žiadne granty.
+
+- `PLAY_TICKETS_ENABLED` — predvolene **zapnuté**. Hodnota `0`, `false`, `off`
+  alebo `no` funkciu vypne: `/api/play/*` vráti 404 `PLAY_TICKETS_DISABLED`,
+  generovanie nevydáva lístky a `/api/profile/complete-solo` beží len po starom
+  (podľa `game_json` z prehliadača, s obmedzením násobiča XP z H3).
+- Keď je zapnuté, prihlásený používateľ dostane pri generovaní lístok hry
+  (`_play_ticket`), tlačidlo READY ho spustí (`POST /api/play/start`; hra
+  z knižnice dostane nový lístok) a `complete-solo` prijme `ticket_id`. Dĺžku,
+  režim a kompetencie berie server zo svojho lístka; lístok platí raz.
+  XP: 30–120 za účasť podľa overených minút, +25 % za reflexiu, ktorá prešla
+  kontrolou (`POST /api/play/:ticket/reflect`: všetky hodnotenia, odpovede aspoň
+  20 znakov, nie opakovanie posledných 5 reflexií).
+- `PLAY_TICKETS_LEGACY_UNTIL` — koniec dvojtýždňového prechodného obdobia pre
+  starších klientov, ktorí ešte neposielajú `ticket_id`. Predvolene
+  `2026-12-05T00:00:00Z`. Dovtedy `complete-solo` bez lístka beží po starom
+  a odpoveď nesie hlavičky `Deprecation: true` a `Sunset`. Potom vráti 400
+  `TICKET_REQUIRED`. Po uplynutí obdobia (a keď v logoch nie sú volania bez
+  lístka) sa dá stará cesta `completeSoloLegacy` v `server.js` odstrániť.
+
+Poradie nasadenia: najprv migrácia `039`, potom server. Ak migrácia ešte nie je
+aplikovaná, nastav `PLAY_TICKETS_ENABLED=false`, inak vydanie lístka pri
+generovaní iba zaloguje chybu a dokončenie bez lístka pôjde starou cestou.
+
 ## Kontrola pred deployom
 
 - Spusť `npm ls stripe`; runtime závislosť `stripe` musí byť vyriešená.
