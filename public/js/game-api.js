@@ -38,19 +38,66 @@ const GameAPI = (() => {
 		finally { clearTimeout(t); }
 	}
 
+	// ─── Klasifikácia AI chýb (čistá funkcia, testovaná v test/frontend-ux.test.js) ───
+	// Vracia jednu z: 'daily_limit' | 'busy' | 'network' | 'generic'.
+	// 'network' pokrýva aj timeout (AbortError) — pre používateľa je to rovnaká situácia.
+	const DAILY_LIMIT_CODES = ['PLAN_AI_DAILY_LIMIT', 'GUEST_AI_DAILY_LIMIT'];
+	function classifyAiError(err) {
+		const code = String((err && err.code) || '');
+		const status = Number(err && err.status) || 0;
+		const name = String((err && err.name) || '');
+		const msg = String((err && err.message) || '');
+		if (DAILY_LIMIT_CODES.includes(code)) return 'daily_limit';
+		if (code === 'AI_DAILY_CAPACITY' || status === 503) return 'busy';
+		if (name === 'AbortError' || name === 'TimeoutError' || code === 'TIMEOUT' || status === 504) return 'network';
+		if (!status && (name === 'TypeError' || /failed to fetch|networkerror|load failed|network request failed|timeout|aborted/i.test(msg))) return 'network';
+		return 'generic';
+	}
+
+	const AI_ERROR_TEXT = {
+		fallback: {
+			daily_limit: ['ai_fallback_daily_limit', 'Dnešný limit AI hier je vyčerpaný, zobrazujem hru z knižnice.'],
+			busy:        ['ai_fallback_busy',        'AI je teraz preťažená, zobrazujem hru z knižnice.'],
+			network:     ['ai_fallback_network',     'AI neodpovedá (pomalé alebo žiadne pripojenie), zobrazujem hru z knižnice.'],
+			generic:     ['ai_fallback_generic',     'AI hru sa nepodarilo vytvoriť, zobrazujem hru z knižnice.']
+		},
+		remix: {
+			daily_limit: ['ai_remix_daily_limit', 'Dnešný limit AI hier je vyčerpaný. Remix skús zajtra.'],
+			busy:        ['ai_remix_busy',        'AI je teraz preťažená. Remix skús o chvíľu.'],
+			network:     ['ai_remix_network',     'AI neodpovedá (pomalé alebo žiadne pripojenie). Skús remix znova.'],
+			generic:     ['ai_remix_generic',     'Remix sa nepodaril. Skús to znova.']
+		}
+	};
+
+	// Priateľská, preložená správa pre používateľa. context: 'fallback' | 'remix'
+	function describeAiError(err, context) {
+		const table = AI_ERROR_TEXT[context] || AI_ERROR_TEXT.fallback;
+		const [key, fallback] = table[classifyAiError(err)];
+		const t = (typeof window !== 'undefined' && window.givemegame_t) || ((k, f) => f || k);
+		return t(key, fallback);
+	}
+
+	function notify(message) {
+		try {
+			if (typeof GameUI !== 'undefined' && GameUI.toast) GameUI.toast('⚠️ ' + message);
+		} catch (e) { /* toast nie je kritický */ }
+	}
+
+	function buildHttpError(res, body) {
+		const e = new Error(body.error || `HTTP ${res.status}`);
+		e.status = res.status;
+		if (body.code) e.code = body.code;
+		if (body.resetsAtUtc) e.resetsAtUtc = body.resetsAtUtc;
+		return e;
+	}
+
 	async function generateGame(filters) {
-		// Vždy skúsime AI prvý; ak server neodpovie, fallback na local
+		// Vždy skúsime AI prvý; ak zlyhá, fallback na hru z knižnice + vysvetlenie prečo
 		try {
 			return await generateWithAI(filters);
 		} catch (err) {
-			console.warn('[GameAPI] AI zlyhalo, fallback na lokálny engine:', err.message);
-			// Upozornenie: používame lokálne hry, API nebolo použité
-			const msg = err.message || '';
-			if (msg.includes('NO_API_KEY') || msg.includes('OPENAI_API_KEY')) {
-				GameUI.toast('⚠️ AI nie je nakonfigurované — použité lokálne hry. Nastav OPENAI_API_KEY v .env');
-			} else if (msg.includes('fetch') || msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-				GameUI.toast('⚠️ Server nedostupný — otvor http://localhost:3000 namiesto súboru');
-			}
+			console.warn('[GameAPI] AI zlyhalo, fallback na lokálny engine:', err.code || err.status || '', err.message);
+			notify(describeAiError(err, 'fallback'));
 			return generateLocally(filters);
 		}
 	}
@@ -67,14 +114,8 @@ const GameAPI = (() => {
 			}, 65000);
 
 			if (!res.ok) {
-				const err = await res.json().catch(() => ({}));
-				let msg = err.error || `Server vrátil ${res.status}`;
-				if (err.code === 'PLAN_AI_DAILY_LIMIT' && err.resetsAtUtc) {
-					msg += ` (Obnova UTC: ${new Date(err.resetsAtUtc).toLocaleString()})`;
-				}
-				const e = new Error(msg);
-				if (err.code) e.code = err.code;
-				throw e;
+				const body = await res.json().catch(() => ({}));
+				throw buildHttpError(res, body);
 			}
 
 			const game = await res.json();
@@ -101,14 +142,8 @@ const GameAPI = (() => {
 				body: JSON.stringify({ filters, remix: sourceGame })
 			}, 65000);
 			if (!res.ok) {
-				const err = await res.json().catch(() => ({}));
-				let msg = err.error || `Server vrátil ${res.status}`;
-				if (err.code === 'PLAN_AI_DAILY_LIMIT' && err.resetsAtUtc) {
-					msg += ` (Obnova UTC: ${new Date(err.resetsAtUtc).toLocaleString()})`;
-				}
-				const e = new Error(msg);
-				if (err.code) e.code = err.code;
-				throw e;
+				const body = await res.json().catch(() => ({}));
+				throw buildHttpError(res, body);
 			}
 			const game = await res.json();
 			console.log(`[GameAPI] REMIX: "${game.title}"`, game);
@@ -150,7 +185,7 @@ const GameAPI = (() => {
 
 	return {
 		generateGame, generateWithAI, generateLocally, remixGame,
-		setMode, getMode, checkServer
+		setMode, getMode, checkServer, classifyAiError, describeAiError
 	};
 })();
 
