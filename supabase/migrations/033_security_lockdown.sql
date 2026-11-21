@@ -11,7 +11,9 @@
 --   * gIVEME image_data accepted arbitrary text;
 --   * edu_schools had INSERT WITH CHECK (true) and edu_school_memberships
 --     had a self-referencing admin policy (recursion / wrong scoping);
---   * rpg_perk_uses allowed direct client INSERT/UPDATE (server-only flow).
+--   * rpg_perk_uses allowed direct client INSERT/UPDATE (server-only flow);
+--   * the assessment tables (029 policies have no TO clause) were readable
+--     by anon, and assessment_questions.correct_answer by every student.
 --
 -- The Express server talks to Postgres through a privileged pg pool
 -- (postgres/service_role), which bypasses RLS; nothing here changes the
@@ -146,9 +148,20 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
      public.giveme_comments, public.giveme_coin_donations
   FROM PUBLIC, anon;
 REVOKE UPDATE, TRUNCATE, REFERENCES, TRIGGER
-  ON public.giveme_posts, public.giveme_likes,
-     public.giveme_comments, public.giveme_coin_donations
+  ON public.giveme_posts, public.giveme_comments, public.giveme_coin_donations
   FROM authenticated;
+
+-- giveme_likes: public/gIVEME/script.js (double-tap like) calls
+-- .upsert({ post_id, user_id }, { onConflict: 'post_id,user_id' }), which
+-- PostgREST sends as INSERT ... ON CONFLICT (post_id, user_id) DO UPDATE
+-- SET post_id = EXCLUDED.post_id, user_id = EXCLUDED.user_id. Postgres
+-- requires UPDATE on those columns when it plans the statement, even if no
+-- conflict happens, so authenticated keeps column-level UPDATE on exactly
+-- these two columns. There is no UPDATE RLS policy on giveme_likes, so no
+-- existing row can actually be modified through it.
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON public.giveme_likes FROM authenticated;
+REVOKE UPDATE ON public.giveme_likes FROM authenticated;
+GRANT UPDATE (post_id, user_id) ON public.giveme_likes TO authenticated;
 
 -- ─── 6. edu_*: server-only writes, fix broken policies ───
 -- Schools are created by the server; WITH CHECK (true) let any client
@@ -200,3 +213,31 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
 REVOKE ALL ON public.quest_log FROM PUBLIC, anon;
 REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
   ON public.quest_log FROM authenticated;
+
+-- ─── 9. Assessments (028-032): no anonymous access, hide answer keys ───
+-- 029 created its policies without a TO clause (they apply to PUBLIC) and
+-- assessments_select / assessment_questions_select match every active
+-- assessment, so with Supabase's default table privileges anon and every
+-- signed-in student could read all questions INCLUDING correct_answer
+-- straight from PostgREST. The browser never touches these tables
+-- (public/edu, public/student and public/institution go through the
+-- /api routes, which use the privileged pool), so:
+--   * anon loses every privilege on the four assessment tables;
+--   * authenticated may no longer read assessment_questions.correct_answer
+--     (column-level SELECT on every other column).
+-- The column-level INSERT/UPDATE grants on assessment_attempts from 032
+-- and the RLS policies from 029/031 are left as they are.
+REVOKE ALL ON
+  public.assessments, public.assessment_questions,
+  public.assessment_attempts, public.assessment_answers
+  FROM PUBLIC, anon;
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON
+  public.assessments, public.assessment_questions,
+  public.assessment_attempts, public.assessment_answers
+  FROM authenticated;
+
+REVOKE SELECT ON public.assessment_questions FROM authenticated;
+GRANT SELECT (
+  id, assessment_id, question_order, question_type,
+  prompt, options, max_points, metadata
+) ON public.assessment_questions TO authenticated;

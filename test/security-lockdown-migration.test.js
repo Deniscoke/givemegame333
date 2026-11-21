@@ -101,6 +101,37 @@ describe('033 security lockdown migration', () => {
 		assert.doesNotMatch(code, /CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i);
 	});
 
+	it('keeps the UPDATE privilege the gIVEME like upsert (ON CONFLICT DO UPDATE) needs', () => {
+		const frontend = fs.readFileSync(path.join(__dirname, '..', 'public', 'gIVEME', 'script.js'), 'utf8');
+		const usesUpsert = /from\(['"]giveme_likes['"]\)\s*\.upsert\(/.test(frontend);
+		const tableRevokes = [...code.matchAll(/REVOKE\s+([^;]*?)\s+ON\s+([^;]*?)\s+FROM\s+([^;]*);/gi)]
+			.filter(([, privs, tables, roles]) => /\bUPDATE\b|\bALL\b/i.test(privs)
+				&& /public\.giveme_likes\b/i.test(tables)
+				&& /\bauthenticated\b/i.test(roles));
+		if (usesUpsert || tableRevokes.length > 0) {
+			assert.match(code, /GRANT\s+UPDATE\s*\(\s*post_id\s*,\s*user_id\s*\)\s*ON\s+public\.giveme_likes\s+TO\s+authenticated/i,
+				'authenticated must keep UPDATE (post_id, user_id) on giveme_likes for the double-tap upsert');
+			// The column grant must come after every table-level revoke, or the revoke wipes it.
+			const grantAt = code.search(/GRANT\s+UPDATE\s*\(\s*post_id/i);
+			for (const r of tableRevokes) {
+				assert.ok(code.indexOf(r[0]) < grantAt, 'UPDATE revoke on giveme_likes must precede the column grant');
+			}
+		}
+		assert.doesNotMatch(code, /CREATE\s+POLICY[^;]*ON\s+public\.giveme_likes\s+FOR\s+(UPDATE|ALL)/i);
+	});
+
+	it('removes anonymous access to assessment tables and hides correct_answer', () => {
+		assert.match(code, /REVOKE\s+ALL\s+ON\s+public\.assessments,\s*public\.assessment_questions,\s*public\.assessment_attempts,\s*public\.assessment_answers\s+FROM\s+PUBLIC,\s*anon/i);
+		assert.match(code, /REVOKE\s+SELECT\s+ON\s+public\.assessment_questions\s+FROM\s+authenticated/i);
+		const m = code.match(/GRANT\s+SELECT\s*\(([^)]*)\)\s*ON\s+public\.assessment_questions\s+TO\s+authenticated/i);
+		assert.ok(m, 'expected column-level SELECT on assessment_questions');
+		const cols = m[1].split(',').map((c) => c.trim());
+		assert.ok(cols.includes('prompt') && cols.includes('options'));
+		assert.ok(!cols.includes('correct_answer'), 'correct_answer must not be client-readable');
+		assert.ok(code.search(/REVOKE\s+SELECT\s+ON\s+public\.assessment_questions/i)
+			< code.search(/GRANT\s+SELECT\s*\([^)]*\)\s*ON\s+public\.assessment_questions/i));
+	});
+
 	it('does not drop tables, columns or data', () => {
 		assert.doesNotMatch(code, /\bDROP\s+(TABLE|COLUMN|SCHEMA)\b/i);
 		assert.doesNotMatch(code, /\b(DELETE\s+FROM|TRUNCATE\s+(TABLE\s+)?public)\b/i);
