@@ -25,6 +25,11 @@ Všetky reálne tajomstvá patria mimo repozitára. Šablóna
    mapovanie pre contact-led provisioning, nie self-service Checkout.
 4. Po zmene environment variables spusti redeploy a over bezpečný Checkout aj
    podpis webhooku.
+5. Nastav `CRON_SECRET` (dlhý náhodný reťazec). Vercel ním raz denne volá
+   `/api/cron/session-sweep` (pozri `crons` vo `vercel.json`), ktorý ukončí
+   opustené sessions a vráti hráčom mince. Bez tejto premennej je endpoint
+   zatvorený; sessions sa potom upratujú len pri bežných požiadavkách na
+   `/api/sessions` (najviac raz za minútu na inštanciu).
 
 ## Databázové migrácie (staging ako prvý)
 
@@ -61,11 +66,11 @@ projektovo špecifická owner-operated zmena DB; dokumentácia zámerne neposkyt
 univerzálny SQL alebo executable shortcut.
 
 Pre existujúcu databázu overenú presne na legacy schéme migrácie `016` je
-k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `039`, pričom
+k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `040`, pričom
 `026` zachová staré `billing_events` riadky a doplní novú schému:
 
 ```powershell
-npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-039
+npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-040
 ```
 
 `023_rpg_talents.sql` dopĺňa tabuľku talentov, ktorá bola v produkcii vytvorená

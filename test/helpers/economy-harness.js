@@ -17,6 +17,7 @@
 
 const crypto = require('node:crypto');
 const path = require('node:path');
+const { sessionSql } = require('./session-sql-fake');
 
 const SERVER_PATH = path.join(__dirname, '..', '..', 'server.js');
 const SUPABASE_URL = 'http://supabase.test.invalid';
@@ -56,6 +57,8 @@ class FakeDb {
 		this.waiters = [];
 		this.log = [];
 		this.openAiCalls = 0;
+		// Phase 6 session SQL lives in session-sql-fake.js and is checked first.
+		this.extensions = [sessionSql];
 	}
 
 	async acquire(owner) {
@@ -97,6 +100,10 @@ class FakeDb {
 		let m;
 
 		if (/^(SAVEPOINT|RELEASE SAVEPOINT|ROLLBACK TO SAVEPOINT) \w+$/.test(sql)) return ok();
+		for (const ext of this.extensions) {
+			const handled = ext(this, sql, params);
+			if (handled) return handled;
+		}
 
 		// ── sessions ──
 		if (/^SELECT [\w, ]+ FROM public\.sessions WHERE join_code = \$1$/.test(sql)) {
@@ -513,9 +520,10 @@ async function startEconomyServer(opts = {}) {
 	});
 	const baseUrl = `http://127.0.0.1:${server.address().port}`;
 
-	async function call(method, urlPath, { user, body } = {}) {
+	async function call(method, urlPath, { user, guest, body } = {}) {
 		const headers = { 'content-type': 'application/json' };
 		if (user) headers.Authorization = `Bearer ${user}`;
+		if (guest) headers['X-Guest-Token'] = guest;
 		const res = await fetch(`${baseUrl}${urlPath}`, {
 			method, headers, body: body === undefined ? undefined : JSON.stringify(body),
 		});
@@ -535,7 +543,7 @@ async function startEconomyServer(opts = {}) {
 		}
 	}
 
-	return { db, call, stop, baseUrl };
+	return { db, call, stop, baseUrl, app };
 }
 
 module.exports = { startEconomyServer, FakeDb };

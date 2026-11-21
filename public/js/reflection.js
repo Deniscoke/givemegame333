@@ -229,23 +229,17 @@ const Reflection = (() => {
 
 		let res;
 		try {
-			if (sessionCode && supabaseClient) {
-				const { data: { session: authSession } } = await Promise.race([
-					supabaseClient.auth.getSession(),
-					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
-				]);
-				const token = authSession?.access_token;
-				if (!token) throw new Error(_t('refl_no_auth', 'Prihlás sa pre odoslanie reflexie'));
+			if (sessionCode) {
+				// Signed-in player (Bearer) or guest without an account (X-Guest-Token).
+				const authH = window.Session?.authHeaders ? await window.Session.authHeaders() : null;
+				if (!authH) throw new Error(_t('refl_no_auth', 'Prihlás sa pre odoslanie reflexie'));
 
 				const ctrl = new AbortController();
 				const fetchTimeout = setTimeout(() => ctrl.abort(), 12000);
 				try {
 					res = await fetch(`/api/sessions/${sessionCode}/reflect`, {
 						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${token}`
-						},
+						headers: { 'Content-Type': 'application/json', ...authH },
 						signal: ctrl.signal,
 						body: JSON.stringify({ reflection_data: _reflectionPayloadForApi(data) })
 					});

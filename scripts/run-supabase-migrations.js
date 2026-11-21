@@ -60,7 +60,8 @@ const SUPPORTED_MIGRATION_ORDER = Object.freeze([
   '036_revoke_client_economy_writes.sql',
   '037_giveme_donations_server_only.sql',
   '038_reconcile_browser_only_balances.sql',
-  '039_play_tickets_and_stat_xp.sql'
+  '039_play_tickets_and_stat_xp.sql',
+  '040_session_state_machine.sql'
 ]);
 
 const LEGACY_016_RELEASE_ORDER = Object.freeze([
@@ -77,7 +78,8 @@ const LEGACY_016_RELEASE_ORDER = Object.freeze([
   '036_revoke_client_economy_writes.sql',
   '037_giveme_donations_server_only.sql',
   '038_reconcile_browser_only_balances.sql',
-  '039_play_tickets_and_stat_xp.sql'
+  '039_play_tickets_and_stat_xp.sql',
+  '040_session_state_machine.sql'
 ]);
 const LEGACY_016_USER_BILLING_COLUMNS = Object.freeze([
   'billing_state_updated_at',
@@ -279,10 +281,10 @@ function validateExecutionMode(options, selected) {
   }
   if (selected.length !== LEGACY_016_RELEASE_ORDER.length
     || selected.some((filename, index) => filename !== LEGACY_016_RELEASE_ORDER[index])) {
-    throw new Error('Legacy 016 upgrade requires the complete 026-039 release.');
+    throw new Error('Legacy 016 upgrade requires the complete 026-040 release.');
   }
-  if (options.confirmation !== 'legacy-016-to-039') {
-    throw new Error('Legacy 016 upgrade confirmation must exactly match legacy-016-to-039.');
+  if (options.confirmation !== 'legacy-016-to-040') {
+    throw new Error('Legacy 016 upgrade confirmation must exactly match legacy-016-to-040.');
   }
   return { mode: 'legacy-016' };
 }
