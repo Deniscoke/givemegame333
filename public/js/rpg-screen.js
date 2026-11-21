@@ -481,7 +481,112 @@ const RpgScreen = (() => {
           <h3 class="rpg-stats-heading">🎯 Čo trénuje aký atribút</h3>
           <div class="rpg-attr-map">${attrMapRows}</div>
         </section>` : ''}
+
+        <section class="rpg-stats-section rpg-play-attrs" id="rpg-play-attrs"></section>
       </div>`;
+    _renderPlayAttributes();
+  }
+
+  // ─── Training from play (Phase 5: GET /api/play/attributes) ─────
+  // Escapes quotes too (title attributes); the shared _esc below does not.
+  const _escq = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const _tr = (key, fallback) => (window.givemegame_t || ((k, f) => f || k))(key, fallback);
+  const SUBTAG_META = {
+    motorika:  { key: 'attr_subtag_motorika',  fb: 'Motorika',  icon: '✋' },
+    vyziva:    { key: 'attr_subtag_vyziva',    fb: 'Výživa',    icon: '🥕' },
+    digitalna: { key: 'attr_subtag_digitalna', fb: 'Digitálne zručnosti', icon: '💻' },
+  };
+  const COMP_LABELS = {
+    'k-uceni':             ['play_comp_k_uceni', 'Učenie'],
+    'k-reseni-problemu':   ['play_comp_k_reseni', 'Riešenie problémov'],
+    'komunikativni':       ['play_comp_komunikativni', 'Komunikácia'],
+    'socialni-personalni': ['play_comp_socialni', 'Spolupráca'],
+    'obcanske':            ['play_comp_obcanske', 'Občianske správanie'],
+    'pracovni':            ['play_comp_pracovni', 'Práca s úlohou'],
+    'digitalni':           ['play_comp_digitalni', 'Digitálne zručnosti'],
+  };
+  const MODE_FALLBACK = { party: 'Párty', classroom: 'Trieda', reflection: 'Chill', circus: 'Cirkus',
+    cooking: 'Varenie', meditation: 'Meditácia', online: 'Online' };
+
+  async function _renderPlayAttributes() {
+    const box = document.getElementById('rpg-play-attrs');
+    if (!box) return;
+    box.innerHTML = `<h3 class="rpg-stats-heading">🌱 ${_escq(_tr('play_attrs_title', 'Tréning z hier'))}</h3>
+      <p class="rpg-xp-hint">${_escq(_tr('play_attrs_loading', 'Načítavam…'))}</p>`;
+    let data = null;
+    try {
+      const token = await _token();
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 12000);
+      try {
+        const res = await fetch('/api/play/attributes', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          signal: ctrl.signal,
+        });
+        if (res.ok) data = await res.json();
+      } finally { clearTimeout(timer); }
+    } catch { data = null; }
+    if (!document.body.contains(box)) return;
+    if (!data) {
+      box.innerHTML = `<h3 class="rpg-stats-heading">🌱 ${_escq(_tr('play_attrs_title', 'Tréning z hier'))}</h3>
+        <p class="rpg-xp-hint">${_escq(_tr('play_attrs_error', 'Tréning sa nepodarilo načítať.'))}</p>`;
+      return;
+    }
+    box.innerHTML = _playAttributesHtml(data);
+  }
+
+  function _playAttributesHtml(data) {
+    const statXp = data.stat_xp || {};
+    const manifest = data.manifest || { modes: {}, subtags: {} };
+    const max = Math.max(1, ...Object.keys(STAT_META).map(k => statXp[k] || 0));
+    const rows = Object.entries(STAT_META).map(([key, meta]) => {
+      const xp = statXp[key] || 0;
+      const subs = Object.entries(manifest.subtags || {})
+        .filter(([tag, parent]) => parent === key && (statXp[tag] || 0) > 0 && SUBTAG_META[tag])
+        .map(([tag]) => `
+          <div class="rpg-subtag-row">
+            <span class="rpg-subtag-icon">${SUBTAG_META[tag].icon}</span>
+            <span class="rpg-subtag-label">${_escq(_tr(SUBTAG_META[tag].key, SUBTAG_META[tag].fb))}</span>
+            <span class="rpg-subtag-value">${statXp[tag]} XP</span>
+          </div>`).join('');
+      return `
+        <div class="rpg-stat-row">
+          <span class="rpg-stat-icon">${meta.icon}</span>
+          <span class="rpg-stat-label">${_escq(_tr(`rpg_stat_${key}`, meta.label))}</span>
+          <div class="rpg-stat-bar-wrap">
+            <div class="rpg-stat-bar" style="width:${Math.round(xp / max * 100)}%;background:${meta.color}"></div>
+          </div>
+          <span class="rpg-stat-value">${xp} XP</span>
+        </div>${subs}`;
+    }).join('');
+
+    const comps = (data.competencies || []).map(c => {
+      const [k, fb] = COMP_LABELS[c.key] || [null, c.key];
+      const avg = c.avg_rating == null ? '' : ` · ${_escq(_tr('play_attrs_avg', 'priemer sebahodnotenia'))} ${c.avg_rating}/5`;
+      return `<li class="rpg-play-comp">${_escq(k ? _tr(k, fb) : fb)}: ${c.games} ${_escq(_tr('play_attrs_games_short', 'hier'))}${avg}</li>`;
+    }).join('');
+
+    const modes = Object.entries(manifest.modes || {}).map(([mode, m]) => {
+      const why = _tr(m.rationale_key, m.rationale);
+      const trains = [...m.stats.map(s => _tr(`rpg_stat_${s}`, STAT_META[s]?.label || s)),
+        ...m.subtags.map(t => _tr(SUBTAG_META[t]?.key || t, SUBTAG_META[t]?.fb || t))].join(', ');
+      return `<div class="rpg-attr-map-row" title="${_escq(why)}">
+        <span class="rpg-attr-map-label">${_escq(_tr(`mode_${mode}`, MODE_FALLBACK[mode] || mode))}</span>
+        <span class="rpg-attr-map-src">${_escq(trains)}</span>
+        <small class="rpg-attr-why">${_escq(why)}</small>
+      </div>`;
+    }).join('');
+
+    const summary = _tr('play_attrs_summary', 'Odohrané hry: {games} · s reflexiou: {reflected}')
+      .replace('{games}', String(data.games || 0)).replace('{reflected}', String(data.reflected || 0));
+    return `
+      <h3 class="rpg-stats-heading">🌱 ${_escq(_tr('play_attrs_title', 'Tréning z hier'))}</h3>
+      <p class="rpg-xp-hint">${_escq(summary)}</p>
+      <div class="rpg-stat-list">${rows}</div>
+      ${comps ? `<h4 class="rpg-stats-subheading">${_escq(_tr('play_attrs_comp_title', 'Kompetencie a sebahodnotenie'))}</h4>
+        <ul class="rpg-play-comp-list">${comps}</ul>` : ''}
+      <h4 class="rpg-stats-subheading">${_escq(_tr('play_attrs_modes_title', 'Čo trénuje ktorý režim'))}</h4>
+      <div class="rpg-attr-map">${modes}</div>`;
   }
 
   // ─── DOM wiring (runs once) ──────────────────────────────────────

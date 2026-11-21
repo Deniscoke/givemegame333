@@ -527,6 +527,13 @@ const GameUI = (() => {
 		strategy:      { labelKey: 'rpg_stat_strategy',      labelFb: 'Strategy',      icon: '♟️', color: '#c4b5fd' },
 	};
 
+	// Phase 5 sub-tags (lib/attribute-map.js SUBTAG_PARENT): shown under their parent stat.
+	const SUBTAG_META = {
+		motorika:  { labelKey: 'attr_subtag_motorika',  labelFb: 'Motorika',  icon: '✋' },
+		vyziva:    { labelKey: 'attr_subtag_vyziva',    labelFb: 'Výživa',    icon: '🥕' },
+		digitalna: { labelKey: 'attr_subtag_digitalna', labelFb: 'Digitálne zručnosti', icon: '💻' },
+	};
+
 	// Maps game's rvp.kompetence keys → RPG stat keys
 	const GAME_KOMP_TO_STAT = {
 		'k-uceni':            'focus',
@@ -595,8 +602,35 @@ const GameUI = (() => {
 		if (data.rpg_xp_gained > 0) {
 			const xpNote = document.createElement('div');
 			xpNote.className = 'game-rpg-xp-note';
-			xpNote.textContent = `⚡ +${data.rpg_xp_gained} XP`;
+			// Phase 5 (play ticket): show what the XP was for.
+			if (data.participation_xp != null) {
+				let line = _t('play_xp_participation', '+{xp} XP za účasť').replace('{xp}', String(data.participation_xp));
+				if (data.reflection_bonus_xp > 0) {
+					line += ' · ' + _t('play_xp_reflection', '+{xp} XP za reflexiu').replace('{xp}', String(data.reflection_bonus_xp));
+				}
+				if (data.xp_multiplier_applied > 1) line += ` · ×${data.xp_multiplier_applied}`;
+				xpNote.textContent = `⚡ ${line}`;
+			} else {
+				xpNote.textContent = `⚡ +${data.rpg_xp_gained} XP`;
+			}
 			kompEl.appendChild(xpNote);
+		}
+
+		const statXp = data.stat_xp_gained;
+		if (statXp && typeof statXp === 'object') {
+			const parts = Object.keys(RPG_STAT_META).filter(k => statXp[k] > 0).map(k => {
+				const meta = RPG_STAT_META[k];
+				return `${meta.icon} ${_t(meta.labelKey, meta.labelFb)} +${statXp[k]}`;
+			});
+			Object.keys(SUBTAG_META).filter(k => statXp[k] > 0).forEach(k => {
+				parts.push(`${SUBTAG_META[k].icon} ${_t(SUBTAG_META[k].labelKey, SUBTAG_META[k].labelFb)} +${statXp[k]}`);
+			});
+			if (parts.length) {
+				const statNote = document.createElement('div');
+				statNote.className = 'game-rpg-statxp-note';
+				statNote.textContent = `${_t('play_stat_xp_title', 'Tréning atribútov')}: ${parts.join(' · ')}`;
+				kompEl.appendChild(statNote);
+			}
 		}
 	}
 

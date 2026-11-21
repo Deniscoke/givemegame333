@@ -158,6 +158,14 @@ const Reflection = (() => {
 			form.appendChild(div);
 		});
 
+		// Phase 5: solo reflections that pass the server's quality gate earn +25 % XP.
+		if (!sessionCode) {
+			const hint = document.createElement('p');
+			hint.className = 'reflection-bonus-hint';
+			hint.textContent = _t('play_refl_hint', '💡 Bonus +25 % XP: ohodnoť všetky otázky a napíš do každej odpovede aspoň 20 znakov vlastnými slovami.');
+			form.appendChild(hint);
+		}
+
 		const submitBtn = modal.querySelector('#btn-reflection-submit');
 		if (submitBtn) {
 			submitBtn.disabled = false;

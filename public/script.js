@@ -207,6 +207,9 @@ const App = (() => {
 			} catch (e) { /* silent — not critical on startup */ }
 		})();
 
+		// Phase 5: READY starts the server's play ticket for this game.
+		Timer.setOnStart(() => { startPlayTicket().catch(() => {}); });
+
 		// Wire timer completion → reflection → solo completion (RPG XP + coiny)
 		Timer.setOnComplete(() => {
 			if (window.SFX) SFX.play('victory');
@@ -220,13 +223,24 @@ const App = (() => {
 					const token = session?.access_token;
 					if (!token) { GameUI.toast(t('sess_no_login_points', 'Prihlás sa pre získanie bodov')); return; }
 
+					// Phase 5: a solo reflection goes to the server first; if it passes
+					// the quality gate, the completion below earns the +25 % bonus.
+					const ticketId = playTicketForCompletion(window.currentGame);
+					if (ticketId) {
+						const refl = await sendSoloReflection(ticketId, reflectionData, token);
+						if (!refl.ok && refl.code) GameUI.toast(`📝 ${reflectionBonusMessage(refl.code)}`);
+					}
+
 					const ctrl = new AbortController();
 					const _ft = setTimeout(() => ctrl.abort(), 12000);
 					try {
 						let res;
+						const xpBoost = Coins.getActivePowerup?.('xp_boost');
 						try {
-							const xpBoost = Coins.getActivePowerup?.('xp_boost');
+							// With a ticket the server ignores game_json and xp_multiplier;
+							// they stay for servers that still run the old path.
 							const bodyPayload = { game_json: window.currentGame };
+							if (ticketId) bodyPayload.ticket_id = ticketId;
 							if (xpBoost) bodyPayload.xp_multiplier = xpBoost.value;
 							res = await fetch('/api/profile/complete-solo', {
 								method: 'POST',
@@ -240,16 +254,26 @@ const App = (() => {
 							if (data.code === 'SOLO_DAILY_LIMIT') {
 								throw new Error(data.error || t('err_solo_daily_limit', 'Denný limit solo hier dosiahnutý'));
 							}
-							throw new Error(data.error || 'Chyba servera');
+							throw new Error(completionErrorMessage(data));
 						}
 					// The server decides whether the boost applied (H3); only then use it up.
 					if (xpBoost && data.xp_multiplier_applied > 1) Coins.consumePowerup?.('xp_boost');
-					const trainedCount = Array.isArray(data.trained_stats) ? data.trained_stats.length : 0;
-					const trainedSuffix = trainedCount > 1 ? ` · trénovaných ${trainedCount} statov` : '';
-					GameUI.toast(t('solo_comp_awarded', '🎮 Hra dokončená! +{coins} 🪙 · +{xp} XP{trained}')
-						.replace('{coins}', '100')
-						.replace('{xp}', String(data.rpg_xp_gained || 0))
-						.replace('{trained}', trainedSuffix));
+					if (data.participation_xp != null) {
+						let msg = t('play_comp_awarded', '🎮 Hra dokončená! +{coins} 🪙 · +{xp} XP za účasť')
+							.replace('{coins}', String(data.coins_awarded ?? 100))
+							.replace('{xp}', String(data.participation_xp));
+						if (data.reflection_bonus_xp > 0) {
+							msg += ' · ' + t('play_xp_reflection', '+{xp} XP za reflexiu').replace('{xp}', String(data.reflection_bonus_xp));
+						}
+						GameUI.toast(msg);
+					} else {
+						const trainedCount = Array.isArray(data.trained_stats) ? data.trained_stats.length : 0;
+						const trainedSuffix = trainedCount > 1 ? ` · trénovaných ${trainedCount} statov` : '';
+						GameUI.toast(t('solo_comp_awarded', '🎮 Hra dokončená! +{coins} 🪙 · +{xp} XP{trained}')
+							.replace('{coins}', '100')
+							.replace('{xp}', String(data.rpg_xp_gained || 0))
+							.replace('{trained}', trainedSuffix));
+					}
 					if (window.Coins?.load) window.Coins.load();
 					if (window.RpgTalents?.load) {
 						const td = await RpgTalents.load();
@@ -1331,6 +1355,127 @@ const App = (() => {
 		return (tr && tr[key] !== undefined) ? tr[key] : (fallback || key);
 	}
 	window.givemegame_t = t;
+
+	// ─── Play tickets (Phase 5) ───────────────────────────────────────
+	// The server keeps its own copy of the game; rewards are paid against it.
+
+	async function _playToken() {
+		try {
+			const { data: { session } } = await withTimeout(supabaseClient.auth.getSession(), 8000, 'auth');
+			return session?.access_token || null;
+		} catch { return null; }
+	}
+
+	async function _playFetch(url, token, body) {
+		const ctrl = new AbortController();
+		const timer = setTimeout(() => ctrl.abort(), 12000);
+		try {
+			const res = await fetch(url, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+				signal: ctrl.signal,
+				body: JSON.stringify(body)
+			});
+			let data = {};
+			try { data = await res.json(); } catch { /* empty */ }
+			return { ok: res.ok, status: res.status, data };
+		} finally { clearTimeout(timer); }
+	}
+
+	/** POST /api/play/start, retried once on a network error. Returns null when both tries fail. */
+	async function _playStartOnce(token, body) {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			try {
+				return await _playFetch('/api/play/start', token, body);
+			} catch { /* network error or timeout: try once more */ }
+		}
+		return null;
+	}
+
+	/**
+	 * Called when READY starts a solo game: start (or create) its play ticket.
+	 * Only a start the server confirmed sets game._play_ticket_started; the
+	 * completion sends ticket_id only then (see playTicketForCompletion).
+	 */
+	async function startPlayTicket() {
+		if (window.Session?.isInSession?.()) return;
+		const game = window.currentGame;
+		if (!game || !supabaseClient) return;
+		game._play_ticket_started = false;
+		// A library game always gets a fresh ticket; a saved copy may still carry an old id.
+		if (game._savedId) delete game._play_ticket;
+		const generatedTicket = game._play_ticket || null;
+		const token = await _playToken();
+		if (!token) return;
+		// A game the server has no copy of (local fallback) gets a "local" ticket.
+		const localBody = { local: true, title: String(game.title || '').slice(0, 200) };
+		const body = game._savedId ? { game_id: game._savedId }
+			: generatedTicket ? { ticket_id: generatedTicket }
+			: localBody;
+		let r = await _playStartOnce(token, body);
+		// The generated ticket is gone (e.g. another account): play it as a local game.
+		if (r && r.status === 404 && body.ticket_id) r = await _playStartOnce(token, localBody);
+		if (r && r.ok && r.data.ticket_id && window.currentGame === game) {
+			game._play_ticket = r.data.ticket_id;
+			game._play_ticket_started = true;
+			if (window.Timer?.persist) Timer.persist();
+		}
+	}
+
+	/** Ticket id to send with the reflection and complete-solo, or null. */
+	function playTicketForCompletion(game) {
+		return game && game._play_ticket_started === true && game._play_ticket ? game._play_ticket : null;
+	}
+
+	/** Solo reflection → server quality gate. Returns { ok, code }. */
+	async function sendSoloReflection(ticketId, reflectionData, token) {
+		const ratings = {};
+		const texts = {};
+		for (const [k, v] of Object.entries(reflectionData || {})) {
+			if (k.startsWith('_')) continue;
+			if (typeof v === 'number') ratings[k] = v;
+			else if (typeof v === 'string') texts[k] = v;
+		}
+		try {
+			const r = await _playFetch(`/api/play/${encodeURIComponent(ticketId)}/reflect`, token, { ratings, texts });
+			return { ok: r.ok, code: r.ok ? null : (r.data.code || null) };
+		} catch {
+			return { ok: false, code: null };
+		}
+	}
+
+	/** Why a reflection did not earn the bonus, in plain words. */
+	function reflectionBonusMessage(code) {
+		switch (code) {
+			case 'REFLECTION_TOO_SHORT':
+				return t('play_refl_too_short', 'Bonus +25 % XP nebol pridaný: napíš do každej odpovede aspoň 20 znakov.');
+			case 'REFLECTION_REPEAT':
+				return t('play_refl_repeat', 'Bonus +25 % XP nebol pridaný: odpovede sa opakujú. Napíš niečo nové.');
+			case 'REFLECTION_INCOMPLETE':
+			case 'REFLECTION_INVALID_RATING':
+				return t('play_refl_incomplete', 'Bonus +25 % XP nebol pridaný: ohodnoť všetky otázky.');
+			default:
+				return t('play_refl_not_counted', 'Bonus za reflexiu tentoraz nebol pridaný.');
+		}
+	}
+
+	/** Completion error codes from the play ticket path, in plain words. */
+	function completionErrorMessage(data) {
+		switch (data?.code) {
+			case 'DURATION_TOO_SHORT':
+				return t('play_err_too_short', 'Hra trvala príliš krátko na odmenu.');
+			case 'TICKET_USED':
+				return t('play_err_ticket_used', 'Za túto hru už si odmenu dostal/a.');
+			case 'TICKET_OVERLAP':
+				return t('play_err_overlap', 'Naraz sa dá hrať len jedna hra. Odmena ide za prvú dokončenú.');
+			case 'TICKET_REQUIRED':
+			case 'TICKET_NOT_STARTED':
+			case 'TICKET_NOT_FOUND':
+				return t('play_err_ticket_required', 'Odmenu sa nepodarilo overiť. Prihlás sa a spusti hru znova.');
+			default:
+				return data?.error || 'Chyba servera';
+		}
+	}
 
 	/**
 	 * @param {string} lang

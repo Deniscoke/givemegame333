@@ -15,12 +15,13 @@
  * which is enough to model the compare-and-swap / conditional UPDATE logic.
  */
 
+const crypto = require('node:crypto');
 const path = require('node:path');
 
 const SERVER_PATH = path.join(__dirname, '..', '..', 'server.js');
 const SUPABASE_URL = 'http://supabase.test.invalid';
 const ENV_KEYS = ['VERCEL', 'NODE_ENV', 'OPENAI_API_KEY', 'SUPABASE_DB_URL', 'SUPABASE_URL',
-	'SUPABASE_ANON_KEY', 'ALLOWED_ORIGINS'];
+	'SUPABASE_ANON_KEY', 'ALLOWED_ORIGINS', 'PLAY_TICKETS_ENABLED', 'PLAY_TICKETS_LEGACY_UNTIL'];
 
 function norm(sql) {
 	return String(sql).replace(/\s+/g, ' ').trim();
@@ -281,6 +282,129 @@ class FakeDb {
 			const r = s.profiles[recipientId];
 			if (r) r.coins += amount;
 			return ok([], 1);
+		}
+
+		// ── play tickets / reflections / stat XP (Phase 5) ──
+		const tickets = (s.tickets = s.tickets || []);
+		const reflections = (s.reflections = s.reflections || []);
+		const statXp = (s.statXp = s.statXp || {});
+		const ticket = (id, uid) => tickets.find((t) => t.id === id && (uid === undefined || t.user_id === uid));
+		const asDate = (v) => (v == null ? null : new Date(v));
+		if ((m = sql.match(/^INSERT INTO public\.play_tickets \(user_id, source, game_hash, game_json, mode, duration_min, duration_max, kompetence(, started_at)?\) VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8(, NOW\(\))?\) RETURNING id, started_at$/))) {
+			const [user_id, source, game_hash, game_json, mode, duration_min, duration_max, kompetence] = params;
+			if (duration_max < duration_min) throw new Error('play_tickets_duration_check violated');
+			const row = {
+				id: crypto.randomUUID(), user_id, source, game_hash, game_json: JSON.parse(game_json), mode,
+				duration_min, duration_max, kompetence: [...kompetence], created_at: new Date().toISOString(),
+				started_at: m[2] ? new Date().toISOString() : null, completed_at: null, reflection_id: null, reward: null,
+			};
+			tickets.push(row);
+			return ok([{ id: row.id, started_at: asDate(row.started_at) }]);
+		}
+		if (sql === "SELECT mode, duration_min, duration_max, kompetence FROM public.play_tickets WHERE game_hash = $1 AND source = 'generated' ORDER BY created_at LIMIT 1") {
+			const t = tickets.find((x) => x.game_hash === params[0] && x.source === 'generated');
+			return ok(t ? [{ mode: t.mode, duration_min: t.duration_min, duration_max: t.duration_max, kompetence: [...t.kompetence] }] : []);
+		}
+		if (sql === "SELECT COUNT(*)::int AS cnt FROM public.play_tickets WHERE user_id = $1 AND source <> 'generated' AND created_at >= CURRENT_DATE") {
+			return ok([{ cnt: tickets.filter((t) => t.user_id === params[0] && t.source !== 'generated'
+				&& new Date(t.created_at) >= since).length }]);
+		}
+		if (sql === 'UPDATE public.play_tickets SET started_at = NOW() WHERE id = $1 AND user_id = $2 AND started_at IS NULL AND completed_at IS NULL RETURNING id, started_at') {
+			const t = ticket(params[0], params[1]);
+			if (!t || t.started_at || t.completed_at) return ok([]);
+			t.started_at = new Date().toISOString();
+			return ok([{ id: t.id, started_at: asDate(t.started_at) }]);
+		}
+		if (sql === 'SELECT id, started_at, completed_at FROM public.play_tickets WHERE id = $1 AND user_id = $2') {
+			const t = ticket(params[0], params[1]);
+			return ok(t ? [{ id: t.id, started_at: asDate(t.started_at), completed_at: asDate(t.completed_at) }] : []);
+		}
+		if (sql === 'SELECT id, mode, duration_min, duration_max, kompetence, started_at, completed_at, reflection_id FROM public.play_tickets WHERE id = $1 AND user_id = $2 FOR UPDATE') {
+			const t = ticket(params[0], params[1]);
+			return ok(t ? [{
+				id: t.id, mode: t.mode, duration_min: t.duration_min, duration_max: t.duration_max,
+				kompetence: [...t.kompetence], started_at: asDate(t.started_at), completed_at: asDate(t.completed_at),
+				reflection_id: t.reflection_id,
+			}] : []);
+		}
+		if (sql === 'SELECT 1 FROM public.play_tickets WHERE user_id = $1 AND id <> $2 AND completed_at > $3 LIMIT 1') {
+			const hit = tickets.some((t) => t.user_id === params[0] && t.id !== params[1] && t.completed_at
+				&& new Date(t.completed_at) > new Date(params[2]));
+			return ok(hit ? [{ '?column?': 1 }] : []);
+		}
+		if (sql === 'UPDATE public.play_tickets SET completed_at = NOW(), reward = $3 WHERE id = $1 AND user_id = $2 AND completed_at IS NULL RETURNING completed_at') {
+			const t = ticket(params[0], params[1]);
+			if (!t || t.completed_at) return ok([]);
+			if (!t.started_at) throw new Error('play_tickets_completed_after_start violated');
+			t.completed_at = new Date().toISOString();
+			t.reward = JSON.parse(params[2]);
+			return ok([{ completed_at: asDate(t.completed_at) }]);
+		}
+		if (sql === 'UPDATE public.play_tickets SET reflection_id = $1 WHERE id = $2') {
+			const t = ticket(params[1]);
+			if (t) t.reflection_id = params[0];
+			return ok([], t ? 1 : 0);
+		}
+		if (sql.startsWith('INSERT INTO public.user_stat_xp (user_id, stat, xp) SELECT $1::uuid, s.stat, s.xp FROM unnest($2::text[], $3::int[]) AS s(stat, xp) ON CONFLICT (user_id, stat) DO UPDATE')) {
+			const allowed = ['insight', 'focus', 'creativity', 'resilience', 'communication', 'strategy', 'motorika', 'vyziva', 'digitalna'];
+			const mine = (statXp[params[0]] = statXp[params[0]] || {});
+			params[1].forEach((stat, i) => {
+				if (!allowed.includes(stat)) throw new Error('user_stat_xp_stat_check violated');
+				mine[stat] = Math.min((mine[stat] || 0) + params[2][i], 999999);
+			});
+			return ok([], params[1].length);
+		}
+		if (sql === 'SELECT texts FROM public.reflections WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5') {
+			return ok(reflections.filter((r) => r.user_id === params[0]).slice(-5).reverse().map((r) => ({ texts: clone(r.texts) })));
+		}
+		if (sql === 'INSERT INTO public.reflections (user_id, ticket_id, ratings, texts) VALUES ($1, $2, $3, $4) RETURNING id') {
+			if (reflections.some((r) => r.ticket_id === params[1])) throw new Error('uq_reflections_ticket violated');
+			const row = { id: crypto.randomUUID(), user_id: params[0], ticket_id: params[1],
+				ratings: JSON.parse(params[2]), texts: JSON.parse(params[3]), created_at: new Date().toISOString() };
+			reflections.push(row);
+			return ok([{ id: row.id }]);
+		}
+		if (sql === 'SELECT stat, xp FROM public.user_stat_xp WHERE user_id = $1') {
+			return ok(Object.entries(statXp[params[0]] || {}).map(([stat, xp]) => ({ stat, xp })));
+		}
+		if (sql.startsWith('SELECT k AS key, COUNT(*)::int AS games, ROUND(AVG((r.ratings->>k)::numeric), 1) AS avg_rating FROM public.play_tickets t')) {
+			const agg = {};
+			for (const t of tickets.filter((x) => x.user_id === params[0] && x.completed_at)) {
+				const refl = reflections.find((r) => r.id === t.reflection_id);
+				for (const k of t.kompetence) {
+					const a = (agg[k] = agg[k] || { games: 0, ratings: [] });
+					a.games += 1;
+					if (refl && refl.ratings[k] != null) a.ratings.push(Number(refl.ratings[k]));
+				}
+			}
+			return ok(Object.entries(agg)
+				.map(([key, a]) => ({ key, games: a.games,
+					avg_rating: a.ratings.length ? String(Math.round(a.ratings.reduce((x, y) => x + y, 0) / a.ratings.length * 10) / 10) : null }))
+				.sort((x, y) => (y.games - x.games) || x.key.localeCompare(y.key)));
+		}
+		if (sql === 'SELECT COUNT(*)::int AS games, COUNT(reflection_id)::int AS reflected FROM public.play_tickets WHERE user_id = $1 AND completed_at IS NOT NULL') {
+			const done = tickets.filter((t) => t.user_id === params[0] && t.completed_at);
+			return ok([{ games: done.length, reflected: done.filter((t) => t.reflection_id).length }]);
+		}
+		if (sql === 'INSERT INTO public.saved_games (user_id, title, mode, game_json) VALUES ($1, $2, $3, $4) RETURNING id, title, mode, created_at') {
+			const id = crypto.randomUUID();
+			const row = { user_id: params[0], title: params[1], mode: params[2], game_json: JSON.parse(params[3]),
+				public_token: null, created_at: new Date().toISOString() };
+			(s.savedGames = s.savedGames || {})[id] = row;
+			return ok([{ id, title: row.title, mode: row.mode, created_at: new Date(row.created_at) }]);
+		}
+		if (sql === 'SELECT id, title, mode, game_json, is_favorite, rating, created_at FROM public.saved_games WHERE id = $1 AND user_id = $2 LIMIT 1') {
+			const g = (s.savedGames || {})[params[0]];
+			return ok(g && g.user_id === params[1] ? [{ id: params[0], title: g.title, mode: g.mode, game_json: clone(g.game_json),
+				is_favorite: false, rating: null, created_at: new Date(g.created_at || Date.now()) }] : []);
+		}
+		if (sql === 'SELECT mode, game_json FROM public.saved_games WHERE id = $1 AND user_id = $2 LIMIT 1') {
+			const g = (s.savedGames || {})[params[0]];
+			return ok(g && g.user_id === params[1] ? [{ mode: g.mode, game_json: clone(g.game_json) }] : []);
+		}
+		if (sql === 'SELECT mode, game_json FROM public.saved_games WHERE public_token = $1 LIMIT 1') {
+			const g = Object.values(s.savedGames || {}).find((x) => x.public_token === params[0]);
+			return ok(g ? [{ mode: g.mode, game_json: clone(g.game_json) }] : []);
 		}
 
 		// ── billing (free plan unless state.billing has a row) ──

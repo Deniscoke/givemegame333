@@ -14,6 +14,7 @@ const RpgTalents = (() => {
   // ─── State ──────────────────────────────────────────────────────
   let _data = null;   // { class_id, talents, unlocked[], coins }
   let _inflight = null;     // shared promise while GET /api/rpg/talents runs
+  let _queued = null;       // one follow-up load requested during an in-flight load (HUD reload race)
   let _lastResult = null;   // { kind, status } of the last load
 
   // ─── Helpers (mirrored from rpg-avatar.js) ──────────────────────
@@ -44,12 +45,18 @@ const RpgTalents = (() => {
   // ─── Load ───────────────────────────────────────────────────────
   /**
    * Load talents and remember why it failed, so the RPG screen can show
-   * "offline" (retry), "login" (401 only) or the data. Parallel callers share
-   * one request instead of getting stale data.
+   * "offline" (retry), "login" (401 only) or the data. A call made while a
+   * request is running waits for it and then fetches once more, so the HUD
+   * sees XP awarded in between instead of stale data.
    * @returns {Promise<{ kind: 'ok'|'login'|'offline'|'error', status: number, data: object|null }>}
    */
   function loadResult() {
-    if (_inflight) return _inflight;
+    if (_inflight) {
+      if (!_queued) {
+        _queued = _inflight.catch(() => null).then(() => { _queued = null; return loadResult(); });
+      }
+      return _queued;
+    }
     _inflight = (async () => {
       let result;
       if (window.RpgNet) {
