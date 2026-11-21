@@ -36,22 +36,22 @@ test('requiring the migration runner does not start the CLI', () => {
 });
 
 describe('supported migration catalog', () => {
-  test('covers every active SQL migration through 032 in deterministic order', () => {
+  test('covers every active SQL migration through 033 in deterministic order', () => {
     const filesOnDisk = fs.readdirSync(migrationsDir);
     const plan = validateMigrationCatalog(SUPPORTED_MIGRATION_ORDER, filesOnDisk);
 
     assert.equal(plan[0], '001_profiles_and_follows.sql');
-    assert.equal(plan.at(-1), '032_assessment_scope_evidence.sql');
+    assert.equal(plan.at(-1), '033_security_lockdown.sql');
     assert.deepEqual(
       plan.filter((name) => name.startsWith('018_')),
       ['018_edu_core.sql', '018_plan_usage_daily.sql']
     );
     assert.equal(plan.some((name) => name.startsWith('019_')), false);
     assert.equal(plan.some((name) => name.startsWith('023_')), false);
-    assert.equal(plan.length, 31);
+    assert.equal(plan.length, 32);
   });
 
-  test('--from 026 selects the 026-032 release without replaying older migrations', () => {
+  test('--from 026 selects the 026-033 release without replaying older migrations', () => {
     const options = parseCliArgs(['--from', '026']);
     const selected = selectMigrations(SUPPORTED_MIGRATION_ORDER, options);
 
@@ -62,7 +62,8 @@ describe('supported migration catalog', () => {
       '029_assessment_security.sql',
       '030_billing_security.sql',
       '031_assessment_scope_security.sql',
-      '032_assessment_scope_evidence.sql'
+      '032_assessment_scope_evidence.sql',
+      '033_security_lockdown.sql'
     ]);
   });
 
@@ -112,21 +113,21 @@ describe('supported migration catalog', () => {
 
   test('uses a legacy-specific confirmation flag and rejects the removed adoption confirmation', () => {
     assert.throws(
-      () => parseCliArgs(['--confirm-adoption', 'legacy-016-to-032']),
+      () => parseCliArgs(['--confirm-adoption', 'legacy-016-to-033']),
       /Unknown argument: --confirm-adoption/
     );
 
     const options = parseCliArgs([
       '--upgrade-legacy-016', '--from', '026',
-      '--confirm-legacy-upgrade', 'legacy-016-to-032'
+      '--confirm-legacy-upgrade', 'legacy-016-to-033'
     ]);
-    assert.equal(options.confirmation, 'legacy-016-to-032');
+    assert.equal(options.confirmation, 'legacy-016-to-033');
   });
 
   test('requires the complete release selector and confirmation for a legacy 016 upgrade', () => {
     const options = parseCliArgs([
       '--upgrade-legacy-016', '--from', '026',
-      '--confirm-legacy-upgrade', 'legacy-016-to-032'
+      '--confirm-legacy-upgrade', 'legacy-016-to-033'
     ]);
     const selected = selectMigrations(SUPPORTED_MIGRATION_ORDER, options);
 
@@ -138,12 +139,12 @@ describe('supported migration catalog', () => {
   });
 
   test('rejects unsafe or ambiguous legacy bootstrap mode combinations', () => {
-    const release = SUPPORTED_MIGRATION_ORDER.slice(-7);
+    const release = SUPPORTED_MIGRATION_ORDER.slice(-8);
     assert.throws(
       () => validateExecutionMode({
         upgradeLegacy016: true,
         from: '026',
-        confirmation: 'legacy-016-to-032',
+        confirmation: 'legacy-016-to-033',
         dryRun: true
       }, release),
       /cannot be combined with --dry-run or --list/
@@ -153,7 +154,7 @@ describe('supported migration catalog', () => {
       /requires --confirm-legacy-upgrade/
     );
     assert.throws(
-      () => validateExecutionMode({ confirmation: '026-032' }, release),
+      () => validateExecutionMode({ confirmation: '026-033' }, release),
       /--confirm-legacy-upgrade is only valid with --upgrade-legacy-016/
     );
   });
@@ -173,7 +174,7 @@ describe('supported migration catalog', () => {
     );
   });
 
-  test('dry-run lists the 026-032 release without requiring database credentials', () => {
+  test('dry-run lists the 026-033 release without requiring database credentials', () => {
     const result = spawnSync(
       process.execPath,
       [runnerPath, '--dry-run', '--from', '026'],
@@ -188,6 +189,7 @@ describe('supported migration catalog', () => {
     assert.match(result.stdout, /030_billing_security\.sql/);
     assert.match(result.stdout, /031_assessment_scope_security\.sql/);
     assert.match(result.stdout, /032_assessment_scope_evidence\.sql/);
+    assert.match(result.stdout, /033_security_lockdown\.sql/);
     assert.doesNotMatch(result.stdout, /025_level_perks\.sql/);
     assert.doesNotMatch(result.stdout, /postgres(?:ql)?:\/\//i);
     assert.equal(result.stderr, '');
