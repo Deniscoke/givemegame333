@@ -17,13 +17,122 @@ const script = read('public/script.js');
 describe('script.js play ticket flow', () => {
 	it('starts the ticket when the timer starts (solo only) and re-saves the running game', () => {
 		assert.match(script, /Timer\.setOnStart\(\(\) => \{ startPlayTicket\(\)/);
-		const fn = script.slice(script.indexOf('async function startPlayTicket'), script.indexOf('async function sendSoloReflection'));
+		const fn = script.slice(script.indexOf('async function _playStartOnce'), script.indexOf('async function sendSoloReflection'));
 		assert.match(fn, /isInSession/);
 		assert.match(fn, /'\/api\/play\/start'/);
 		assert.match(fn, /game_id: game\._savedId/);
-		assert.match(fn, /ticket_id: game\._play_ticket/);
+		assert.match(fn, /ticket_id: generatedTicket/);
+		assert.match(fn, /local: true/);
 		assert.match(fn, /Timer\.persist\(\)/);
 	});
+
+	it('completion sends only a ticket the server confirmed as started', () => {
+		const flow = script.slice(script.indexOf('Timer.setOnComplete('), script.indexOf('// Photo verification'));
+		assert.match(flow, /const ticketId = playTicketForCompletion\(window\.currentGame\)/);
+	});
+});
+
+/** Runs startPlayTicket from script.js against a scripted fetch. */
+function loadPlayTicketFns({ token = 'tok', responses = [] } = {}) {
+	const src = script.slice(script.indexOf('async function _playToken'), script.indexOf('async function sendSoloReflection'));
+	const calls = [];
+	const queue = [...responses];
+	let persisted = 0;
+	const window = { Session: { isInSession: () => false }, Timer: { persist: () => { persisted++; } } };
+	const ctx = {
+		window,
+		Timer: window.Timer,
+		supabaseClient: { auth: { getSession: async () => ({ data: { session: token ? { access_token: token } : null } }) } },
+		withTimeout: (p) => p,
+		AbortController,
+		setTimeout,
+		clearTimeout,
+		fetch: async (url, opts) => {
+			calls.push({ url, body: JSON.parse(opts.body) });
+			const next = queue.shift();
+			if (!next || next === 'throw') throw new Error('network down');
+			return { ok: next.status === 200, status: next.status, json: async () => next.body || {} };
+		},
+	};
+	vm.createContext(ctx);
+	vm.runInContext(`${src}\nthis.startPlayTicket = startPlayTicket; this.playTicketForCompletion = playTicketForCompletion;`, ctx);
+	return { ctx, window, calls, persisted: () => persisted };
+}
+
+describe('startPlayTicket behaviour', () => {
+	const NEW_ID = '6f1c2b8e-1b2c-4d5e-8f90-123456789abc';
+
+	it('a confirmed start marks the ticket as started', async () => {
+		const t = loadPlayTicketFns({ responses: [{ status: 200, body: { ticket_id: 'gen-1' } }] });
+		const game = { title: 'A', _play_ticket: 'gen-1' };
+		t.window.currentGame = game;
+		await t.ctx.startPlayTicket();
+		assert.deepEqual(t.calls.map((c) => c.body), [{ ticket_id: 'gen-1' }]);
+		assert.equal(t.ctx.playTicketForCompletion(game), 'gen-1');
+		assert.equal(t.persisted(), 1);
+	});
+
+	it('a network error is retried once; if both fail nothing counts as started', async () => {
+		const t = loadPlayTicketFns({ responses: ['throw', 'throw'] });
+		const game = { title: 'A', _play_ticket: 'gen-1' };
+		t.window.currentGame = game;
+		await t.ctx.startPlayTicket();
+		assert.equal(t.calls.length, 2);
+		assert.equal(t.ctx.playTicketForCompletion(game), null, 'complete-solo will not send an unstarted ticket');
+
+		const retry = loadPlayTicketFns({ responses: ['throw', { status: 200, body: { ticket_id: 'gen-1' } }] });
+		const g2 = { title: 'A', _play_ticket: 'gen-1' };
+		retry.window.currentGame = g2;
+		await retry.ctx.startPlayTicket();
+		assert.equal(retry.ctx.playTicketForCompletion(g2), 'gen-1');
+	});
+
+	it('without a token nothing is started or sent', async () => {
+		const t = loadPlayTicketFns({ token: null });
+		const game = { title: 'A', _play_ticket: 'gen-1', _play_ticket_started: true };
+		t.window.currentGame = game;
+		await t.ctx.startPlayTicket();
+		assert.equal(t.calls.length, 0);
+		assert.equal(t.ctx.playTicketForCompletion(game), null);
+	});
+
+	it('a library game drops the old ticket id from its saved copy, even when the start fails', async () => {
+		const t = loadPlayTicketFns({ responses: [{ status: 429, body: { code: 'TICKET_DAILY_LIMIT' } }] });
+		const game = { title: 'A', _savedId: 'saved-1', _play_ticket: 'old-used', _play_ticket_started: true };
+		t.window.currentGame = game;
+		await t.ctx.startPlayTicket();
+		assert.deepEqual(t.calls.map((c) => c.body), [{ game_id: 'saved-1' }]);
+		assert.equal(game._play_ticket, undefined);
+		assert.equal(t.ctx.playTicketForCompletion(game), null);
+	});
+
+	it('a game without a server copy starts a local ticket; a lost generated ticket falls back to one', async () => {
+		const t = loadPlayTicketFns({ responses: [{ status: 200, body: { ticket_id: NEW_ID } }] });
+		const local = { title: 'Záložná hra' };
+		t.window.currentGame = local;
+		await t.ctx.startPlayTicket();
+		assert.deepEqual(t.calls.map((c) => c.body), [{ local: true, title: 'Záložná hra' }]);
+		assert.equal(t.ctx.playTicketForCompletion(local), NEW_ID);
+
+		const lost = loadPlayTicketFns({ responses: [{ status: 404 }, { status: 200, body: { ticket_id: NEW_ID } }] });
+		const g = { title: 'B', _play_ticket: 'gone' };
+		lost.window.currentGame = g;
+		await lost.ctx.startPlayTicket();
+		assert.deepEqual(lost.calls.map((c) => c.body), [{ ticket_id: 'gone' }, { local: true, title: 'B' }]);
+		assert.equal(lost.ctx.playTicketForCompletion(g), NEW_ID);
+	});
+
+	it('a used generated ticket is not replaced by a local one', async () => {
+		const t = loadPlayTicketFns({ responses: [{ status: 409, body: { code: 'TICKET_USED' } }] });
+		const game = { title: 'A', _play_ticket: 'gen-1' };
+		t.window.currentGame = game;
+		await t.ctx.startPlayTicket();
+		assert.equal(t.calls.length, 1);
+		assert.equal(t.ctx.playTicketForCompletion(game), null);
+	});
+});
+
+describe('script.js play ticket flow (completion)', () => {
 
 	it('sends the solo reflection to the server before completing, then completes with ticket_id', () => {
 		const flow = script.slice(script.indexOf('Timer.setOnComplete('), script.indexOf('// Photo verification'));

@@ -224,7 +224,7 @@ const App = (() => {
 
 					// Phase 5: a solo reflection goes to the server first; if it passes
 					// the quality gate, the completion below earns the +25 % bonus.
-					const ticketId = window.currentGame?._play_ticket || null;
+					const ticketId = playTicketForCompletion(window.currentGame);
 					if (ticketId) {
 						const refl = await sendSoloReflection(ticketId, reflectionData, token);
 						if (!refl.ok && refl.code) GameUI.toast(`📝 ${reflectionBonusMessage(refl.code)}`);
@@ -1381,25 +1381,49 @@ const App = (() => {
 		} finally { clearTimeout(timer); }
 	}
 
-	/** Called when READY starts a solo game: start (or create) its play ticket. */
+	/** POST /api/play/start, retried once on a network error. Returns null when both tries fail. */
+	async function _playStartOnce(token, body) {
+		for (let attempt = 0; attempt < 2; attempt++) {
+			try {
+				return await _playFetch('/api/play/start', token, body);
+			} catch { /* network error or timeout: try once more */ }
+		}
+		return null;
+	}
+
+	/**
+	 * Called when READY starts a solo game: start (or create) its play ticket.
+	 * Only a start the server confirmed sets game._play_ticket_started; the
+	 * completion sends ticket_id only then (see playTicketForCompletion).
+	 */
 	async function startPlayTicket() {
 		if (window.Session?.isInSession?.()) return;
 		const game = window.currentGame;
 		if (!game || !supabaseClient) return;
+		game._play_ticket_started = false;
+		// A library game always gets a fresh ticket; a saved copy may still carry an old id.
+		if (game._savedId) delete game._play_ticket;
+		const generatedTicket = game._play_ticket || null;
 		const token = await _playToken();
 		if (!token) return;
-		// A library game gets a fresh ticket; a saved copy may still carry an old id.
+		// A game the server has no copy of (local fallback) gets a "local" ticket.
+		const localBody = { local: true, title: String(game.title || '').slice(0, 200) };
 		const body = game._savedId ? { game_id: game._savedId }
-			: game._play_ticket ? { ticket_id: game._play_ticket }
-			: null;
-		if (!body) return;
-		const r = await _playFetch('/api/play/start', token, body);
-		if (r.ok && r.data.ticket_id && window.currentGame === game) {
+			: generatedTicket ? { ticket_id: generatedTicket }
+			: localBody;
+		let r = await _playStartOnce(token, body);
+		// The generated ticket is gone (e.g. another account): play it as a local game.
+		if (r && r.status === 404 && body.ticket_id) r = await _playStartOnce(token, localBody);
+		if (r && r.ok && r.data.ticket_id && window.currentGame === game) {
 			game._play_ticket = r.data.ticket_id;
+			game._play_ticket_started = true;
 			if (window.Timer?.persist) Timer.persist();
-		} else if (!r.ok && body.ticket_id) {
-			delete game._play_ticket; // stale or used ticket: no reward path, legacy fallback only
 		}
+	}
+
+	/** Ticket id to send with the reflection and complete-solo, or null. */
+	function playTicketForCompletion(game) {
+		return game && game._play_ticket_started === true && game._play_ticket ? game._play_ticket : null;
 	}
 
 	/** Solo reflection → server quality gate. Returns { ok, code }. */
