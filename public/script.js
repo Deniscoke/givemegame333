@@ -378,9 +378,9 @@ const App = (() => {
 			shareBtn.addEventListener('click', async () => {
 				try {
 					await navigator.clipboard.writeText(shareUrl);
-					GameUI.toast('🔗 Odkaz skopírovaný! Pošli kamarátovi túto URL — NIE localhost.');
+					GameUI.toast('🔗 ' + t('share_link_copied', 'Odkaz skopírovaný! Pošli ho kamarátovi.'));
 				} catch (e) {
-					GameUI.toast('Skopíruj URL z adresného riadka.');
+					GameUI.toast(t('share_link_copy_manual', 'Skopíruj odkaz z adresného riadka.'));
 				}
 			});
 		}
@@ -430,7 +430,8 @@ const App = (() => {
 
 		// Check if player can afford the generation cost
 		if (!Coins.canAfford(costAction)) {
-			GameUI.toast(`🪙 ${t('not_enough_coins', 'Nedostatek coinů!')} (${Coins.getCost(costAction)} potřeba, máš ${Coins.getBalance()})`);
+			const needCoins = String(Coins.getCost(costAction));
+			GameUI.toast(`🪙 ${t('not_enough_coins', 'Nedostatok coinov! Potrebuješ {cost} 🪙').replace('{cost}', needCoins)} (${Coins.getBalance()} 🪙)`);
 			return;
 		}
 
@@ -479,9 +480,12 @@ const App = (() => {
 			console.error('[App] Generování selhalo:', err);
 			GameUI.showScreen('welcome');
 
-			// Chyba — ale vďaka fallbacku v GameAPI sa sem dostaneme len zriedka
-			const errorMsg = t('status_error', 'ERROR') + ' — ' + err.message;
-			GameUI.toast(errorMsg);
+			// Chyba — pri generovaní ju zachytí fallback v GameAPI, sem padá hlavne remix.
+			// Používateľovi ukážeme priateľskú preloženú správu, nie surovú chybu servera.
+			const friendly = (GameAPI && typeof GameAPI.describeAiError === 'function')
+				? GameAPI.describeAiError(err, sourceGame ? 'remix' : 'fallback')
+				: t('ai_remix_generic', 'Remix sa nepodaril. Skús to znova.');
+			GameUI.toast('⚠️ ' + friendly);
 			GameUI.setStatus(t('status_error', 'ERROR'));
 		} finally {
 			isGenerating = false;
@@ -1061,8 +1065,27 @@ const App = (() => {
 	}
 
 	// ─── Jazyk / i18n ───
-	let currentLang = localStorage.getItem('givemegame_preferred_lang') || 'cs';
+	// Poradie: uložená voľba → jazyk prehliadača (ak ho podporujeme) → slovenčina.
+	// BEGIN resolveInitialLang (čistá funkcia — rovnaká kópia je v login.html, testuje test/frontend-ux.test.js)
+	function resolveInitialLang(saved, browserLangs) {
+		const SUPPORTED = ['sk', 'cs', 'en', 'de', 'es', 'tr'];
+		const norm = (v) => String(v || '').trim().toLowerCase().split(/[-_]/)[0];
+		if (SUPPORTED.includes(norm(saved))) return norm(saved);
+		const list = Array.isArray(browserLangs) ? browserLangs : [browserLangs];
+		for (const l of list) {
+			if (SUPPORTED.includes(norm(l))) return norm(l);
+		}
+		return 'sk';
+	}
+	// END resolveInitialLang
+	let savedLangPref = null;
+	try { savedLangPref = localStorage.getItem('givemegame_preferred_lang'); } catch (e) { /* storage blocked */ }
+	let currentLang = resolveInitialLang(
+		savedLangPref,
+		(navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language]
+	);
 	window.givemegame_currentLang = currentLang;
+	document.documentElement.lang = currentLang;
 	const translationCache = {};
 
 	// Kľúče, ktorých hodnota obsahuje HTML (použijeme innerHTML namiesto textContent)
