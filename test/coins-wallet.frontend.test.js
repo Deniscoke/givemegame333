@@ -159,6 +159,43 @@ describe('coins.js signed-in wallet (server-authoritative)', () => {
 	});
 });
 
+describe('coins.js after the P0 review', () => {
+	it('signed-in: spendAmount no longer lowers only the local number (gIVEME donations go to the server)', async () => {
+		const t = loadCoins({ signedIn: true, responses: { '/api/coins/balance': { json: { balance: 100 } } } });
+		await t.Coins.load();
+		assert.equal(t.Coins.spendAmount(50), false);
+		assert.equal(t.Coins.getBalance(), 100);
+		assert.equal(t.Coins.isServerWallet(), true);
+		t.Coins.syncServerBalance(50);
+		assert.equal(t.Coins.getBalance(), 50);
+		assert.equal(t.profileWrites.length, 0);
+	});
+
+	it('guest: spendAmount still debits the practice wallet; syncServerBalance is ignored', async () => {
+		const t = loadCoins({ signedIn: false });
+		await t.Coins.load();
+		assert.equal(t.Coins.spendAmount(50), true);
+		assert.equal(t.Coins.getBalance(), 450);
+		t.Coins.syncServerBalance(99999);
+		assert.equal(t.Coins.getBalance(), 450);
+	});
+
+	it('shows the daily-cap toast when a counted completion earned no coins (capped)', async () => {
+		const t = loadCoins({
+			signedIn: true,
+			responses: {
+				'/api/coins/balance': { json: { balance: 500 } },
+				'/api/coins/log': { json: { ok: true, credited: 0, capped: true, balance: 500 } },
+			},
+		});
+		await t.Coins.load();
+		t.Coins.award('robot_challenge');
+		await flush(); await flush();
+		assert.equal(t.Coins.getBalance(), 500);
+		assert.equal(t.toasts.length, 1);
+	});
+});
+
 describe('coins.js guest practice wallet', () => {
 	it('starts with the starter coins, stays local and never calls the server', async () => {
 		const t = loadCoins({ signedIn: false });
@@ -188,6 +225,25 @@ describe('Phase 0 i18n keys', () => {
 
 	it('are the keys the code uses', () => {
 		const src = coinsSrc + read('public/script.js');
-		for (const k of KEYS) assert.match(src, new RegExp(`\\b_?t\\('${k}'`), k);
+		// coins.js keeps ledger labels as [key, fallback] pairs passed to _t().
+		for (const k of KEYS) assert.match(src, new RegExp(`\\b_?t\\('${k}'|\\['${k}',`), k);
+	});
+});
+
+describe('P0 review i18n keys', () => {
+	const LANGS = ['sk', 'cs', 'en', 'de', 'es', 'tr'];
+	const dicts = Object.fromEntries(LANGS.map((l) => [l, JSON.parse(read(`public/data/i18n/${l}.json`))]));
+	const KEYS = ['coins_tx_donation_sent', 'coins_tx_donation_received', 'coins_tx_balance_reconcile', 'giveme_donate_daily_cap'];
+
+	it('exist and are translated in all six languages', () => {
+		for (const k of KEYS) {
+			for (const l of LANGS) assert.equal(typeof dicts[l][k], 'string', `${l}:${k}`);
+			for (const l of ['en', 'de', 'es', 'tr']) assert.notEqual(dicts[l][k], dicts.sk[k], `${l}:${k}`);
+		}
+	});
+
+	it('are the keys the code uses', () => {
+		const src = coinsSrc + read('public/gIVEME/script.js');
+		for (const k of KEYS) assert.match(src, new RegExp(`'${k}'`), k);
 	});
 });

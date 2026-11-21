@@ -415,6 +415,10 @@
   "profile_rpg_title": "⚔️ RPG postup a statistiky",
   "coins_daily_cap": "Denní limit coinů z této aktivity je vyčerpán. Zkus to zítra.",
   "coins_tx_starter_grant": "🎁 Startovní bonus",
+  "coins_tx_donation_sent": "🎁 Darované coiny (gIVEME)",
+  "coins_tx_donation_received": "🎁 Přijatý dar (gIVEME)",
+  "coins_tx_balance_reconcile": "🧾 Obnovený zůstatek",
+  "giveme_donate_daily_cap": "Dnešní limit darování coinů je vyčerpán. Zkus to zítra.",
   "refl_verify_daily_cap": "Dnes už jsi vyčerpal/a limit ověření fotky. Zkus to zítra.",
   "refl_verify_reward_capped": "Fotka je ověřená, ale dnešní foto bonusy jsou už vyčerpané."
 }

@@ -413,6 +413,10 @@
   "profile_rpg_title": "⚔️ RPG progress and stats",
   "coins_daily_cap": "Daily coin limit for this activity reached. Try again tomorrow.",
   "coins_tx_starter_grant": "🎁 Starter bonus",
+  "coins_tx_donation_sent": "🎁 Coins donated (gIVEME)",
+  "coins_tx_donation_received": "🎁 Gift received (gIVEME)",
+  "coins_tx_balance_reconcile": "🧾 Balance restored",
+  "giveme_donate_daily_cap": "Today's coin donation limit is used up. Try again tomorrow.",
   "refl_verify_daily_cap": "You have used up today's photo checks. Try again tomorrow.",
   "refl_verify_reward_capped": "Photo verified, but today's photo bonuses are used up."
 }

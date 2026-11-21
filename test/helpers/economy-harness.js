@@ -37,6 +37,9 @@ function createState() {
 		participants: [],      // { session_id, user_id, coins_paid, reflection_done, awarded_competencies, joined_at }
 		tx: [],                // coin_transactions { user_id, amount, action, metadata, created_at }
 		talents: [],           // { user_id, talent_id }
+		posts: {},             // giveme_posts id → { author_id }
+		donations: [],         // giveme_coin_donations { post_id, donor_id, recipient_id, amount }
+		billing: {},           // user_billing user_id → { plan_code, paid_access_enabled }
 	};
 }
 
@@ -201,6 +204,10 @@ class FakeDb {
 			this.ensureProfile(params[0]);
 			return ok([], existed ? 0 : 1);
 		}
+		if (sql === 'SELECT coins, updated_at FROM public.profiles WHERE id = $1 LIMIT 1') {
+			const p = s.profiles[params[0]];
+			return ok(p ? [{ coins: p.coins, updated_at: null }] : []);
+		}
 		if (sql === 'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1') {
 			const p = s.profiles[params[0]];
 			return ok(p ? [{ rpg_avatar_id: p.rpg_avatar_id }] : []);
@@ -253,8 +260,34 @@ class FakeDb {
 			return ok(s.tx.some((t) => t.user_id === params[0]) ? [{ '?column?': 1 }] : []);
 		}
 
-		// ── billing (free plan for every harness user) ──
-		if (sql.startsWith('SELECT user_id, plan_code') && sql.includes('FROM public.user_billing WHERE user_id = $1')) return ok([]);
+		if (sql === "SELECT COUNT(*)::int AS c FROM public.coin_transactions WHERE user_id = $1::uuid AND action = 'robot_challenge' AND created_at > NOW() - INTERVAL '24 hours'") {
+			return ok([{ c: s.tx.filter((t) => t.user_id === params[0] && t.action === 'robot_challenge'
+				&& Date.now() - t.created_at.getTime() < 86400000).length }]);
+		}
+		if (sql.startsWith("SELECT COALESCE(SUM(-amount), 0)::int AS sent FROM public.coin_transactions WHERE user_id = $1 AND action = 'giveme_donation_sent' AND created_at >= CURRENT_DATE")) {
+			return ok([{ sent: todays(params[0]).filter((t) => t.action === 'giveme_donation_sent').reduce((a, t) => a - t.amount, 0) }]);
+		}
+
+		// ── gIVEME ──
+		if (sql === 'SELECT author_id FROM public.giveme_posts WHERE id = $1') {
+			const post = (s.posts || {})[params[0]];
+			return ok(post ? [{ author_id: post.author_id }] : []);
+		}
+		if (sql === 'INSERT INTO public.giveme_coin_donations (post_id, donor_id, recipient_id, amount) VALUES ($1, $2, $3, $4)') {
+			const [postId, donorId, recipientId, amount] = params;
+			if (donorId === recipientId || amount < 1 || amount > 100) throw new Error('giveme_coin_donations_sane violated');
+			(s.donations = s.donations || []).push({ post_id: postId, donor_id: donorId, recipient_id: recipientId, amount });
+			// 003 trigger on_giveme_donation: credit the recipient.
+			const r = s.profiles[recipientId];
+			if (r) r.coins += amount;
+			return ok([], 1);
+		}
+
+		// ── billing (free plan unless state.billing has a row) ──
+		if (sql.startsWith('SELECT user_id, plan_code') && sql.includes('FROM public.user_billing WHERE user_id = $1')) {
+			const row = (s.billing || {})[params[0]];
+			return ok(row ? [{ user_id: params[0], ...row }] : []);
+		}
 		if (sql === 'SELECT public.effective_tier($1) AS tier') return ok([{ tier: 'free' }]);
 
 		throw new Error(`FakeDb: unhandled SQL: ${sql}`);

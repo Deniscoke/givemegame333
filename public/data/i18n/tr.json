@@ -358,6 +358,10 @@
   "profile_rpg_title": "⚔️ RPG ilerlemesi ve istatistikler",
   "coins_daily_cap": "Bu etkinlik için günlük coin sınırına ulaşıldı. Yarın tekrar dene.",
   "coins_tx_starter_grant": "🎁 Başlangıç bonusu",
+  "coins_tx_donation_sent": "🎁 Bağışlanan coinler (gIVEME)",
+  "coins_tx_donation_received": "🎁 Alınan hediye (gIVEME)",
+  "coins_tx_balance_reconcile": "🧾 Bakiye geri yüklendi",
+  "giveme_donate_daily_cap": "Bugünkü coin bağış sınırına ulaşıldı. Yarın tekrar dene.",
   "refl_verify_daily_cap": "Bugünkü fotoğraf doğrulama hakkını kullandın. Yarın tekrar dene.",
   "refl_verify_reward_capped": "Fotoğraf doğrulandı, ancak bugünkü fotoğraf bonusları tükendi."
 }

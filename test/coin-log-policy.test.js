@@ -12,10 +12,13 @@ const {
 	SERVER_ROUTED_ACTIONS,
 	DAILY_REWARD_CAP,
 	STARTER_GRANT_COINS,
+	EXACT_REWARD_AMOUNTS,
+	DONATION_MAX,
 	COIN_LOG_RULES,
 	rewardCapKey,
 	computeRewardCredit,
 	validateCoinLog,
+	validateDonation,
 } = require('../lib/coin-log-policy');
 
 const ROOT = path.join(__dirname, '..');
@@ -135,5 +138,31 @@ describe('server-side reward caps (C2)', () => {
 		const m = /const STARTER_COINS = (\d+);/.exec(coinsJs);
 		assert.ok(m, 'STARTER_COINS not found in coins.js');
 		assert.equal(Number(m[1]), STARTER_GRANT_COINS);
+	});
+});
+
+describe('P0 review: robot_challenge exact amounts (M5)', () => {
+	it('accepts only the base reward and its double_coins value', () => {
+		assert.deepEqual([...EXACT_REWARD_AMOUNTS.robot_challenge], [REWARD_BASE.robot_challenge, REWARD_BASE.robot_challenge * 2]);
+		assert.equal(validateCoinLog({ action: 'robot_challenge', amount: 250 }).ok, true);
+		assert.equal(validateCoinLog({ action: 'robot_challenge', amount: 500 }).ok, true);
+		for (const amount of [1, 2, 249, 251, 499]) {
+			assert.equal(validateCoinLog({ action: 'robot_challenge', amount }).code, 'AMOUNT_OUT_OF_RANGE', String(amount));
+		}
+	});
+});
+
+describe('P0 review: validateDonation', () => {
+	const POST = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+	it('accepts a uuid post and an amount within the 033 constraint', () => {
+		assert.deepEqual(validateDonation({ post_id: POST.toUpperCase(), amount: 5 }), { ok: true, postId: POST, amount: 5 });
+		assert.equal(validateDonation({ post_id: POST, amount: DONATION_MAX }).ok, true);
+	});
+	it('rejects bad input', () => {
+		assert.equal(validateDonation({ post_id: POST, amount: 0 }).code, 'AMOUNT_OUT_OF_RANGE');
+		assert.equal(validateDonation({ post_id: POST, amount: DONATION_MAX + 1 }).code, 'AMOUNT_OUT_OF_RANGE');
+		assert.equal(validateDonation({ post_id: POST, amount: '5' }).code, 'AMOUNT_OUT_OF_RANGE');
+		assert.equal(validateDonation({ post_id: 'x', amount: 5 }).code, 'INVALID_INPUT');
+		assert.equal(validateDonation(null).code, 'INVALID_INPUT');
 	});
 });

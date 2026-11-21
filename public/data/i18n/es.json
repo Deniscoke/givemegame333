@@ -361,6 +361,10 @@
   "profile_rpg_title": "⚔️ Progreso y estadísticas RPG",
   "coins_daily_cap": "Has alcanzado el límite diario de monedas de esta actividad. Inténtalo mañana.",
   "coins_tx_starter_grant": "🎁 Bono de inicio",
+  "coins_tx_donation_sent": "🎁 Monedas donadas (gIVEME)",
+  "coins_tx_donation_received": "🎁 Regalo recibido (gIVEME)",
+  "coins_tx_balance_reconcile": "🧾 Saldo restaurado",
+  "giveme_donate_daily_cap": "Has alcanzado el límite diario de donaciones de monedas. Inténtalo mañana.",
   "refl_verify_daily_cap": "Ya has usado las verificaciones de foto de hoy. Inténtalo mañana.",
   "refl_verify_reward_capped": "Foto verificada, pero los bonos de foto de hoy ya se agotaron."
 }

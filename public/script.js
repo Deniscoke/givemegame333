@@ -1304,7 +1304,7 @@ const App = (() => {
 				const plan = window.__givemegamePlan;
 				const lim = plan?.entitlements?.robotCompletionsPer24h;
 				const used = plan?.usage?.robotCompletions24h ?? 0;
-				if (plan && !plan.hasPaidAccess && lim != null && used >= lim) {
+				if (plan && lim != null && used >= lim) {
 					GameUI.toast(t('robot_plan_limit', 'Bez Pro: limit Robot Challenge / 24 h — odmena dnes už nie. Skús neskôr alebo Pro učiteľ.'));
 				} else {
 					Coins.award('robot_challenge');

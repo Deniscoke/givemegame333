@@ -80,8 +80,8 @@ const {
 	createCachedProbe,
 	cacheControlForPath,
 } = require('./lib/ai-guard');
-const { validateCoinLog, STARTER_GRANT_COINS } = require('./lib/coin-log-policy');
-const { applyCoinLogEntry, grantStarterCoins } = require('./lib/coin-ledger');
+const { validateCoinLog, validateDonation, STARTER_GRANT_COINS } = require('./lib/coin-log-policy');
+const { applyCoinLogEntry, grantStarterCoins, applyRobotChallenge, applyDonation } = require('./lib/coin-ledger');
 
 // Free-tier soft cap: level grows from XP, but is displayed/enforced at FREE_LIMITS.maxLevel.
 // Talents/perks gated by level will therefore remain locked past the cap until user upgrades.
@@ -107,7 +107,7 @@ const JOIN_CODE_LENGTH  = 6;
 // Rate limiting: solo completions per 24h — Free vs Pro (plan-entitlements).
 const TALENT_XP_AWARD  = 25;  // per talent unlock (idempotent via UNIQUE constraint)
 const SESSION_XP_AWARD = 75;  // per multiplayer session completion (reflection_done guard)
-const ROBOT_XP_AWARD   = 30;  // per robot challenge completion (no daily cap — mini-game)
+const ROBOT_XP_AWARD   = 30;  // per robot challenge completion (completions per 24h capped by plan, M5)
 
 // ─── Reward validation constants ───
 const VALID_COMPETENCY_KEYS = [
@@ -1458,25 +1458,7 @@ app.post('/api/coins/log', async (req, res) => {
 		return res.status(400).json({ error: checked.error, code: checked.code });
 	}
 	const { amount, action: actionTrim, metadata } = checked;
-	if (actionTrim === 'robot_challenge' && amount > 0) {
-		try {
-			const bill = await getUserBillingState(coinsDbPool, user.id);
-			const ent = entitlementsForPlan(hasPaidAccess(bill));
-			if (ent.robotCompletionsPer24h != null) {
-				const rc = await countRobotChallengesLast24h(coinsDbPool, user.id);
-				if (rc >= ent.robotCompletionsPer24h) {
-					return res.status(429).json({
-						error: `Limit Robot Challenge: ${rc}/${ent.robotCompletionsPer24h} za 24 h. Obnoví sa alebo predplaťte Pro učiteľ.`,
-						code: 'ROBOT_DAILY_LIMIT',
-						limit: ent.robotCompletionsPer24h,
-						used: rc
-					});
-				}
-			}
-		} catch (e) {
-			console.warn('[Coins] robot_challenge plan check:', e.message);
-		}
-	}
+	if (actionTrim === 'robot_challenge') return handleRobotChallengeLog(res, user, amount, metadata);
 	// C2: the server applies the event to profiles.coins (the browser can no
 	// longer write it). Rewards are capped per day, spends need the balance.
 	let client;
@@ -1503,10 +1485,6 @@ app.post('/api/coins/log', async (req, res) => {
 			return res.status(409).json({ error: 'Profil nenájdený', code: 'NO_PROFILE' });
 		}
 
-		// Robot challenge XP in the same transaction as the coin credit (M5 part).
-		if (actionTrim === 'robot_challenge') {
-			await awardXpInTransaction(client, user.id, ROBOT_XP_AWARD, 'robot_challenge');
-		}
 		await client.query('COMMIT');
 
 		res.json({ ok: true, credited: result.credited, balance: result.balance });
@@ -1514,6 +1492,92 @@ app.post('/api/coins/log', async (req, res) => {
 		if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ } }
 		console.error('[Coins] log insert failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa zaznamenať transakciu', code: 'LOG_ERROR' });
+	} finally {
+		if (client) client.release();
+	}
+});
+
+/**
+ * M5: a robot challenge completion. The completion limit (rows per 24 h,
+ * every plan) is checked inside the transaction under the profile lock; the
+ * XP is awarded once per accepted completion in the same transaction, and a
+ * completion past the daily coin cap still counts and still earns its XP.
+ */
+async function handleRobotChallengeLog(res, user, amount, metadata) {
+	let completionLimit = entitlementsForPlan(false).robotCompletionsPer24h;
+	try {
+		const bill = await getUserBillingState(coinsDbPool, user.id);
+		completionLimit = entitlementsForPlan(hasPaidAccess(bill)).robotCompletionsPer24h;
+	} catch (e) {
+		// Fail closed: without billing state the free limit applies.
+		console.warn('[Coins] robot_challenge plan check:', e.message);
+	}
+	let client;
+	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		const result = await applyRobotChallenge(client, {
+			userId: user.id, amount, metadata: metadata || null, completionLimit,
+		});
+		if (result.status === 'limit') {
+			await client.query('ROLLBACK');
+			return res.status(429).json({
+				error: `Limit Robot Challenge: ${result.used}/${result.limit} za 24 h.`,
+				code: 'ROBOT_DAILY_LIMIT', limit: result.limit, used: result.used, balance: result.balance
+			});
+		}
+		if (result.status !== 'ok') {
+			await client.query('ROLLBACK');
+			return res.status(409).json({ error: 'Profil nenájdený', code: 'NO_PROFILE' });
+		}
+		await awardXpInTransaction(client, user.id, ROBOT_XP_AWARD, 'robot_challenge');
+		await client.query('COMMIT');
+		res.json({
+			ok: true, credited: result.credited, balance: result.balance,
+			capped: result.capped, xp_awarded: ROBOT_XP_AWARD,
+			completions: result.completions, limit: completionLimit
+		});
+	} catch (err) {
+		if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ } }
+		console.error('[Coins] robot_challenge failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa zaznamenať transakciu', code: 'LOG_ERROR' });
+	} finally {
+		if (client) client.release();
+	}
+}
+
+// gIVEME coin donation: one transaction debits the donor, inserts the
+// donation row (its trigger credits the author) and writes both ledger rows.
+// Browsers can no longer insert giveme_coin_donations directly (037).
+app.post('/api/giveme/donate', async (req, res) => {
+	if (!coinApiReady()) return respondCoinApiDisabled(res);
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const checked = validateDonation(req.body);
+	if (!checked.ok) return res.status(400).json({ error: checked.error, code: checked.code });
+	let client;
+	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		const result = await applyDonation(client, { donorId: user.id, postId: checked.postId, amount: checked.amount });
+		if (result.status !== 'ok') {
+			await client.query('ROLLBACK');
+			if (result.status === 'insufficient') {
+				return res.status(402).json({ error: 'Nedostatok coinov', code: 'INSUFFICIENT_COINS', balance: result.balance, required: result.required });
+			}
+			if (result.status === 'capped') {
+				return res.status(429).json({ error: 'Denný limit darovania dosiahnutý', code: 'DONATION_DAILY_CAP', balance: result.balance, cap: result.cap, sent_today: result.sentToday });
+			}
+			if (result.status === 'self') return res.status(400).json({ error: 'Nemôžeš darovať sám sebe', code: 'SELF_DONATION' });
+			if (result.status === 'no_post') return res.status(404).json({ error: 'Príspevok nenájdený', code: 'NO_POST' });
+			return res.status(409).json({ error: 'Profil nenájdený', code: 'NO_PROFILE' });
+		}
+		await client.query('COMMIT');
+		res.json({ ok: true, donated: checked.amount, balance: result.balance });
+	} catch (err) {
+		if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ } }
+		console.error('[gIVEME] donation failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa odoslať coiny', code: 'DONATION_ERROR' });
 	} finally {
 		if (client) client.release();
 	}

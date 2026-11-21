@@ -144,7 +144,8 @@ const Coins = (() => {
 			if (!token) return null;
 			const r = await _apiJson('/api/coins/log', token, { method: 'POST', body: { amount, action } });
 			_applyServerBalance(r.data);
-			if (r.status === 429 && r.data?.code === 'COIN_DAILY_CAP' && amount > 0) {
+			// 429: nič sa nepripísalo; capped: udalosť sa započítala (napr. Robot Challenge XP), coiny už nie.
+			if (amount > 0 && ((r.status === 429 && r.data?.code === 'COIN_DAILY_CAP') || (r.ok && r.data?.capped))) {
 				GameUI.toast(`🪙 ${_t('coins_daily_cap', 'Denný limit coinov z tejto aktivity je vyčerpaný. Skús to zajtra.')}`);
 			}
 			return r;
@@ -302,7 +303,14 @@ const Coins = (() => {
 
 	function getBalance() { return balance; }
 
+	/**
+	 * Lokálne odpočítanie — len hosťova cvičná peňaženka. Prihlásený používateľ
+	 * daruje cez POST /api/giveme/donate (server odpočíta a vráti zostatok,
+	 * ten sa prevezme cez syncServerBalance); lokálne zníženie čísla by inak
+	 * po obnovení stránky zmizlo a dar by bol zadarmo.
+	 */
 	function spendAmount(amount) {
+		if (serverWallet) return false;
 		const amt = parseInt(amount) || 0;
 		if (amt <= 0 || balance < amt) return false;
 		balance -= amt;
@@ -328,6 +336,14 @@ const Coins = (() => {
 		shop_xp_potion_500: '🧪 XP Potion',
 		solo_complete_boosted: '⚡ Solo (boosted)',
 		photo_verify_bonus: '📸 Foto výzva (overené)',
+	};
+
+	/** Server-side ledger actions with translated labels: action → [i18n key, Slovak fallback]. */
+	const I18N_ACTION_LABELS = {
+		starter_grant: ['coins_tx_starter_grant', '🎁 Štartovací bonus'],
+		giveme_donation_sent: ['coins_tx_donation_sent', '🎁 Darované coiny (gIVEME)'],
+		donation_received: ['coins_tx_donation_received', '🎁 Prijatý dar (gIVEME)'],
+		balance_reconcile: ['coins_tx_balance_reconcile', '🧾 Obnovený zostatok'],
 	};
 
 	function formatRelativeTime(isoString) {
@@ -593,8 +609,9 @@ const Coins = (() => {
 				return;
 			}
 			listEl.innerHTML = transactions.map(tx => {
-				const label = tx.action === 'starter_grant'
-					? _t('coins_tx_starter_grant', '🎁 Štartovací bonus')
+				const i18nLabel = I18N_ACTION_LABELS[tx.action];
+				const label = i18nLabel
+					? _t(i18nLabel[0], i18nLabel[1])
 					: (ACTION_LABELS[tx.action] || tx.action);
 				const sign = tx.amount >= 0 ? '+' : '';
 				const cls = tx.amount >= 0 ? 'positive' : 'negative';
@@ -623,6 +640,8 @@ const Coins = (() => {
 
 	return {
 		load, award, spend, spendAmount, canAfford, getCost, getBalance,
+		isServerWallet: () => serverWallet,
+		syncServerBalance: (b) => { if (serverWallet) _applyServerBalance({ balance: b }); },
 		toggleHistory, switchTab, purchaseItem,
 		getActivePowerup, consumePowerup
 	};
