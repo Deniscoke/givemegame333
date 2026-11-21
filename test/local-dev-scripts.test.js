@@ -57,7 +57,8 @@ test('local-env preload refuses a non-local database URL', () => {
 });
 
 test('local Supabase config is isolated from other projects and leaves migrations to our runner', () => {
-	const toml = fs.readFileSync(path.join(ROOT, 'supabase', 'config.toml'), 'utf8');
+	// Normalize CRLF (Windows checkouts with core.autocrlf) so section lookups match.
+	const toml = fs.readFileSync(path.join(ROOT, 'supabase', 'config.toml'), 'utf8').replace(/\r\n/g, '\n');
 	assert.match(toml, /^project_id = "givemegame"$/m);
 	const ports = [...toml.matchAll(/^(?:port|shadow_port) = (\d+)$/gm)].map((m) => Number(m[1]));
 	assert.ok(ports.length >= 6);

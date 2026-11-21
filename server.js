@@ -4165,7 +4165,7 @@ app.get('/api/random-fact', async (req, res) => {
 	let lastError = null;
 	for (const factModel of modelsToTry) {
 		try {
-			const langMap = { sk: 'Slovak', cs: 'Czech', en: 'English', es: 'Spanish' };
+			const langMap = { sk: 'Slovak', cs: 'Czech', de: 'German', en: 'English', es: 'Spanish', tr: 'Turkish' };
 			const tgtLang = langMap[lang] || 'Czech';
 			const STYLE_HINTS = {
 				genz: 'Use Gen Z slang and casual vocabulary. Same educational content, different delivery. EN: "lowkey", "literally", "vibe", "no cap", "slay", "fr". CZ/SK: "v pohodě", "lit", "based", "lowkey", "to je vibe", "žádný cap". Keep the fact accurate, just make it sound like a Gen Z friend.',
