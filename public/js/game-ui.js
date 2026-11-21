@@ -360,22 +360,40 @@ const GameUI = (() => {
 	}
 
 	// ─── Vzhled ───
-	function toggleTheme() {
-		document.body.classList.toggle('light-mode');
-		const icon = document.getElementById('theme-icon');
-		if (document.body.classList.contains('light-mode')) {
-			icon.className = 'bi bi-sun-fill';
-		} else {
-			icon.className = 'bi bi-moon-fill';
+	const THEME_STORAGE_KEY = 'givemegame_theme';
+
+	// Theme = body.light-mode + html[data-theme]; the choice is saved (Phase 2).
+	function applyTheme(theme, persist = true) {
+		const light = theme === 'light';
+		document.body.classList.toggle('light-mode', light);
+		document.documentElement?.setAttribute?.('data-theme', light ? 'light' : 'dark');
+		const use = document.querySelector?.('#theme-icon use');
+		if (use) use.setAttribute('href', `/ui/icons/px-icons.svg#i-${light ? 'sun' : 'moon'}`);
+		if (persist) {
+			try { localStorage.setItem(THEME_STORAGE_KEY, light ? 'light' : 'dark'); } catch (_) {}
 		}
 	}
 
-	// ─── Modaly ───
+	function toggleTheme() {
+		applyTheme(document.body.classList.contains('light-mode') ? 'dark' : 'light');
+	}
+
+	function restoreTheme() {
+		let saved = null;
+		try { saved = localStorage.getItem(THEME_STORAGE_KEY); } catch (_) {}
+		if (saved === 'light' || saved === 'dark') applyTheme(saved, false);
+	}
+
+	// ─── Modaly ─── (PxModal: focus trap, Escape, focus restore — M19)
 	function openModal(id) {
-		document.getElementById(id).style.display = 'flex';
+		if (window.PxModal) { window.PxModal.open(id); return; }
+		const el = document.getElementById(id);
+		if (el) el.style.display = 'flex';
 	}
 	function closeModal(id) {
-		document.getElementById(id).style.display = 'none';
+		if (window.PxModal) { window.PxModal.close(id); return; }
+		const el = document.getElementById(id);
+		if (el) el.style.display = 'none';
 	}
 	function openHelp() { openModal('help-modal'); }
 
@@ -707,7 +725,7 @@ const GameUI = (() => {
 
 	return {
 		showScreen, renderGame, renderQuickView, addToHistory, clearHistory, loadHistory,
-		toggleSection, toggleTheme, openModal, closeModal,
+		toggleSection, toggleTheme, applyTheme, restoreTheme, openModal, closeModal,
 		openHelp, toggleFullscreen, toggleHistory, initTools, openTool, closeTools,
 		toggleMobileFilters, toggleMobileSmarta, closeMobileOverlays,
 		toast, setStatus, updateStats, renderCompetencies, renderProfileCompetencies,
