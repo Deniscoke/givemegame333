@@ -168,7 +168,7 @@ const App = (() => {
 			const u = raw ? JSON.parse(raw) : null;
 			if (u?.uid === 'guest') sessionStorage.removeItem('givemegame_user');
 		} catch (e) {}
-		await syncAuthFromSupabase();
+		await syncAuthFromSupabase({ verify: true });
 		supabaseClient?.auth.onAuthStateChange(async (event, session) => {
 			// INITIAL_SESSION is handled by the explicit UserPreferences.load() call below in init().
 			// Only react to genuine sign-in so prefs are not loaded twice on startup.
@@ -939,14 +939,73 @@ const App = (() => {
 	// supabaseClient, supabaseProfilesOk, getCurrentUser are now top-level
 	// globals (see top of script.js). coins.js references them directly.
 
+	// Codes Supabase Auth uses when it definitively rejects a stored session.
+	// Anything else (offline, timeout, 5xx, AuthRetryableFetchError) is treated
+	// as "unknown" so a flaky connection never logs anyone out.
+	// BEGIN isDefinitiveAuthRejection (testuje test/frontend-ux.test.js)
+	const REVOKED_AUTH_CODES = new Set([
+		'session_not_found', 'refresh_token_not_found', 'refresh_token_already_used',
+		'user_not_found', 'bad_jwt'
+	]);
+	function isDefinitiveAuthRejection(error) {
+		if (!error) return false;
+		// After session_not_found, supabase-js removes the session itself and
+		// reports AuthSessionMissingError (status 400).
+		if (error.name === 'AuthSessionMissingError') return true;
+		if (REVOKED_AUTH_CODES.has(error.code)) return true;
+		return error.status === 401 || error.status === 403;
+	}
+	// END isDefinitiveAuthRejection
+
+	async function isStoredSessionRevoked() {
+		try {
+			const { error } = await Promise.race([
+				supabaseClient.auth.getUser(),
+				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
+			]);
+			return isDefinitiveAuthRejection(error);
+		} catch {
+			return false;
+		}
+	}
+
+	function redirectToLoginAfterRevocation() {
+		sessionStorage.removeItem('givemegame_user');
+		localStorage.removeItem('givemegame_user');
+		// Keep a ?lobby=CODE deep link: login.html routes back to it after sign-in.
+		try {
+			const lobby = new URLSearchParams(window.location.search).get('lobby');
+			if (lobby) sessionStorage.setItem('givemegame_pending_lobby', lobby.trim().toUpperCase());
+		} catch {}
+		window.location.href = '/login.html';
+	}
+
 	// Sync Supabase session → sessionStorage (každý používateľ má svoj gIVEME účet)
-	async function syncAuthFromSupabase() {
+	// verify=true (page load only) also asks Supabase whether the stored session
+	// is still valid; SIGNED_IN events skip that extra network call.
+	async function syncAuthFromSupabase({ verify = false } = {}) {
 		if (!supabaseClient) return;
 		try {
-			const { data: { session } } = await Promise.race([
+			const { data: { session }, error: sessionError } = await Promise.race([
 				supabaseClient.auth.getSession(),
 				new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
 			]);
+			// getSession() reads localStorage (refreshing an expired token). A session
+			// revoked on the server (password change, sign-out elsewhere) would look
+			// logged in while every API call fails, so drop it and ask to sign in.
+			if (verify) {
+				let revoked;
+				if (sessionError) revoked = isDefinitiveAuthRejection(sessionError);
+				else if (session?.user) revoked = await isStoredSessionRevoked();
+				// No session and no error: supabase-js already dropped it, leaving only
+				// our cached givemegame_user behind.
+				else revoked = Boolean(getCurrentUser());
+				if (revoked) {
+					await supabaseClient.auth.signOut({ scope: 'local' }).catch(() => {});
+					redirectToLoginAfterRevocation();
+					return null;
+				}
+			}
 			if (session?.user) {
 				const user = {
 					uid: session.user.id,
@@ -1846,3 +1905,13 @@ window.addEventListener('message', (e) => {
 
 // ─── Spuštění ───
 document.addEventListener('DOMContentLoaded', () => App.init());
+
+// The gIVEME iframe can finish loading before this script defines App;
+// its inline onload then skips, so run the first user sync here instead.
+(() => {
+	const iframe = document.getElementById('giveme-iframe');
+	try {
+		const doc = iframe?.contentDocument;
+		if (doc?.readyState === 'complete' && doc.URL !== 'about:blank') App.Profile.onGivemeLoad(iframe);
+	} catch { /* cross-origin or not ready: the normal onload will handle it */ }
+})();

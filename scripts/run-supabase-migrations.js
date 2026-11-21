@@ -44,6 +44,7 @@ const SUPPORTED_MIGRATION_ORDER = Object.freeze([
   '020_profiles_add_email.sql',
   '021_audit_append_only.sql',
   '022_rpg_avatar.sql',
+  '023_rpg_talents.sql',
   '024_rpg_progression.sql',
   '025_level_perks.sql',
   '026_billing.sql',
@@ -54,7 +55,8 @@ const SUPPORTED_MIGRATION_ORDER = Object.freeze([
   '031_assessment_scope_security.sql',
   '032_assessment_scope_evidence.sql',
   '033_security_lockdown.sql',
-  '034_assessment_writes_and_tier_scope.sql'
+  '034_assessment_writes_and_tier_scope.sql',
+  '035_session_realtime.sql'
 ]);
 
 const LEGACY_016_RELEASE_ORDER = Object.freeze([
@@ -66,7 +68,8 @@ const LEGACY_016_RELEASE_ORDER = Object.freeze([
   '031_assessment_scope_security.sql',
   '032_assessment_scope_evidence.sql',
   '033_security_lockdown.sql',
-  '034_assessment_writes_and_tier_scope.sql'
+  '034_assessment_writes_and_tier_scope.sql',
+  '035_session_realtime.sql'
 ]);
 const LEGACY_016_USER_BILLING_COLUMNS = Object.freeze([
   'billing_state_updated_at',
@@ -268,10 +271,10 @@ function validateExecutionMode(options, selected) {
   }
   if (selected.length !== LEGACY_016_RELEASE_ORDER.length
     || selected.some((filename, index) => filename !== LEGACY_016_RELEASE_ORDER[index])) {
-    throw new Error('Legacy 016 upgrade requires the complete 026-033 release.');
+    throw new Error('Legacy 016 upgrade requires the complete 026-035 release.');
   }
-  if (options.confirmation !== 'legacy-016-to-034') {
-    throw new Error('Legacy 016 upgrade confirmation must exactly match legacy-016-to-034.');
+  if (options.confirmation !== 'legacy-016-to-035') {
+    throw new Error('Legacy 016 upgrade confirmation must exactly match legacy-016-to-035.');
   }
   return { mode: 'legacy-016' };
 }
@@ -446,7 +449,7 @@ async function main(argv = process.argv.slice(2)) {
   if (options.list) {
     console.log(`Supported migration order (${supportedOrder.length} active SQL files):`);
     for (const filename of supportedOrder) console.log(filename);
-    console.log('Both 018 files are active; disabled 019 files are excluded; 023 is intentionally absent.');
+    console.log('Both 018 files are active; disabled 019 files are excluded.');
     return;
   }
 

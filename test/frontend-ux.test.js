@@ -233,3 +233,22 @@ describe('login auth health probe', () => {
 		assert.match(block, /return;/);
 	});
 });
+
+test('isDefinitiveAuthRejection logs out only on explicit Supabase rejections, never on network trouble', () => {
+	const src = read('public/script.js');
+	const m = src.match(/\/\/ BEGIN isDefinitiveAuthRejection[^\n]*\n([\s\S]*?)\/\/ END isDefinitiveAuthRejection/);
+	assert.ok(m, 'public/script.js missing isDefinitiveAuthRejection markers');
+	const fn = vm.runInNewContext(`${m[1]}\nisDefinitiveAuthRejection`);
+	// revoked
+	assert.equal(fn({ name: 'AuthSessionMissingError', status: 400 }), true);
+	assert.equal(fn({ name: 'AuthApiError', status: 400, code: 'refresh_token_not_found' }), true);
+	assert.equal(fn({ name: 'AuthApiError', status: 400, code: 'refresh_token_already_used' }), true);
+	assert.equal(fn({ name: 'AuthApiError', status: 403, code: 'session_not_found' }), true);
+	assert.equal(fn({ name: 'AuthApiError', status: 401 }), true);
+	// keep the user signed in
+	assert.equal(fn(null), false);
+	assert.equal(fn({ name: 'AuthRetryableFetchError', status: 0 }), false);
+	assert.equal(fn({ name: 'AuthRetryableFetchError', status: 503 }), false);
+	assert.equal(fn({ name: 'AuthApiError', status: 500 }), false);
+	assert.equal(fn({ name: 'AuthApiError', status: 400, code: 'validation_failed' }), false);
+});
