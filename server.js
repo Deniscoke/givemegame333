@@ -26,6 +26,7 @@ const {
 	getAvatarById,
 	RPG_AVATAR_SWITCH_COST,
 } = require('./lib/rpg-avatars');
+const { rpgMembershipFields, rpgDisplayClassId } = require('./lib/rpg-membership');
 const { getTalentManifest, getTalentById, talentIdsToTalents, validatePrerequisite } = require('./lib/rpg-talents');
 const { computeRpgLevel, getEffectiveStats, awardXpInTransaction, computeSoloXpFromDurationMax } = require('./lib/rpg-progression');
 const {
@@ -3044,8 +3045,7 @@ app.get('/api/rpg/avatar', async (req, res) => {
     const coins = profileRows[0]?.coins ?? 0;
     res.json({
       eligible: true,
-      role: membership ? membership.role : 'player',
-      school_name: membership ? membership.school_name : null,
+      ...rpgMembershipFields(membership),
       current_avatar_id: currentAvatarId,
       coins,
       avatar_switch_cost: RPG_AVATAR_SWITCH_COST,
@@ -3169,14 +3169,15 @@ app.get('/api/rpg/talents', async (req, res) => {
   if (!user) return;
   try {
     const membership = await _rpgGetMembership(user.id);
-    // Return manifest even for non-members so CTA renders; class_id = null signals no avatar
+    // Return manifest for everyone; class_id = null only when no avatar is owned.
+    // Non-members still see their avatar class (M13); unlocks stay member-only (POST gate).
     const { rows: profileRows } = await queryCoinsDb(
       `SELECT COALESCE(coins, 0) AS coins, rpg_avatar_id, COALESCE(rpg_xp, 0) AS rpg_xp
          FROM public.profiles WHERE id = $1`,
       [user.id]
     );
     const profile = profileRows[0] || {};
-    const class_id = membership ? (profile.rpg_avatar_id || null) : null;
+    const class_id = rpgDisplayClassId(profile);
     const avatarEntry = class_id ? getAvatarById(class_id) : null;
     const avatar_meta = avatarEntry
       ? {
@@ -3205,8 +3206,7 @@ app.get('/api/rpg/talents', async (req, res) => {
     res.json({
       eligible:    true,
       class_id,
-      role:        membership?.role        || 'player',
-      school_name: membership?.school_name || null,
+      ...rpgMembershipFields(membership),
       coins:       profile.coins || 0,
       avatar_meta,
       avatar_switch_cost: RPG_AVATAR_SWITCH_COST,

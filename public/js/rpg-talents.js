@@ -13,7 +13,8 @@ const RpgTalents = (() => {
 
   // ─── State ──────────────────────────────────────────────────────
   let _data = null;   // { class_id, talents, unlocked[], coins }
-  let _loading = false;
+  let _inflight = null;     // shared promise while GET /api/rpg/talents runs
+  let _lastResult = null;   // { kind, status } of the last load
 
   // ─── Helpers (mirrored from rpg-avatar.js) ──────────────────────
   async function _token() {
@@ -41,26 +42,37 @@ const RpgTalents = (() => {
   }
 
   // ─── Load ───────────────────────────────────────────────────────
-  async function load() {
-    if (_loading) return _data;
-    _loading = true;
-    try {
-      const token = await _token();
-      if (!token) { _data = null; return null; }
-      const res = await _fetch('/api/rpg/talents', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) { _data = null; return null; }
-      _data = await res.json();
+  /**
+   * Load talents and remember why it failed, so the RPG screen can show
+   * "offline" (retry), "login" (401 only) or the data. Parallel callers share
+   * one request instead of getting stale data.
+   * @returns {Promise<{ kind: 'ok'|'login'|'offline'|'error', status: number, data: object|null }>}
+   */
+  function loadResult() {
+    if (_inflight) return _inflight;
+    _inflight = (async () => {
+      let result;
+      if (window.RpgNet) {
+        result = await window.RpgNet.request('/api/rpg/talents');
+      } else {
+        result = { kind: 'offline', status: 0, data: null };
+      }
+      _lastResult = { kind: result.kind, status: result.status };
+      _data = result.kind === 'ok' ? result.data : null;
       try { window.__lastRpgTalentsData = _data; } catch (_) {}
-      return _data;
-    } catch {
-      _data = null;
-      return null;
-    } finally {
-      _loading = false;
-    }
+      return { ...result, data: _data };
+    })().finally(() => { _inflight = null; });
+    return _inflight;
   }
+
+  /** Backwards-compatible: resolves with the data or null. */
+  async function load() {
+    const result = await loadResult();
+    return result.data;
+  }
+
+  /** @returns {{ kind: string, status: number } | null} outcome of the last load */
+  function getLastResult() { return _lastResult; }
 
   // ─── Unlock ─────────────────────────────────────────────────────
   async function unlock(talentId, onSuccess) {
@@ -136,14 +148,29 @@ const RpgTalents = (() => {
     const el = document.getElementById(containerId);
     if (!el) return;
 
-    // Not eligible (no avatar selected or not a school member)
-    if (!_data || !_data.class_id) {
+    // No data: say why (offline / login only on 401), never a fake "not a member"
+    if (!_data) {
+      const kind = _lastResult?.kind || 'loading';
+      if (window.RpgNet) {
+        RpgNet.renderState(el, kind === 'ok' ? 'loading' : kind, {
+          // Inside the RPG screen a retry must refresh the sidebar too, not only this panel.
+          onRetry: () => {
+            if (window.RpgScreen?.isOpen?.()) RpgScreen.refresh();
+            else loadResult().then(() => render(containerId));
+          },
+          onLogin: () => { window.RpgScreen?.close?.(); window.App?.Profile?.open?.(); },
+        });
+      }
+      return;
+    }
+
+    // Logged in, but no avatar yet
+    if (!_data.class_id) {
+      const tr = (k, f) => (window.RpgNet ? RpgNet.t(k, f) : f);
       el.innerHTML = `
-        <div class="talent-empty">
-          <div class="talent-empty-icon">🌱</div>
-          <p class="talent-empty-title">Talent Tree</p>
-          <p class="talent-empty-hint">Vyber si RPG avatara (musíš byť členom školy) a odomkni svoju triedu talentov.</p>
-          <a href="/edu/index.html" class="btn btn-retro" style="text-decoration:none;font-size:10px">🏫 gIVEMEEDU</a>
+        <div class="talent-empty px-state">
+          <p class="talent-empty-title px-state__title">${_esc(tr('rpg_no_class', 'Bez avatara'))}</p>
+          <p class="talent-empty-hint px-state__text">${_esc(tr('rpg_pick_avatar_hint', 'Vyber si avatara a uvidíš atribúty svojej postavy.'))}</p>
         </div>`;
       return;
     }
@@ -192,7 +219,12 @@ const RpgTalents = (() => {
         </div>`;
     }
 
+    const memberNote = _data.is_school_member === false
+      ? `<p class="rpg-talent-member-note px-badge px-badge--warning">${_esc(window.RpgNet ? RpgNet.t('rpg_not_member_text', 'Talenty a školské odmeny sa odomknú, keď ťa učiteľ pridá do triedy v gIVEMEEDU.') : 'Talenty a školské odmeny sa odomknú, keď ťa učiteľ pridá do triedy v gIVEMEEDU.')}</p>`
+      : '';
+
     el.innerHTML = `
+      ${memberNote}
       <p class="rpg-talent-hint">Odomkni talenty za coiny. Každá vetva má 3 stupne — odomkni postupne od Tier 1.</p>
       <div class="rpg-talent-tree" id="rpg-talent-tree-grid">
         ${branchHTML(branchA, branchLabels[0])}
@@ -267,7 +299,7 @@ const RpgTalents = (() => {
     _data = null;
   }
 
-  return { load, unlock, render, clearCache };
+  return { load, loadResult, getLastResult, unlock, render, clearCache };
 })();
 
 window.RpgTalents = RpgTalents;
