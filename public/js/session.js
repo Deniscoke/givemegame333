@@ -352,7 +352,7 @@ const Session = (() => {
 				schema: 'public',
 				table: 'sessions',
 				filter: `join_code=eq.${_code}`
-			}, payload => _onSessionUpdate(payload.new))
+			}, payload => _onRealtimeSessionUpdate(payload.new))
 			.on('postgres_changes', {
 				event: '*',
 				schema: 'public',
@@ -360,6 +360,23 @@ const Session = (() => {
 				filter: `session_id=eq.${_sessionId}`
 			}, () => _refreshParticipants())
 			.subscribe();
+	}
+
+	// Realtime UPDATE rows can omit unchanged large (TOASTed) columns, so a
+	// status-only change may arrive without game_json. Fetch the full session
+	// then; if that fails, leave _lastKnownStatus alone so polling catches up.
+	async function _onRealtimeSessionUpdate(row) {
+		if (row?.status === 'active' && !row.game_json && _code) {
+			try {
+				const token = await _token();
+				const res = await fetchApi(`/api/sessions/${_code}`, {
+					headers: { 'Authorization': `Bearer ${token}` }
+				});
+				if (res.ok) _onSessionUpdate(await res.json());
+			} catch { /* polling will deliver the full session */ }
+			return;
+		}
+		_onSessionUpdate(row);
 	}
 
 	function _onSessionUpdate(session) {
