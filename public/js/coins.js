@@ -145,6 +145,10 @@ const Coins = (() => {
 			const r = await _apiJson('/api/coins/log', token, { method: 'POST', body: { amount, action } });
 			_applyServerBalance(r.data);
 			// 429: nič sa nepripísalo; capped: udalosť sa započítala (napr. Robot Challenge XP), coiny už nie.
+			if (amount > 0 && r.status === 429 && r.data?.code === 'COIN_DAILY_CAP') {
+				// Let periodic sources (e.g. the phone buzz) stop instead of retrying all day.
+				try { window.dispatchEvent(new CustomEvent('givemegame:coin-cap', { detail: { action } })); } catch (_) {}
+			}
 			if (amount > 0 && ((r.status === 429 && r.data?.code === 'COIN_DAILY_CAP') || (r.ok && r.data?.capped))) {
 				GameUI.toast(`🪙 ${_t('coins_daily_cap', 'Denný limit coinov z tejto aktivity je vyčerpaný. Skús to zajtra.')}`);
 			}

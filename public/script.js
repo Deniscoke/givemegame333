@@ -2029,6 +2029,8 @@ const App = (() => {
 			const btn = document.getElementById('btn-phone');
 			if (!btn) return;
 			phoneVibrateInterval = setInterval(() => {
+				// No passive coins from a tab nobody is looking at.
+				if (document.visibilityState !== 'visible') return;
 				btn.classList.add('phone-vibrate');
 				setTimeout(() => btn.classList.remove('phone-vibrate'), 400);
 				Coins.award('phone_buzz');
@@ -2042,6 +2044,10 @@ const App = (() => {
 
 		// Spusti vibráciu po init
 		document.addEventListener('DOMContentLoaded', () => setTimeout(startPhoneVibrate, 5000));
+		// Daily cap reached for the buzz: stop instead of hitting the server every 30 s.
+		window.addEventListener('givemegame:coin-cap', (e) => {
+			if (e.detail?.action === 'phone_buzz') stopPhoneVibrate();
+		});
 
 		return { open, switchTab, onGivemeLoad, syncGivemeIframe, logout, startPhoneVibrate, stopPhoneVibrate };
 	})();
