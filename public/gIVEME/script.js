@@ -3,8 +3,8 @@
 // ============================================
 
 // ===== SUPABASE (prepojené s Google účtom — každý používateľ má svoj gIVEME účet) =====
-const SUPABASE_URL = 'https://vhpkkbixshfyytohkruv.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
+const SUPABASE_URL = (((typeof window !== 'undefined' ? window : {}).GMG_SUPABASE || {}).url) || 'https://vhpkkbixshfyytohkruv.supabase.co';
+const SUPABASE_ANON_KEY = (((typeof window !== 'undefined' ? window : {}).GMG_SUPABASE || {}).anonKey) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
 let socialSupabase = null;
 try {
 	if (typeof window !== 'undefined' && window.supabase) {

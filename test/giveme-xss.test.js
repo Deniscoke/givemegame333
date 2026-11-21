@@ -70,7 +70,9 @@ function loadHelpers() {
   const start = source.indexOf('// ===== XSS HELPERS =====');
   const end = source.indexOf('// ===== FOLLOW API');
   assert.ok(start !== -1 && end > start, 'XSS helper block must exist in gIVEME/script.js');
-  const urlLine = source.match(/const SUPABASE_URL = '[^']+';/);
+  // The constant reads window.GMG_SUPABASE (served by /supabase-config.js)
+  // and falls back to the production URL; the vm context has no window.
+  const urlLine = source.match(/const SUPABASE_URL = [^\n]*'(https:\/\/[^']+)';/);
   assert.ok(urlLine, 'SUPABASE_URL constant must exist');
   const avatarFn = source.match(/function getAvatarEmoji\(name\) \{[\s\S]*?\n\}/);
   assert.ok(avatarFn, 'getAvatarEmoji must exist');
@@ -79,7 +81,7 @@ function loadHelpers() {
   const ctx = { URL };
   vm.createContext(ctx);
   vm.runInContext(code, ctx);
-  return { ...ctx, SUPABASE_URL: urlLine[0].match(/'([^']+)'/)[1] };
+  return { ...ctx, SUPABASE_URL: urlLine[1] };
 }
 
 test('esc escapes & < > " and \'', () => {

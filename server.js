@@ -17,6 +17,7 @@ const { validateDurationGate, validateParticipantGate, validateHostCooldownGate 
 const { createEduRouter } = require('./lib/edu-routes');
 const { createAssessmentRouter } = require('./lib/assessment-routes');
 const { createInstitutionRouter } = require('./lib/institution-routes');
+const { buildSupabasePublicConfig, renderSupabaseConfigScript, extraCspOrigin } = require('./lib/supabase-public-config');
 const {
 	VALID_AVATAR_IDS,
 	RPG_ELIGIBLE_ROLES,
@@ -145,6 +146,16 @@ app.use(express.json());
 // Applied to every response. CSP uses 'unsafe-inline' because the current
 // frontend uses inline <script> blocks — tighten by moving to external .js
 // files in Sprint 2 to enable a nonce-based CSP.
+// Browser Supabase config (GET /supabase-config.js). A local Supabase stack
+// (http://127.0.0.1:55321) is not covered by https://*.supabase.co, so its
+// origin is added to img-src/connect-src only when configured.
+const SUPABASE_PUBLIC_CONFIG = buildSupabasePublicConfig(process.env);
+const SUPABASE_PUBLIC_CONFIG_JS = renderSupabaseConfigScript(SUPABASE_PUBLIC_CONFIG);
+const SUPABASE_EXTRA_CSP_ORIGIN = extraCspOrigin(SUPABASE_PUBLIC_CONFIG);
+const SUPABASE_CSP_SOURCES = SUPABASE_EXTRA_CSP_ORIGIN
+  ? `https://*.supabase.co ${SUPABASE_EXTRA_CSP_ORIGIN}`
+  : 'https://*.supabase.co';
+
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   // SAMEORIGIN instead of DENY: the profile modal embeds gIVEME/index.html
@@ -161,8 +172,8 @@ app.use((req, res, next) => {
     "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net",
     // Bootstrap Icons CSS (cdn.jsdelivr.net) + Google Fonts stylesheet
     "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com",
-    "img-src 'self' data: https://*.supabase.co https://lh3.googleusercontent.com",
-    "connect-src 'self' https://*.supabase.co",
+    `img-src 'self' data: ${SUPABASE_CSP_SOURCES} https://lh3.googleusercontent.com`,
+    `connect-src 'self' ${SUPABASE_CSP_SOURCES}`,
     // Google Fonts files (gstatic) + Bootstrap Icons font files (jsdelivr)
     "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net",
     // 'self' allows same-origin iframes (gIVEME social network in profile modal)
@@ -172,6 +183,13 @@ app.use((req, res, next) => {
     "base-uri 'self'",
   ].join('; '));
   next();
+});
+
+// Public Supabase config for the browser (anon key is public by design).
+app.get('/supabase-config.js', (req, res) => {
+	res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+	res.setHeader('Cache-Control', 'no-cache');
+	res.send(SUPABASE_PUBLIC_CONFIG_JS);
 });
 
 // Favicon — predchádza 404

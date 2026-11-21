@@ -28,7 +28,8 @@ const NEW_KEYS = [
 	'ai_fallback_daily_limit', 'ai_fallback_busy', 'ai_fallback_network', 'ai_fallback_generic',
 	'ai_remix_daily_limit', 'ai_remix_busy', 'ai_remix_network', 'ai_remix_generic',
 	'login_auth_unavailable', 'login_sdk_failed', 'login_open_via_web', 'login_failed',
-	'share_link_copied', 'share_link_copy_manual', 'share_link_hint'
+	'share_link_copied', 'share_link_copy_manual', 'share_link_hint',
+	'login_local_failed'
 ];
 
 describe('frontend-ux i18n coverage', () => {
