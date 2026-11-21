@@ -122,6 +122,12 @@ a `user_stat_xp`. Zapisuje do nich len server; prehliadač nemá žiadne granty.
   XP: 30–120 za účasť podľa overených minút, +25 % za reflexiu, ktorá prešla
   kontrolou (`POST /api/play/:ticket/reflect`: všetky hodnotenia, odpovede aspoň
   20 znakov, nie opakovanie posledných 5 reflexií).
+  Hra z knižnice je obsah z prehliadača: dĺžku, režim a kompetencie prevezme
+  len vtedy, keď sa jej obsah (bez kľúčov začínajúcich `_`) zhoduje s hrou,
+  ktorú server sám vygeneroval. Inak dostane lístok 5–45 min bez režimu a
+  kompetencií (bez stat XP). Hra bez kópie na serveri (lokálna záložná hra,
+  hra vytvorená bez prihlásenia) sa spustí cez `{ local: true }` a dostane
+  lístok 5–15 min bez bonusov; ráta sa do denného limitu lístkov z knižnice.
 - `PLAY_TICKETS_LEGACY_UNTIL` — koniec dvojtýždňového prechodného obdobia pre
   starších klientov, ktorí ešte neposielajú `ticket_id`. Predvolene
   `2026-12-05T00:00:00Z`. Dovtedy `complete-solo` bez lístka beží po starom

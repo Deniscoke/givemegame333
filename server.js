@@ -2307,7 +2307,7 @@ app.post('/api/play/start', async (req, res) => {
 	if (!playTicketsGuard(res)) return;
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
-	const { ticket_id, game_id, public_id } = req.body || {};
+	const { ticket_id, game_id, public_id, local } = req.body || {};
 	try {
 		if (ticket_id != null) {
 			if (!PlayTickets.isTicketId(ticket_id)) {
@@ -2321,13 +2321,21 @@ app.post('/api/play/start', async (req, res) => {
 
 		// Library game (own saved game or a shared public link): the server
 		// copies its stored game_json into a new ticket and starts it now.
+		// Local game (fallback or made while logged out): the server has no copy,
+		// so the ticket gets fixed bounds and no mode / competency bonus.
+		const isLocal = local === true && game_id == null && public_id == null;
 		const byPublic = game_id == null && public_id != null;
 		const ref = byPublic ? public_id : game_id;
-		if (!PlayTickets.isTicketId(ref)) {
+		if (!isLocal && !PlayTickets.isTicketId(ref)) {
 			return res.status(400).json({ error: 'Chýba hra na spustenie', code: 'MISSING_GAME' });
 		}
 		if ((await PlayTickets.libraryTicketsToday(coinsDbPool, user.id)) >= PlayTickets.MAX_LIBRARY_TICKETS_PER_DAY) {
 			return res.status(429).json({ error: 'Dnes si spustil/a už veľa hier. Skús to zajtra.', code: 'TICKET_DAILY_LIMIT' });
+		}
+		if (isLocal) {
+			const title = typeof req.body.title === 'string' ? req.body.title : '';
+			const row = await PlayTickets.issueLocalTicket(coinsDbPool, user.id, title);
+			return res.json({ ok: true, ticket_id: row.id, started_at: row.started_at, verified: false });
 		}
 		const { rows } = await queryCoinsDb(
 			byPublic
@@ -2336,10 +2344,11 @@ app.post('/api/play/start', async (req, res) => {
 			byPublic ? [ref] : [ref, user.id]
 		);
 		if (!rows.length || !rows[0].game_json) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
-		const row = await PlayTickets.insertTicket(coinsDbPool, user.id, rows[0].game_json, {
-			source: 'library', mode: rows[0].mode, start: true,
-		});
-		res.json({ ok: true, ticket_id: row.id, started_at: row.started_at });
+		// saved_games.game_json is whatever the browser saved: only a copy whose
+		// content matches a server-generated game keeps that game's durations,
+		// mode and competencies; anything else gets clamped bounds, no bonus.
+		const row = await PlayTickets.issueLibraryTicket(coinsDbPool, user.id, rows[0].game_json);
+		res.json({ ok: true, ticket_id: row.id, started_at: row.started_at, verified: row.verified });
 	} catch (err) {
 		console.error('[Play] start failed:', err.message);
 		res.status(500).json({ error: 'Hru sa nepodarilo spustiť', code: 'TICKET_ERROR' });
@@ -2982,7 +2991,8 @@ app.post('/api/games/save', async (req, res) => {
 			`INSERT INTO public.saved_games (user_id, title, mode, game_json)
 			 VALUES ($1, $2, $3, $4)
 			 RETURNING id, title, mode, created_at`,
-			[user.id, title, mode, JSON.stringify(game)]
+			// A play ticket id belongs to one play, never to the saved copy.
+			[user.id, title, mode, JSON.stringify(PlayTickets.stripClientGameFields(game))]
 		);
 		res.json({ ok: true, game: rows[0] });
 	} catch (err) {
@@ -3032,7 +3042,8 @@ app.get('/api/games/:id', async (req, res) => {
 		);
 		if (rows.length === 0) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
 		const row = rows[0];
-		res.json({ ...row.game_json, _savedId: row.id, _savedAt: row.created_at, _favorite: row.is_favorite, _currentRating: row.rating || 0 });
+		// Older saves may still hold a used play ticket id; it never leaves the server.
+		res.json({ ...PlayTickets.stripClientGameFields(row.game_json), _savedId: row.id, _savedAt: row.created_at, _favorite: row.is_favorite, _currentRating: row.rating || 0 });
 	} catch (err) {
 		console.error('[Games] fetch game failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa načítať hru', code: 'FETCH_ERROR' });

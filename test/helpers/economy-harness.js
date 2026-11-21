@@ -301,6 +301,10 @@ class FakeDb {
 			tickets.push(row);
 			return ok([{ id: row.id, started_at: asDate(row.started_at) }]);
 		}
+		if (sql === "SELECT mode, duration_min, duration_max, kompetence FROM public.play_tickets WHERE game_hash = $1 AND source = 'generated' ORDER BY created_at LIMIT 1") {
+			const t = tickets.find((x) => x.game_hash === params[0] && x.source === 'generated');
+			return ok(t ? [{ mode: t.mode, duration_min: t.duration_min, duration_max: t.duration_max, kompetence: [...t.kompetence] }] : []);
+		}
 		if (sql === "SELECT COUNT(*)::int AS cnt FROM public.play_tickets WHERE user_id = $1 AND source <> 'generated' AND created_at >= CURRENT_DATE") {
 			return ok([{ cnt: tickets.filter((t) => t.user_id === params[0] && t.source !== 'generated'
 				&& new Date(t.created_at) >= since).length }]);
@@ -381,6 +385,18 @@ class FakeDb {
 		if (sql === 'SELECT COUNT(*)::int AS games, COUNT(reflection_id)::int AS reflected FROM public.play_tickets WHERE user_id = $1 AND completed_at IS NOT NULL') {
 			const done = tickets.filter((t) => t.user_id === params[0] && t.completed_at);
 			return ok([{ games: done.length, reflected: done.filter((t) => t.reflection_id).length }]);
+		}
+		if (sql === 'INSERT INTO public.saved_games (user_id, title, mode, game_json) VALUES ($1, $2, $3, $4) RETURNING id, title, mode, created_at') {
+			const id = crypto.randomUUID();
+			const row = { user_id: params[0], title: params[1], mode: params[2], game_json: JSON.parse(params[3]),
+				public_token: null, created_at: new Date().toISOString() };
+			(s.savedGames = s.savedGames || {})[id] = row;
+			return ok([{ id, title: row.title, mode: row.mode, created_at: new Date(row.created_at) }]);
+		}
+		if (sql === 'SELECT id, title, mode, game_json, is_favorite, rating, created_at FROM public.saved_games WHERE id = $1 AND user_id = $2 LIMIT 1') {
+			const g = (s.savedGames || {})[params[0]];
+			return ok(g && g.user_id === params[1] ? [{ id: params[0], title: g.title, mode: g.mode, game_json: clone(g.game_json),
+				is_favorite: false, rating: null, created_at: new Date(g.created_at || Date.now()) }] : []);
 		}
 		if (sql === 'SELECT mode, game_json FROM public.saved_games WHERE id = $1 AND user_id = $2 LIMIT 1') {
 			const g = (s.savedGames || {})[params[0]];

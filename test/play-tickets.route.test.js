@@ -11,6 +11,7 @@
 
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const { startEconomyServer } = require('./helpers/economy-harness');
 const PT = require('../lib/play-tickets');
 const { computeSoloXpFromDurationMax } = require('../lib/rpg-progression');
@@ -104,17 +105,24 @@ describe('POST /api/play/start', () => {
 	});
 
 	it('creates a started ticket from an own library game or a shared link, not from a stranger\'s game', async () => {
-		profile();
+		profile(); profile(OTHER);
+		// The author generated the game; the saved copy carries the usual metadata.
+		await generatedTicket(COOKING, 'cooking', OTHER);
+		const savedCopy = { ...COOKING, _engine: 'ai', _timestamp: 'x', _play_ticket: 'old' };
 		h.db.state.savedGames = {
-			[SAVED_ID]: { user_id: OTHER, mode: 'circus', game_json: COOKING, public_token: PUBLIC_ID },
+			[SAVED_ID]: { user_id: OTHER, mode: 'circus', game_json: savedCopy, public_token: PUBLIC_ID },
 		};
 		const notMine = await h.call('POST', '/api/play/start', { user: U, body: { game_id: SAVED_ID } });
 		assert.equal(notMine.status, 404);
 		const shared = await h.call('POST', '/api/play/start', { user: U, body: { public_id: PUBLIC_ID } });
 		assert.equal(shared.status, 200, JSON.stringify(shared.body));
+		assert.equal(shared.body.verified, true);
 		const t = h.db.state.tickets.find((x) => x.id === shared.body.ticket_id);
 		assert.equal(t.source, 'library');
-		assert.equal(t.mode, 'circus', 'mode from the saved row');
+		assert.equal(t.mode, 'cooking', 'mode from the server generation ticket, not the saved row');
+		assert.equal(t.duration_min, 10);
+		assert.deepEqual(t.kompetence, ['k-uceni', 'pracovni']);
+		assert.equal(t.game_json._play_ticket, undefined, 'old ticket id is not copied');
 		assert.ok(t.started_at);
 
 		h.db.state.savedGames[SAVED_ID].user_id = U;
@@ -133,6 +141,125 @@ describe('POST /api/play/start', () => {
 	it('requires login', async () => {
 		const r = await h.call('POST', '/api/play/start', { body: { ticket_id: SAVED_ID } });
 		assert.equal(r.status, 401);
+	});
+});
+
+describe('library games saved by the browser are not trusted', () => {
+	const FORGED = {
+		title: 'x',
+		mode: 'party',
+		duration: { min: 1, max: 180 },
+		rvp: { kompetence: ['komunikativni', 'k-uceni', 'pracovni'] },
+	};
+
+	it('a forged saved game gets clamped durations and no mode, competency or stat bonus', async () => {
+		profile();
+		const saved = await h.call('POST', '/api/games/save', { user: U, body: { game: FORGED } });
+		assert.equal(saved.status, 200, JSON.stringify(saved.body));
+		const start = await h.call('POST', '/api/play/start', { user: U, body: { game_id: saved.body.game.id } });
+		assert.equal(start.status, 200, JSON.stringify(start.body));
+		assert.equal(start.body.verified, false);
+		const id = start.body.ticket_id;
+		const t = h.db.state.tickets.find((x) => x.id === id);
+		assert.equal(t.duration_min, PT.UNVERIFIED_DURATION_MIN);
+		assert.equal(t.duration_max, PT.UNVERIFIED_DURATION_MAX);
+		assert.equal(t.mode, null);
+		assert.deepEqual(t.kompetence, []);
+
+		backdate(id, 3);
+		const early = await h.call('POST', '/api/profile/complete-solo', { user: U, body: { ticket_id: id } });
+		assert.equal(early.body.code, 'DURATION_TOO_SHORT', 'the 1-minute floor from the browser is ignored');
+
+		backdate(id, 120);
+		const r = await h.call('POST', '/api/profile/complete-solo', { user: U, body: { ticket_id: id } });
+		assert.equal(r.status, 200, JSON.stringify(r.body));
+		assert.equal(r.body.participation_xp, computeSoloXpFromDurationMax(PT.UNVERIFIED_DURATION_MAX));
+		assert.equal(r.body.mode, null);
+		assert.deepEqual(r.body.trained_stats, []);
+		assert.equal(h.db.state.statXp?.[U], undefined);
+	});
+
+	it('editing a generated game before saving drops the trust; a jsonb key reorder does not', async () => {
+		profile();
+		await generatedTicket();
+		// Same content, keys in another order (Postgres jsonb does not keep order).
+		const reordered = { rvp: { kompetence: ['k-uceni', 'pracovni'] }, duration: { max: 15, min: 10 }, mode: 'cooking', title: COOKING.title };
+		h.db.state.savedGames = {
+			[SAVED_ID]: { user_id: U, mode: 'cooking', game_json: reordered },
+			[PUBLIC_ID]: { user_id: U, mode: 'cooking', game_json: { ...COOKING, duration: { min: 1, max: 180 } } },
+		};
+		const same = await h.call('POST', '/api/play/start', { user: U, body: { game_id: SAVED_ID } });
+		assert.equal(same.body.verified, true);
+		const edited = await h.call('POST', '/api/play/start', { user: U, body: { game_id: PUBLIC_ID } });
+		assert.equal(edited.body.verified, false);
+		const t = h.db.state.tickets.find((x) => x.id === edited.body.ticket_id);
+		assert.equal(t.duration_max, PT.UNVERIFIED_DURATION_MAX);
+		assert.equal(t.mode, null);
+	});
+
+	it('/api/games/save never stores a play ticket id, and loading a game never returns one', async () => {
+		profile();
+		const saved = await h.call('POST', '/api/games/save', {
+			user: U, body: { game: { ...COOKING, _play_ticket: 'abc', _play_ticket_started: true, _engine: 'ai' } },
+		});
+		const row = h.db.state.savedGames[saved.body.game.id];
+		assert.equal(row.game_json._play_ticket, undefined);
+		assert.equal(row.game_json._play_ticket_started, undefined);
+		assert.equal(row.game_json._engine, 'ai');
+
+		row.game_json._play_ticket = 'older-save';
+		const loaded = await h.call('GET', `/api/games/${saved.body.game.id}`, { user: U });
+		assert.equal(loaded.status, 200, JSON.stringify(loaded.body));
+		assert.equal(loaded.body._play_ticket, undefined);
+		assert.equal(loaded.body._savedId, saved.body.game.id);
+	});
+});
+
+describe('local games (no server copy)', () => {
+	it('start { local: true } issues a started 5-15 min ticket without bonuses', async () => {
+		profile();
+		const r = await h.call('POST', '/api/play/start', {
+			user: U, body: { local: true, title: 'Hra z knižnice', duration: { max: 180 }, rvp: { kompetence: ['digitalni'] } },
+		});
+		assert.equal(r.status, 200, JSON.stringify(r.body));
+		const t = h.db.state.tickets.find((x) => x.id === r.body.ticket_id);
+		assert.equal(t.source, 'local');
+		assert.equal(t.duration_min, PT.LOCAL_DURATION_MIN);
+		assert.equal(t.duration_max, PT.LOCAL_DURATION_MAX);
+		assert.equal(t.mode, null);
+		assert.deepEqual(t.kompetence, []);
+		assert.deepEqual(t.game_json, { title: 'Hra z knižnice' });
+		assert.ok(t.started_at);
+	});
+
+	it('local: true must be a boolean and counts against the daily ticket limit', async () => {
+		profile();
+		const bad = await h.call('POST', '/api/play/start', { user: U, body: { local: 'yes' } });
+		assert.equal(bad.body.code, 'MISSING_GAME');
+		h.db.state.tickets = Array.from({ length: PT.MAX_LIBRARY_TICKETS_PER_DAY }, () => ({
+			id: crypto.randomUUID(), user_id: U, source: 'local', game_hash: 'h', game_json: {}, mode: null,
+			duration_min: 5, duration_max: 15, kompetence: [], created_at: new Date().toISOString(),
+			started_at: null, completed_at: null, reflection_id: null, reward: null,
+		}));
+		const limited = await h.call('POST', '/api/play/start', { user: U, body: { local: true, title: 'x' } });
+		assert.equal(limited.status, 429);
+		assert.equal(limited.body.code, 'TICKET_DAILY_LIMIT');
+	});
+
+	it('after the legacy window a local fallback game still pays the base reward', async () => {
+		process.env.PLAY_TICKETS_LEGACY_UNTIL = '2020-01-01T00:00:00Z';
+		profile();
+		const start = await h.call('POST', '/api/play/start', { user: U, body: { local: true, title: 'Záložná hra' } });
+		const id = start.body.ticket_id;
+		backdate(id, 20);
+		const r = await h.call('POST', '/api/profile/complete-solo', {
+			user: U, body: { ticket_id: id, game_json: { duration: { max: 180 } }, xp_multiplier: 5 },
+		});
+		assert.equal(r.status, 200, JSON.stringify(r.body));
+		assert.equal(r.body.coins_awarded, 100);
+		assert.equal(r.body.participation_xp, computeSoloXpFromDurationMax(PT.LOCAL_DURATION_MAX));
+		assert.equal(r.body.xp_multiplier_applied, 1);
+		assert.equal(h.db.state.profiles[U].coins, 100);
 	});
 });
 

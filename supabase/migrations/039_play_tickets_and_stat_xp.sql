@@ -36,9 +36,13 @@ CREATE TABLE IF NOT EXISTS public.play_tickets (
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'play_tickets_source_check') THEN
+  -- 'local' = a game the server has no copy of (fixed 5-15 min, no bonus).
+  -- Re-created when an older copy of this check does not list it yet.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'play_tickets_source_check'
+                   AND pg_get_constraintdef(oid) LIKE '%local%') THEN
+    ALTER TABLE public.play_tickets DROP CONSTRAINT IF EXISTS play_tickets_source_check;
     ALTER TABLE public.play_tickets
-      ADD CONSTRAINT play_tickets_source_check CHECK (source IN ('generated', 'library', 'replay'));
+      ADD CONSTRAINT play_tickets_source_check CHECK (source IN ('generated', 'library', 'replay', 'local'));
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'play_tickets_duration_check') THEN
     ALTER TABLE public.play_tickets
@@ -55,6 +59,9 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_play_tickets_user_created ON public.play_tickets (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_play_tickets_user_started ON public.play_tickets (user_id, started_at DESC)
   WHERE started_at IS NOT NULL;
+-- Library copies are matched to the server's own generated game by content hash.
+CREATE INDEX IF NOT EXISTS idx_play_tickets_generated_hash ON public.play_tickets (game_hash)
+  WHERE source = 'generated';
 
 CREATE TABLE IF NOT EXISTS public.reflections (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

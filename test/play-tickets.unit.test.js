@@ -49,6 +49,35 @@ describe('ticket fields come from the server copy of the game', () => {
 		assert.ok(g.duration_max >= g.duration_min);
 	});
 
+	it('game hash ignores "_" metadata and key order, but not content', () => {
+		const g = { title: 'A', duration: { min: 5, max: 10 }, rvp: { kompetence: ['k-uceni'] } };
+		const h = PT.gameHash(g);
+		assert.equal(PT.gameHash({ ...g, _engine: 'ai', _play_ticket: 'x', _savedId: 'y' }), h);
+		assert.equal(PT.gameHash({ rvp: { kompetence: ['k-uceni'] }, duration: { max: 10, min: 5 }, title: 'A' }), h);
+		assert.equal(PT.gameHash({ ...g, extra: undefined }), h);
+		assert.notEqual(PT.gameHash({ ...g, duration: { min: 5, max: 11 } }), h);
+		assert.notEqual(PT.gameHash({ ...g, rvp: { kompetence: ['pracovni'] } }), h);
+	});
+
+	it('unverified and local ticket fields use server bounds and no bonus', () => {
+		const u = PT.unverifiedTicketFields({ mode: 'party', duration: { min: 1, max: 180 }, rvp: { kompetence: ['k-uceni'] } });
+		assert.deepEqual([u.duration_min, u.duration_max, u.mode, u.kompetence],
+			[PT.UNVERIFIED_DURATION_MIN, PT.UNVERIFIED_DURATION_MAX, null, []]);
+		const mid = PT.unverifiedTicketFields({ duration: { min: 12, max: 20 } });
+		assert.deepEqual([mid.duration_min, mid.duration_max], [12, 20]);
+		const flipped = PT.unverifiedTicketFields({ duration: { min: 30, max: 10 } });
+		assert.ok(flipped.duration_max >= flipped.duration_min);
+		const l = PT.localTicketFields({ title: 'x' });
+		assert.deepEqual([l.duration_min, l.duration_max, l.mode, l.kompetence], [5, 15, null, []]);
+	});
+
+	it('strips client-only keys from a saved game without touching the original', () => {
+		const g = { title: 'A', _play_ticket: 't', _play_ticket_started: true, _savedId: 's', _engine: 'ai' };
+		assert.deepEqual(PT.stripClientGameFields(g), { title: 'A', _engine: 'ai' });
+		assert.equal(g._play_ticket, 't');
+		assert.equal(PT.stripClientGameFields(null), null);
+	});
+
 	it('recognises ticket ids', () => {
 		assert.equal(PT.isTicketId('6f1c2b8e-1b2c-4d5e-8f90-123456789abc'), true);
 		assert.equal(PT.isTicketId('nope'), false);

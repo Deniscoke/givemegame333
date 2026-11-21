@@ -38,6 +38,14 @@ describe('039 play tickets, reflections, stat XP', () => {
 		assert.doesNotMatch(sql, /CREATE POLICY/i);
 	});
 
+	it('allows local tickets and indexes generated tickets by content hash', () => {
+		assert.match(sql, /CHECK \(source IN \('generated', 'library', 'replay', 'local'\)\)/);
+		// An older copy of the check without 'local' is replaced on re-run.
+		assert.match(sql, /pg_get_constraintdef\(oid\) LIKE '%local%'/);
+		assert.match(sql, /DROP CONSTRAINT IF EXISTS play_tickets_source_check/);
+		assert.match(sql, /CREATE INDEX IF NOT EXISTS idx_play_tickets_generated_hash ON public\.play_tickets \(game_hash\)\s+WHERE source = 'generated'/);
+	});
+
 	it('stat check lists exactly the attribute-map keys', () => {
 		const m = sql.match(/stat IN \(([^)]*)\)/);
 		assert.ok(m);
