@@ -53,6 +53,20 @@ const {
 	countRobotChallengesLast24h,
 	countSoloCompletionsLast24h,
 } = require('./lib/plan-usage');
+const {
+	parseLimit,
+	createDailyCounter,
+	admitAiGeneration,
+	hashIp,
+	cleanText,
+	sanitizeGenerateFilters,
+	sanitizeRemix,
+	resolveOutputLanguage,
+	isAuthOutage,
+	createCachedProbe,
+	cacheControlForPath,
+} = require('./lib/ai-guard');
+const { validateCoinLog } = require('./lib/coin-log-policy');
 
 // Free-tier soft cap: level grows from XP, but is displayed/enforced at FREE_LIMITS.maxLevel.
 // Talents/perks gated by level will therefore remain locked past the cap until user upgrades.
@@ -271,7 +285,11 @@ if (SUPABASE_DB_URL) {
 	try {
 		coinsDbPool = new Pool({
 			connectionString: SUPABASE_DB_URL,
-			ssl: SUPABASE_DB_URL.includes('supabase.co') ? { rejectUnauthorized: false } : undefined
+			ssl: SUPABASE_DB_URL.includes('supabase.co') ? { rejectUnauthorized: false } : undefined,
+			// Fail fast instead of hanging until Vercel's 60 s maxDuration.
+			connectionTimeoutMillis: 5000,
+			idleTimeoutMillis: 10000,
+			statement_timeout: 10000
 		});
 		coinsDbPool.on('error', (err) => console.error('[Coins] Database pool error:', err.message));
 		console.log('[Coins] Database pool inicializovaný.');
@@ -285,20 +303,52 @@ if (SUPABASE_DB_URL) {
 
 const SUPABASE_AUTH_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/auth/v1/user` : '';
 
+const SUPABASE_AUTH_TIMEOUT_MS = 5000;
+
+/**
+ * Verify a Supabase access token. Throws on failure; errors caused by an
+ * outage (network, timeout, 429/5xx) carry `authUnavailable = true` so callers
+ * can answer 503 instead of blaming the user's token.
+ */
 async function fetchSupabaseUser(accessToken) {
 	if (!accessToken || !SUPABASE_AUTH_ENDPOINT || !SUPABASE_ANON_KEY) return null;
-	const resp = await fetch(SUPABASE_AUTH_ENDPOINT, {
-		headers: {
-			apikey: SUPABASE_ANON_KEY,
-			Authorization: `Bearer ${accessToken}`
-		}
-	});
-	if (!resp.ok) {
-		const errText = await resp.text().catch(() => '');
-		throw new Error(`Supabase user lookup failed (${resp.status}) ${errText}`);
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), SUPABASE_AUTH_TIMEOUT_MS);
+	let resp;
+	try {
+		resp = await fetch(SUPABASE_AUTH_ENDPOINT, {
+			headers: {
+				apikey: SUPABASE_ANON_KEY,
+				Authorization: `Bearer ${accessToken}`
+			},
+			signal: controller.signal
+		});
+	} catch (fetchErr) {
+		clearTimeout(timer);
+		const err = new Error(`Supabase user lookup unreachable: ${fetchErr.name || 'Error'}`);
+		err.authUnavailable = isAuthOutage({ error: fetchErr });
+		throw err;
 	}
-	const data = await resp.json();
-	return { id: data.id, email: data.email || null, raw: data };
+	try {
+		if (!resp.ok) {
+			const errText = await resp.text().catch(() => '');
+			const err = new Error(`Supabase user lookup failed (${resp.status}) ${errText.slice(0, 200)}`);
+			err.status = resp.status;
+			err.authUnavailable = isAuthOutage({ status: resp.status });
+			throw err;
+		}
+		const data = await resp.json();
+		return { id: data.id, email: data.email || null, raw: data };
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+function respondAuthUnavailable(res) {
+	return res.status(503).json({
+		error: 'Overenie prihlásenia je dočasne nedostupné. Skúste znova o chvíľu.',
+		code: 'AUTH_UNAVAILABLE'
+	});
 }
 
 async function requireSupabaseUser(req, res) {
@@ -317,8 +367,32 @@ async function requireSupabaseUser(req, res) {
 		if (!user) throw new Error('Token verification failed');
 		return user;
 	} catch (err) {
-		const status = err.message.includes('401') ? 401 : 403;
+		if (err.authUnavailable) {
+			console.warn('[Auth] Supabase verification unavailable:', err.message.slice(0, 120));
+			respondAuthUnavailable(res);
+			return null;
+		}
+		const status = err.status === 401 || err.message.includes('401') ? 401 : 403;
 		res.status(status).json({ error: 'Neplatný Supabase token', code: 'INVALID_TOKEN' });
+		return null;
+	}
+}
+
+/**
+ * Like optionalSupabaseUser, but rethrows outage errors (err.authUnavailable)
+ * so the caller can answer 503 instead of silently downgrading a logged-in
+ * user to guest. Invalid tokens still resolve to null.
+ */
+async function optionalSupabaseUserStrict(req) {
+	const authHeader = req.headers.authorization || '';
+	if (!authHeader.startsWith('Bearer ')) return null;
+	const token = authHeader.slice(7).trim();
+	if (!token) return null;
+	try {
+		const user = await fetchSupabaseUser(token);
+		return user || null;
+	} catch (err) {
+		if (err.authUnavailable) throw err;
 		return null;
 	}
 }
@@ -412,12 +486,20 @@ if (coinsDbPool) {
 // ─── OpenAI klient ───
 let openai = null;
 
+// Vercel maxDuration is 60 s — keep a single OpenAI call well below that.
+const OPENAI_TIMEOUT_MS = 25000;
+const OPENAI_MAX_RETRIES = 1;
+
+function createOpenAIClient(apiKey) {
+	return new OpenAI({ apiKey, timeout: OPENAI_TIMEOUT_MS, maxRetries: OPENAI_MAX_RETRIES });
+}
+
 function initOpenAI(apiKey) {
 	if (!apiKey || apiKey === 'sk-your-openai-api-key-here') {
 		console.warn('[Server] OpenAI API kľúč nie je nastavený.');
 		return false;
 	}
-	openai = new OpenAI({ apiKey });
+	openai = createOpenAIClient(apiKey);
 	console.log('[Server] OpenAI klient inicializovaný.');
 	return true;
 }
@@ -850,6 +932,20 @@ function cleanupRateLimitMap() {
 const generateGameRateLimitCleanupTimer = setInterval(cleanupRateLimitMap, 60 * 1000);
 generateGameRateLimitCleanupTimer.unref();
 
+// ─── Daily AI caps (per-instance, in-memory SOFT caps) ───
+// Each Vercel instance keeps its own counters, so the effective ceiling is
+// limit × warm instances; the real hard ceiling is the OpenAI project budget.
+// Logged-in users with a DB connection are capped by plan_usage_daily instead
+// of the guest counter; the global breaker covers every generation.
+const GUEST_AI_DAILY_LIMIT = parseLimit(process.env.GUEST_AI_DAILY_LIMIT, 5);
+const AI_GLOBAL_DAILY_LIMIT = parseLimit(process.env.AI_GLOBAL_DAILY_LIMIT, 300);
+const guestAiDailyCounter = createDailyCounter({ limit: GUEST_AI_DAILY_LIMIT });
+const globalAiDailyCounter = createDailyCounter({ limit: AI_GLOBAL_DAILY_LIMIT });
+
+function clientIp(req) {
+	return req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+}
+
 function checkGenerateGameRateLimit(key, limit) {
 	const now = Date.now();
 	let data = generateGameRateMap.get(key);
@@ -864,11 +960,18 @@ function checkGenerateGameRateLimit(key, limit) {
 
 // ─── API endpoint ───
 app.post('/api/generate-game', async (req, res, next) => {
-	const ip = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+	const ip = clientIp(req);
 	let limit = entitlementsForPlan(false).generatePerMinute;
 	let key = `ip:${ip}`;
+	let user = null;
 	try {
-		const user = await optionalSupabaseUser(req);
+		user = await optionalSupabaseUserStrict(req);
+	} catch (e) {
+		console.warn('[GenerateGame] auth unavailable:', e.message.slice(0, 120));
+		return respondAuthUnavailable(res);
+	}
+	req.genUser = user;
+	try {
 		if (user && coinsDbPool) {
 			key = `user:${user.id}`;
 			const state = await getUserBillingState(coinsDbPool, user.id);
@@ -887,7 +990,15 @@ app.post('/api/generate-game', async (req, res, next) => {
 	}
 	next();
 }, async (req, res) => {
-	const { filters, remix } = req.body;
+	const body = req.body || {};
+
+	// ─── Input limits: filters go straight into the prompt ───
+	const sanitized = sanitizeGenerateFilters(body.filters);
+	if (!sanitized.ok) {
+		return res.status(sanitized.status).json({ error: sanitized.error, code: sanitized.code });
+	}
+	const filters = sanitized.filters;
+	const remix = sanitizeRemix(body.remix);
 
 	// API kľúč výhradne z .env (nikdy z klienta)
 	const effectiveKey = process.env.OPENAI_API_KEY;
@@ -901,14 +1012,19 @@ app.post('/api/generate-game', async (req, res, next) => {
 
 	// Inicializuj klienta ak treba
 	if (!openai) {
-		openai = new OpenAI({ apiKey: effectiveKey });
+		openai = createOpenAIClient(effectiveKey);
 	}
 
-	const genUser = await optionalSupabaseUser(req);
+	const genUser = req.genUser || null;
 	let genPaid = false;
 	if (genUser && coinsDbPool) {
-		const st = await getUserBillingState(coinsDbPool, genUser.id);
-		genPaid = hasPaidAccess(st);
+		try {
+			const st = await getUserBillingState(coinsDbPool, genUser.id);
+			genPaid = hasPaidAccess(st);
+		} catch (e) {
+			console.error('[GenerateGame] billing state check failed:', e.message);
+			return res.status(503).json({ error: 'Databáza je dočasne nedostupná. Skúste znova o chvíľu.', code: 'DB_UNAVAILABLE' });
+		}
 	}
 	const genEnt = entitlementsForPlan(genPaid);
 	if (genUser && coinsDbPool && genEnt.aiGamesPerUtcDay != null) {
@@ -924,15 +1040,30 @@ app.post('/api/generate-game', async (req, res, next) => {
 				});
 			}
 		} catch (e) {
-			console.warn('[GenerateGame] plan_usage_daily check:', e.message);
+			// Fail closed: without the usage count we cannot enforce the plan quota.
+			console.error('[GenerateGame] plan_usage_daily check failed:', e.message);
+			return res.status(503).json({ error: 'Databáza je dočasne nedostupná. Skúste znova o chvíľu.', code: 'DB_UNAVAILABLE' });
 		}
 	}
 
-	const f = filters || {};
+	// ─── Guest daily cap + global daily breaker (consumed only when admitted) ───
+	const isGuest = !(genUser && coinsDbPool);
+	const admission = admitAiGeneration({
+		globalCounter: globalAiDailyCounter,
+		guestCounter: guestAiDailyCounter,
+		isGuest,
+		ipKey: `ip:${clientIp(req)}`
+	});
+	if (!admission.ok) {
+		console.warn(`[GenerateGame] ${admission.body.code} ip=${hashIp(clientIp(req))}`);
+		return res.status(admission.status).json(admission.body);
+	}
+
+	const f = filters;
 	const filterDescription = buildFilterDescription(f);
 	const didacticGuidance = buildDidacticGuidance(f);
-	const aiLanguage = f.aiLanguage || 'Czech';
-	const langCode = f.lang || 'cs';
+	// Output language: honour lang / language code from the request, default sk.
+	const { code: langCode, name: aiLanguage } = resolveOutputLanguage(f);
 
 	// ─── RPG avatar stats for personalized generation ───────────────
 	let rpgProfileBlock = '';
@@ -1010,9 +1141,10 @@ NEPREHÁŇAJ personalizáciu — jemne uprednostni aktivity ladené s najvyšš�
 		cs: 'ÚKOL: Vygeneruj jednu originální hru/aktivitu.\nPOUŽIJ VŠECHNY vstupy z panelu výše — každý filtr je tvůj brief.\nSTYL: Piš Gen Z — jednoduše, uvolněně, s příklady. Žádný akademický žargon.\nPŘÍKLADY: V instrukcích, reflexních otázkách a poznámkách vždy uveď konkrétní příklady (např. "Honza hází míč Zuzce a říká její jméno").\nPřed odpovědí zkontroluj, zda jsi splnil VŠECHNA omezení.\nOdpověz JEDNÍM JSON objektem.',
 		en: 'TASK: Generate one original game/activity.\nUSE ALL inputs from the panel above — every filter is your brief.\nSTYLE: Write Gen Z — simple, relaxed, with examples. No academic jargon.\nEXAMPLES: In instructions, reflection prompts, and notes always include concrete examples (e.g. "John throws the ball to Sarah and says her name").\nBefore responding, verify you met ALL constraints.\nRespond with ONE JSON object.',
 		de: 'AUFGABE: Generiere ein originelles Spiel/Aktivität.\nVERWENDE ALLE Eingaben aus dem Panel oben — jeder Filter ist dein Brief.\nSTIL: Schreibe Gen Z — einfach, locker, mit Beispielen. Kein akademischer Jargon.\nBEISPIELE: In Anweisungen, Reflexionsfragen und Notizen immer konkrete Beispiele angeben (z.B. "Hans wirft den Ball zu Petra und sagt ihren Namen").\nVor der Antwort prüfe, ob du ALLE Einschränkungen erfüllt hast.\nAntworte mit EINEM JSON-Objekt.',
+		tr: 'GÖREV: Orijinal bir oyun/etkinlik oluştur.\nYukarıdaki paneldeki TÜM girdileri KULLAN — her filtre senin brifindir.\nSTİL: Gen Z tarzında yaz — basit, rahat, örneklerle. Akademik jargon yok.\nÖRNEKLER: Talimatlarda, yansıtma sorularında ve notlarda her zaman somut örnekler ver (ör. "Ali topu Ayşe\'ye atar ve onun adını söyler").\nYanıtlamadan önce TÜM kısıtlamalara uyduğunu kontrol et.\nTEK bir JSON nesnesiyle yanıt ver.',
 		es: 'TAREA: Genera un juego/actividad original.\nUSA TODAS las entradas del panel de arriba — cada filtro es tu brief.\nESTILO: Escribe Gen Z — simple, relajado, con ejemplos. Sin jerga académica.\nEJEMPLOS: En instrucciones, preguntas de reflexión y notas siempre incluye ejemplos concretos (ej. "Juan lanza la pelota a María y dice su nombre").\nAntes de responder, verifica que cumpliste TODAS las restricciones.\nResponde con UN objeto JSON.',
 	};
-	const taskBlock = langInstructions[langCode] || langInstructions.cs;
+	const taskBlock = langInstructions[langCode] || langInstructions.sk;
 
 	const userContent = `🌐 LANGUAGE: ${aiLanguage}. Write EVERY text field in ${aiLanguage}. Do NOT use English unless the language IS English.
 ══════════════════════════════════════
@@ -1044,13 +1176,13 @@ The following reference material was uploaded by the facilitator. Use it to ENRI
 - WRITE THE OUTPUT IN ${aiLanguage}.
 
 ${knowledgeSummary}
-═══ END SOURCE OF KNOWLEDGE ═══` : ''}${(remix && typeof remix === 'object' && remix.title) ? `
+═══ END SOURCE OF KNOWLEDGE ═══` : ''}${remix ? `
 ──────────────────────────────────────
 REMIX — Create a VARIATION (don't plagiarize, just get inspired):
 Original game: "${remix.title}"
 Original mode: ${remix.mode || 'not specified'}
-Original competences: ${(remix.rvp?.kompetence || []).join(', ') || 'not specified'}
-Original learning goals: ${(remix.learningGoals || []).slice(0, 3).join(' | ') || 'not specified'}
+Original competences: ${remix.kompetence.join(', ') || 'not specified'}
+Original learning goals: ${remix.learningGoals.join(' | ') || 'not specified'}
 Keep mode, learning goals and competences. Change mechanics, materials, title, and procedure SIGNIFICANTLY.
 Write the remix in ${aiLanguage}.
 ──────────────────────────────────────` : ''}`;
@@ -1282,11 +1414,11 @@ app.post('/api/coins/log', async (req, res) => {
 	if (!coinApiReady()) return respondCoinApiDisabled(res);
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
-	const { amount, action, metadata } = req.body || {};
-	if (!Number.isInteger(amount) || typeof action !== 'string' || !action.trim()) {
-		return res.status(400).json({ error: 'amount (integer) a action (string) sú povinné' });
+	const checked = validateCoinLog(req.body);
+	if (!checked.ok) {
+		return res.status(400).json({ error: checked.error, code: checked.code });
 	}
-	const actionTrim = action.trim();
+	const { amount, action: actionTrim, metadata } = checked;
 	if (actionTrim === 'robot_challenge' && amount > 0) {
 		try {
 			const bill = await getUserBillingState(coinsDbPool, user.id);
@@ -1969,10 +2101,16 @@ app.post('/api/verify-completion', async (req, res) => {
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
 
-	const { photo_base64, challenge_description, game_title } = req.body || {};
-	if (!photo_base64 || !challenge_description) {
+	const { photo_base64 } = req.body || {};
+	const rawChallenge = (req.body || {}).challenge_description;
+	const rawTitle = (req.body || {}).game_title;
+	if (typeof photo_base64 !== 'string' || typeof rawChallenge !== 'string' || !photo_base64 || !rawChallenge.trim()
+		|| (rawTitle != null && typeof rawTitle !== 'string')) {
 		return res.status(400).json({ error: 'Chýba fotka alebo popis výzvy', code: 'MISSING_DATA' });
 	}
+	// Free text goes into the vision prompt — clamp like generate-game filters.
+	const challenge_description = cleanText(rawChallenge);
+	const game_title = rawTitle ? cleanText(rawTitle) : '';
 
 	// Limit base64 size (~5 MB image → ~6.7 MB base64)
 	if (photo_base64.length > 8_000_000) {
@@ -3699,29 +3837,6 @@ try {
 	console.log('[API] RVP CZ načítaný pre random-fact.');
 } catch (e) { console.warn('[API] rvp.json not loaded:', e.message); }
 
-// ─── Debug: test OpenAI pre vypraváča ───
-app.get('/api/random-fact-test', async (req, res) => {
-	const key = process.env.OPENAI_API_KEY;
-	const hasKey = key && key !== 'sk-your-openai-api-key-here';
-	if (!hasKey) {
-		return res.json({ ok: false, error: 'OPENAI_API_KEY nie je nastavený v .env' });
-	}
-	try {
-		const client = new OpenAI({ apiKey: key });
-		const { data } = await client.chat.completions.create({
-			model: 'gpt-4o-mini',
-			max_tokens: 50,
-			messages: [{ role: 'user', content: 'Say hello in one word.' }]
-		});
-		const choice = data?.choices?.[0];
-		const text = choice?.message?.content?.trim();
-		const finishReason = choice?.finish_reason;
-		return res.json({ ok: true, model: 'gpt-4o-mini', response: text, finish_reason: finishReason, raw: !!choice });
-	} catch (err) {
-		return res.json({ ok: false, error: err.message, code: err?.code });
-	}
-});
-
 // ─── Narrator oblasti (pre výber v UI) ───
 app.get('/api/narrator-areas', (req, res) => {
 	const areas = [{ id: '', name: 'Náhodná oblasť' }];
@@ -3781,7 +3896,7 @@ app.get('/api/random-fact', async (req, res) => {
 	}
 
 	// OpenAI API — GPT-5.4 (Chat) pre generovanie, TTS pre čítanie
-	if (!openai) openai = new OpenAI({ apiKey: effectiveKey });
+	if (!openai) openai = createOpenAIClient(effectiveKey);
 	const langNames = { sk: 'Slovenčina', cs: 'Čeština', de: 'Deutsch', en: 'English', es: 'Español' };
 	const langName = langNames[lang] || 'Slovenčina';
 
@@ -3931,6 +4046,7 @@ app.post('/api/tts', async (req, res) => {
 	try {
 		const response = await fetch('https://api.openai.com/v1/audio/speech', {
 			method: 'POST',
+			signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
 				'Content-Type': 'application/json'
@@ -3959,10 +4075,18 @@ app.post('/api/tts', async (req, res) => {
 });
 
 // ─── Status endpoint ───
-app.get('/api/status', (req, res) => {
+// Cheap DB liveness probe: SELECT 1, 2 s timeout, cached 30 s. Reports only
+// 'ok' | 'down' | 'disabled' — never connection details.
+const dbHealthProbe = coinsDbPool
+	? createCachedProbe({ probe: () => coinsDbPool.query('SELECT 1'), ttlMs: 30000, timeoutMs: 2000 })
+	: null;
+
+app.get('/api/status', async (req, res) => {
 	const hasKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-your-openai-api-key-here');
+	const db = dbHealthProbe ? await dbHealthProbe() : 'disabled';
 	res.json({
 		status: 'ok',
+		db,
 		hasApiKey: hasKey,
 		model: process.env.OPENAI_MODEL || 'gpt-4o',
 		engine: openai ? 'ai' : 'local',
@@ -4006,7 +4130,13 @@ app.get('/game/:id', (req, res) => {
 });
 
 // ─── Statický file serving (po API route, aby /api/* fungovalo) ───
-app.use(express.static(PUBLIC_DIR));
+// HTML always revalidates; versioned assets (?v=N) are cached for 1 h.
+app.use(express.static(PUBLIC_DIR, {
+	setHeaders(res, filePath) {
+		const cc = cacheControlForPath(filePath);
+		if (cc) res.setHeader('Cache-Control', cc);
+	}
+}));
 
 // ─── Spustenie servera (lokálne) / export pre Vercel ───
 const PORT = process.env.PORT || 3000;
