@@ -2242,7 +2242,7 @@ app.get('/api/profile/analytics', async (req, res) => {
 
 // ─── Sessions API ─────────────────────────────────────────────────
 // Routes live in lib/routes/sessions.js (Phase 6 extraction).
-app.use('/api/sessions', createSessionsRouter({
+const sessionsRouter = createSessionsRouter({
 	coinApiReady,
 	respondCoinApiDisabled,
 	requireSupabaseUser,
@@ -2257,7 +2257,17 @@ app.use('/api/sessions', createSessionsRouter({
 		VALID_COMPETENCY_KEYS,
 		GAME_KOMP_TO_STAT,
 	},
-}));
+});
+app.use('/api/sessions', sessionsRouter);
+// Phase 6: expire abandoned sessions and refund coins_paid. Serverless hosts
+// (VERCEL) rely on the lazy check inside every session request instead.
+app.locals.sweepExpiredSessions = sessionsRouter.sweepExpired;
+if (!process.env.VERCEL) {
+	const sessionSweepTimer = setInterval(() => {
+		sessionsRouter.sweepExpired().catch((err) => console.error('[Sessions] sweep failed:', err.message));
+	}, 60 * 1000);
+	sessionSweepTimer.unref();
+}
 
 // ─── Public game viewer — no auth, read-only ───
 app.get('/api/games/public/:id', async (req, res) => {
