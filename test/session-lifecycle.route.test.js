@@ -74,6 +74,20 @@ describe('create', () => {
 	});
 });
 
+describe('lobby settings', () => {
+	it('the host changes the lobby size, guests and play style before start only', async () => {
+		profile(HOST, 0);
+		seed();
+		const res = await h.call('POST', '/api/sessions/ABC123/settings', { user: HOST, body: { max_players: 4, allow_guests: false, play_style: 'online' } });
+		assert.equal(res.status, 200, JSON.stringify(res.body));
+		assert.deepEqual([res.body.max_players, res.body.allow_guests, res.body.play_style], [4, false, 'online']);
+		assert.equal((await h.call('POST', '/api/sessions/ABC123/settings', { user: P1, body: { max_players: 40 } })).status, 403);
+		h.db.session('sess-1').status = 'active';
+		assert.equal((await h.call('POST', '/api/sessions/ABC123/settings', { user: HOST, body: { max_players: 40 } })).status, 409);
+		assert.equal(h.db.session('sess-1').max_players, 4);
+	});
+});
+
 describe('transitions', () => {
 	it('walks waiting → active → reflection → completed', async () => {
 		profile(HOST, 0); profile(P1, 200); profile(P2, 200);

@@ -74,6 +74,12 @@ function sessionSql(db, sql, params) {
 			&& (ms(r.expires_at) <= t || t - ms(r.last_host_seen_at) >= params[0] * 60000))
 			.map((r) => pick(r, ['id', 'status', 'expires_at', 'last_host_seen_at'])));
 	}
+	if (sql.startsWith("UPDATE public.sessions SET max_players = $2, allow_guests = $3, play_style = $4 WHERE id = $1 AND status = 'waiting'")) {
+		const r = s.sessions[params[0]];
+		if (!r || r.status !== 'waiting') return ok([]);
+		Object.assign(r, { max_players: params[1], allow_guests: params[2], play_style: params[3] });
+		return ok([pick(r, ['max_players', 'allow_guests', 'play_style'])]);
+	}
 	if (sql === 'UPDATE public.sessions SET last_host_seen_at = NOW() WHERE id = $1') {
 		const r = s.sessions[params[0]];
 		if (r) r.last_host_seen_at = nowIso();
