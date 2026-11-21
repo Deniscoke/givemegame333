@@ -42,7 +42,9 @@ const GP = (() => {
 		const wrap = el(containerId);
 		if (!wrap) return;
 		wrap.innerHTML = '';
-		(keys || []).forEach(key => {
+		// Saved games may hold a single string (e.g. stupen: "prvni", doporucene_hodnoceni: "...").
+		const list = Array.isArray(keys) ? keys : (keys ? [keys] : []);
+		list.forEach(key => {
 			const def = lookup?.[key];
 			const badge = document.createElement('span');
 			badge.className = 'rvp-badge';

@@ -52,6 +52,7 @@ const GameUI = (() => {
 		addBadge(badges, playersBadge(game), 'players', 'bi-people');
 		addBadge(badges, `${game.duration.min}–${game.duration.max} min`, 'duration', 'bi-clock');
 		addBadge(badges, `${tr('export_age', 'Vek')} ${game.ageRange.min}–${game.ageRange.max}`, 'age', 'bi-person');
+		addMethodologyBadge(badges, game.methodology);
 
 		// Popis
 		document.getElementById('game-pitch').textContent = game.pitch;
@@ -249,6 +250,20 @@ const GameUI = (() => {
 		const span = document.createElement('span');
 		span.className = `badge badge-${_esc(type)}`;
 		span.innerHTML = `<i class="bi ${icon}"></i> ${_esc(text)}`;
+		container.appendChild(span);
+	}
+
+	// Methodology comes from the AI, so it is rendered as text only (no innerHTML).
+	function addMethodologyBadge(container, methodology) {
+		if (typeof methodology !== 'string' || !methodology.trim()) return;
+		const text = methodology.trim().slice(0, 160);
+		const span = document.createElement('span');
+		span.className = 'badge badge-methodology';
+		const icon = document.createElement('i');
+		icon.className = 'bi bi-lightbulb';
+		span.appendChild(icon);
+		span.appendChild(document.createTextNode(` ${_t('methodology_badge', 'Metodika')}: ${text}`));
+		span.title = text;
 		container.appendChild(span);
 	}
 
