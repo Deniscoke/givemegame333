@@ -5,10 +5,10 @@
 // ===== SUPABASE (prepojené s Google účtom — každý používateľ má svoj gIVEME účet) =====
 const SUPABASE_URL = 'https://vhpkkbixshfyytohkruv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
-let supabase = null;
+let socialSupabase = null;
 try {
 	if (typeof window !== 'undefined' && window.supabase) {
-		supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+		socialSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 			auth: { detectSessionInUrl: true, persistSession: true }
 		});
 	}
@@ -27,10 +27,10 @@ function getCurrentUser() {
 
 // Sync auth z Supabase (ak sessionStorage prázdne napr. po refreshi)
 async function syncAuthFromSupabase() {
-	if (!supabase) return null;
+	if (!socialSupabase) return null;
 	try {
 		const { data: { session } } = await Promise.race([
-			supabase.auth.getSession(),
+			socialSupabase.auth.getSession(),
 			new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
 		]);
 		if (session?.user) {
@@ -43,7 +43,7 @@ async function syncAuthFromSupabase() {
 			};
 			sessionStorage.setItem('givemegame_user', JSON.stringify(user));
 			// Upsert profiles — potrebné pre FK integrity (author_id → profiles.id)
-			supabase.from('profiles').upsert({
+			socialSupabase.from('profiles').upsert({
 				id: u.id,
 				display_name: user.name,
 				avatar_url: user.photo,
@@ -64,12 +64,70 @@ function getAvatarEmoji(name) {
 	return emojis[idx];
 }
 
+// ===== XSS HELPERS =====
+// Všetky dáta z DB (mená, popisy, komentáre, zadania, URL obrázkov) sú od používateľov
+// a nesmú ísť do innerHTML bez escapovania. Obrázky sa vkladajú cez DOM s overeným src.
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function esc(value) {
+	if (value === null || value === undefined) return '';
+	return String(value).replace(/[&<>"']/g, ch => HTML_ESCAPES[ch]);
+}
+// Spätná kompatibilita — staré volania escapeHTML() teraz escapujú aj úvodzovky.
+const escapeHTML = esc;
+
+// ID (UUID) vkladané do inline onclick handlerov alebo CSS selektorov — povolené len bezpečné znaky.
+function safeId(value) {
+	return String(value === null || value === undefined ? '' : value).replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+const SAFE_DATA_IMAGE_RE = /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/;
+const SUPABASE_STORAGE_HOST = (() => { try { return new URL(SUPABASE_URL).host; } catch { return ''; } })();
+// Profilové fotky z Google prihlásenia (avatar_url / me.photo) — povolené len pre avatary.
+const AVATAR_EXTRA_HOST_RE = /^[a-z0-9-]+\.googleusercontent\.com$/i;
+
+function safeImageSrc(src, opts) {
+	if (typeof src !== 'string') return null;
+	const value = src.trim();
+	if (!value) return null;
+	if (SAFE_DATA_IMAGE_RE.test(value)) return value;
+	let url;
+	try { url = new URL(value); } catch { return null; }
+	if (url.protocol !== 'https:') return null;
+	if (url.username || url.password) return null;
+	if (SUPABASE_STORAGE_HOST && url.host === SUPABASE_STORAGE_HOST && url.pathname.startsWith('/storage/v1/object/')) return url.href;
+	if (opts && opts.avatar && AVATAR_EXTRA_HOST_RE.test(url.hostname)) return url.href;
+	return null;
+}
+
+// Vytvorí <img> s overeným src, alebo vráti null (obrázok sa preskočí).
+function createSafeImg(src, attrs, opts) {
+	const safe = safeImageSrc(src, opts);
+	if (!safe) return null;
+	const img = document.createElement('img');
+	img.src = safe;
+	img.alt = (attrs && attrs.alt) || '';
+	if (attrs && attrs.className) img.className = attrs.className;
+	if (attrs && attrs.width) img.width = attrs.width;
+	if (attrs && attrs.height) img.height = attrs.height;
+	if (attrs && attrs.style) img.setAttribute('style', attrs.style);
+	if (opts && opts.avatar) img.referrerPolicy = 'no-referrer';
+	return img;
+}
+
+// Avatar: bezpečný <img> alebo emoji ako textový uzol.
+function renderAvatarInto(container, avatarUrl, name, attrs) {
+	if (!container) return;
+	container.textContent = '';
+	const img = createSafeImg(avatarUrl, attrs, { avatar: true });
+	container.appendChild(img || document.createTextNode(getAvatarEmoji(name || '')));
+}
+
 // ===== FOLLOW API (sledovanie používateľov) =====
 async function followUser(targetId) {
 	const me = getCurrentUser();
-	if (!me || me.uid === targetId || !supabase) return false;
+	if (!me || me.uid === targetId || !socialSupabase) return false;
 	try {
-		const { error } = await supabase.from('follows').insert({
+		const { error } = await socialSupabase.from('follows').insert({
 			follower_id: me.uid,
 			following_id: targetId
 		});
@@ -79,9 +137,9 @@ async function followUser(targetId) {
 
 async function unfollowUser(targetId) {
 	const me = getCurrentUser();
-	if (!me || !supabase) return false;
+	if (!me || !socialSupabase) return false;
 	try {
-		const { error } = await supabase.from('follows').delete()
+		const { error } = await socialSupabase.from('follows').delete()
 			.eq('follower_id', me.uid)
 			.eq('following_id', targetId);
 		return !error;
@@ -90,9 +148,9 @@ async function unfollowUser(targetId) {
 
 async function getFollowStatus(targetId) {
 	const me = getCurrentUser();
-	if (!me || !supabase) return false;
+	if (!me || !socialSupabase) return false;
 	try {
-		const { data } = await supabase.from('follows').select('follower_id')
+		const { data } = await socialSupabase.from('follows').select('follower_id')
 			.eq('follower_id', me.uid).eq('following_id', targetId).maybeSingle();
 		return !!data;
 	} catch (e) { return false; }
@@ -100,26 +158,26 @@ async function getFollowStatus(targetId) {
 
 async function getFollowingIds() {
 	const me = getCurrentUser();
-	if (!me || !supabase) return [];
+	if (!me || !socialSupabase) return [];
 	try {
-		const { data } = await supabase.from('follows').select('following_id')
+		const { data } = await socialSupabase.from('follows').select('following_id')
 			.eq('follower_id', me.uid);
 		return (data || []).map(r => r.following_id);
 	} catch (e) { return []; }
 }
 
 async function getFollowersCount(userId) {
-	if (!supabase) return 0;
+	if (!socialSupabase) return 0;
 	try {
-		const { count } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId);
+		const { count } = await socialSupabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId);
 		return count || 0;
 	} catch (e) { return 0; }
 }
 
 async function getFollowingCount(userId) {
-	if (!supabase) return 0;
+	if (!socialSupabase) return 0;
 	try {
-		const { count } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId);
+		const { count } = await socialSupabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId);
 		return count || 0;
 	} catch (e) { return 0; }
 }
@@ -276,7 +334,7 @@ async function loadFeed() {
     if (!feedEl || !loadingEl) return;
 
     try {
-        if (!supabase) {
+        if (!socialSupabase) {
             loadingEl.style.display = 'none';
             emptyEl.style.display = 'block';
             const txt = document.getElementById('feedEmptyText');
@@ -284,7 +342,7 @@ async function loadFeed() {
             return;
         }
         const { data: posts, error } = await Promise.race([
-            supabase
+            socialSupabase
                 .from('giveme_posts')
                 .select('id, image_data, caption, prompt, created_at, author_id')
                 .order('created_at', { ascending: false })
@@ -312,7 +370,7 @@ async function loadFeed() {
 
         const authorIds = [...new Set(posts.map(p => p.author_id))];
         const { data: profilesData } = await Promise.race([
-            supabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds),
+            socialSupabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds),
             new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
         ]).catch(() => ({ data: [] }));
         const profileMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
@@ -321,9 +379,9 @@ async function loadFeed() {
         const postIds = posts.map(p => p.id);
         const [likesRes, commentsRes, donationsRes] = await Promise.race([
             Promise.all([
-                supabase.from('giveme_likes').select('post_id, user_id').in('post_id', postIds),
-                supabase.from('giveme_comments').select('post_id').in('post_id', postIds),
-                supabase.from('giveme_coin_donations').select('post_id, amount').in('post_id', postIds)
+                socialSupabase.from('giveme_likes').select('post_id, user_id').in('post_id', postIds),
+                socialSupabase.from('giveme_comments').select('post_id').in('post_id', postIds),
+                socialSupabase.from('giveme_coin_donations').select('post_id, amount').in('post_id', postIds)
             ]),
             new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
         ]).catch(() => [{ data: [] }, { data: [] }, { data: [] }]);
@@ -352,53 +410,54 @@ async function loadFeed() {
         for (const post of posts) {
             const author = profileMap[post.author_id] || {};
             const displayName = author.display_name || 'Anonym';
-            const avatar = author.avatar_url ? `<img src="${escapeHTML(author.avatar_url)}" alt="" class="post-avatar-img">` : getAvatarEmoji(displayName);
-            const likesCount = (likesByPost[post.id]?.count) || 0;
-            const commentsCount = (commentsByPost[post.id]) || 0;
-            const coinsReceived = (donationsByPost[post.id]) || 0;
+            const postId = safeId(post.id);
+            const authorId = safeId(post.author_id);
+            const domId = postId.replace(/-/g, '');
+            const likesCount = Number(likesByPost[post.id]?.count) || 0;
+            const commentsCount = Number(commentsByPost[post.id]) || 0;
+            const coinsReceived = Number(donationsByPost[post.id]) || 0;
             const iLiked = me && (likesByPost[post.id]?.userIds || []).includes(me.uid);
             const iFollow = me && post.author_id !== me.uid && followingIds.has(post.author_id);
             const showFollowBtn = me && post.author_id !== me.uid;
             const followBtnHtml = showFollowBtn
-                ? `<button class="follow-btn ${iFollow ? 'followed' : ''}" onclick="toggleFollow(this, '${post.author_id}')">${iFollow ? 'Sledujem' : 'Sledovať'}</button>`
+                ? `<button class="follow-btn ${iFollow ? 'followed' : ''}" onclick="toggleFollow(this, '${authorId}')">${iFollow ? 'Sledujem' : 'Sledovať'}</button>`
                 : '';
 
             const card = document.createElement('article');
             card.className = 'post-card';
-            card.dataset.postId = post.id;
-            card.dataset.authorId = post.author_id;
+            card.dataset.postId = postId;
+            card.dataset.authorId = authorId;
             card.innerHTML = `
                 <div class="post-header">
                     <div class="post-user-info">
-                        <div class="post-avatar">${avatar}</div>
+                        <div class="post-avatar"></div>
                         <div>
-                            <div class="post-username" onclick="openUserProfile('${post.author_id}')" role="button" tabindex="0" title="Zobraziť profil">${escapeHTML(displayName)}</div>
+                            <div class="post-username" onclick="openUserProfile('${authorId}')" role="button" tabindex="0" title="Zobraziť profil">${esc(displayName)}</div>
                             <div class="post-location">🎨 gIVEME</div>
                         </div>
                     </div>
                     ${followBtnHtml}
                     <button class="post-menu-btn">•••</button>
                 </div>
-                <div class="post-image-container" ondblclick="doubleTapLike(this, '${post.id}')">
-                    <img src="${post.image_data}" alt="pixel art" class="post-image-pixel" width="16" height="16">
+                <div class="post-image-container" ondblclick="doubleTapLike(this, '${postId}')">
                     <div class="double-tap-heart">❤️</div>
                 </div>
                 <div class="post-actions">
                     <div class="post-actions-left">
-                        <button class="action-btn like-btn ${iLiked ? 'liked' : ''}" onclick="toggleLike(this, '${post.id}')">
+                        <button class="action-btn like-btn ${iLiked ? 'liked' : ''}" onclick="toggleLike(this, '${postId}')">
                             <span class="like-icon">${iLiked ? '❤️' : '🤍'}</span>
                         </button>
-                        <button class="action-btn comment-btn" onclick="openComments('${post.id}')">💬</button>
-                        <button class="action-btn share-btn" onclick="openShare('${post.id}')">📤</button>
+                        <button class="action-btn comment-btn" onclick="openComments('${postId}')">💬</button>
+                        <button class="action-btn share-btn" onclick="openShare('${postId}')">📤</button>
                         <button class="action-btn coin-btn" onclick="toggleCoinPopup(this)">
                             <div class="coin-symbol">C</div>
                             <div class="coin-amount-popup">
-                                <div class="coin-amount-option" onclick="sendCoins(event, '${post.id}', '${post.author_id}', 1)">🪙 1 Coin</div>
-                                <div class="coin-amount-option" onclick="sendCoins(event, '${post.id}', '${post.author_id}', 5)">🪙 5 Coins</div>
-                                <div class="coin-amount-option" onclick="sendCoins(event, '${post.id}', '${post.author_id}', 10)">🪙 10 Coins</div>
+                                <div class="coin-amount-option" onclick="sendCoins(event, '${postId}', '${authorId}', 1)">🪙 1 Coin</div>
+                                <div class="coin-amount-option" onclick="sendCoins(event, '${postId}', '${authorId}', 5)">🪙 5 Coins</div>
+                                <div class="coin-amount-option" onclick="sendCoins(event, '${postId}', '${authorId}', 10)">🪙 10 Coins</div>
                                 <div class="coin-custom-input">
-                                    <input type="number" placeholder="Vlastné" min="1" id="customCoin${post.id.replace(/-/g,'')}">
-                                    <button onclick="sendCustomCoins(event, '${post.id}', '${post.author_id}')">OK</button>
+                                    <input type="number" placeholder="Vlastné" min="1" id="customCoin${domId}">
+                                    <button onclick="sendCustomCoins(event, '${postId}', '${authorId}')">OK</button>
                                 </div>
                             </div>
                         </button>
@@ -406,21 +465,25 @@ async function loadFeed() {
                     <button class="action-btn bookmark-btn" onclick="toggleBookmark(this)">🔖</button>
                 </div>
                 <div class="post-stats">
-                    <div class="post-likes">❤️ <span class="likes-count" id="likes-${post.id.replace(/-/g,'')}">${likesCount}</span> lajkov</div>
-                    <div class="post-coins-received">🪙 <span id="coins-received-${post.id.replace(/-/g,'')}">${coinsReceived}</span> coinov darovaných</div>
+                    <div class="post-likes">❤️ <span class="likes-count" id="likes-${domId}">${likesCount}</span> lajkov</div>
+                    <div class="post-coins-received">🪙 <span id="coins-received-${domId}">${coinsReceived}</span> coinov darovaných</div>
                 </div>
-                ${post.prompt ? `<div class="post-prompt">📋 Zadanie: ${escapeHTML(post.prompt)}</div>` : ''}
-                <div class="post-caption"><span class="caption-username">${escapeHTML(displayName)}</span> ${escapeHTML(post.caption || '')}</div>
+                ${post.prompt ? `<div class="post-prompt">📋 Zadanie: ${esc(post.prompt)}</div>` : ''}
+                <div class="post-caption"><span class="caption-username">${esc(displayName)}</span> ${esc(post.caption || '')}</div>
                 <div class="post-comments-preview">
-                    <button class="view-comments-btn" onclick="openComments('${post.id}')">${commentsCount === 0 ? 'Pridať komentár' : (commentsCount === 1 ? 'Zobraziť 1 komentár' : 'Zobraziť ' + commentsCount + ' komentárov')}</button>
+                    <button class="view-comments-btn" onclick="openComments('${postId}')">${commentsCount === 0 ? 'Pridať komentár' : (commentsCount === 1 ? 'Zobraziť 1 komentár' : 'Zobraziť ' + commentsCount + ' komentárov')}</button>
                 </div>
                 <div class="comment-input-area">
                     <button class="emoji-btn">😀</button>
-                    <input type="text" placeholder="Pridať komentár..." onkeydown="handleCommentInput(event, this, '${post.id}')" oninput="toggleSubmitBtn(this)">
-                    <button class="comment-submit-btn" onclick="submitInlineComment(this, '${post.id}')">Odoslať</button>
+                    <input type="text" placeholder="Pridať komentár..." onkeydown="handleCommentInput(event, this, '${postId}')" oninput="toggleSubmitBtn(this)">
+                    <button class="comment-submit-btn" onclick="submitInlineComment(this, '${postId}')">Odoslať</button>
                 </div>
-                <div class="post-time">${formatTimeAgo(post.created_at)}</div>
+                <div class="post-time">${esc(formatTimeAgo(post.created_at))}</div>
             `;
+            renderAvatarInto(card.querySelector('.post-avatar'), author.avatar_url, displayName, { className: 'post-avatar-img' });
+            const postImg = createSafeImg(post.image_data, { alt: 'pixel art', className: 'post-image-pixel', width: 16, height: 16 });
+            const imgContainer = card.querySelector('.post-image-container');
+            if (postImg && imgContainer) imgContainer.insertBefore(postImg, imgContainer.firstChild);
             feedEl.appendChild(card);
         }
     } catch (err) {
@@ -526,15 +589,15 @@ async function toggleLike(btn, postId) {
 
     const isLiked = btn.classList.contains('liked');
 
-    if (me && supabase) {
+    if (me && socialSupabase) {
         try {
             if (isLiked) {
-                await supabase.from('giveme_likes').delete().eq('post_id', postId).eq('user_id', me.uid);
+                await socialSupabase.from('giveme_likes').delete().eq('post_id', postId).eq('user_id', me.uid);
                 btn.classList.remove('liked');
                 btn.querySelector('.like-icon').textContent = '🤍';
                 likesEl.textContent = Math.max(0, parseInt(likesEl.textContent) - 1);
             } else {
-                await supabase.from('giveme_likes').insert({ post_id: postId, user_id: me.uid });
+                await socialSupabase.from('giveme_likes').insert({ post_id: postId, user_id: me.uid });
                 btn.classList.add('liked');
                 btn.querySelector('.like-icon').textContent = '❤️';
                 likesEl.textContent = parseInt(likesEl.textContent) + 1;
@@ -576,7 +639,7 @@ async function toggleFollow(btn, authorId) {
 let currentProfileUserId = null;
 
 async function openUserProfile(userId) {
-	if (!userId || !supabase) return;
+	if (!userId || !socialSupabase) return;
 	currentProfileUserId = userId;
 	const modal = document.getElementById('userProfileModal');
 	const avatarEl = document.getElementById('userProfileAvatar');
@@ -591,7 +654,7 @@ async function openUserProfile(userId) {
 	if (!modal || !avatarEl || !nameEl) return;
 
 	modal.classList.add('show');
-	avatarEl.innerHTML = getAvatarEmoji('');
+	avatarEl.textContent = getAvatarEmoji('');
 	nameEl.textContent = '—';
 	postsCountEl.textContent = '0';
 	followersEl.textContent = '0';
@@ -601,14 +664,14 @@ async function openUserProfile(userId) {
 	if (loadingEl) loadingEl.style.display = 'block';
 
 	try {
-		const { data: profile } = await supabase.from('profiles').select('id, display_name, avatar_url, bio').eq('id', userId).single();
+		const { data: profile } = await socialSupabase.from('profiles').select('id, display_name, avatar_url, bio').eq('id', userId).single();
 		const displayName = profile?.display_name || 'Anonym';
 		nameEl.textContent = displayName;
-		avatarEl.innerHTML = profile?.avatar_url ? `<img src="${escapeHTML(profile.avatar_url)}" alt="">` : getAvatarEmoji(displayName);
+		renderAvatarInto(avatarEl, profile?.avatar_url, displayName);
 
 		const [postsRes, countRes, followersCount, followingCount] = await Promise.all([
-			supabase.from('giveme_posts').select('id, image_data, caption, created_at').eq('author_id', userId).order('created_at', { ascending: false }).limit(30),
-			supabase.from('giveme_posts').select('*', { count: 'exact', head: true }).eq('author_id', userId),
+			socialSupabase.from('giveme_posts').select('id, image_data, caption, created_at').eq('author_id', userId).order('created_at', { ascending: false }).limit(30),
+			socialSupabase.from('giveme_posts').select('*', { count: 'exact', head: true }).eq('author_id', userId),
 			getFollowersCount(userId),
 			getFollowingCount(userId)
 		]);
@@ -637,7 +700,9 @@ async function openUserProfile(userId) {
 			for (const p of posts) {
 				const thumb = document.createElement('div');
 				thumb.className = 'user-profile-post-thumb';
-				thumb.innerHTML = `<img src="${p.image_data}" alt="">`;
+				const thumbImg = createSafeImg(p.image_data, { alt: '' });
+				if (!thumbImg) continue;
+				thumb.appendChild(thumbImg);
 				thumb.onclick = () => { closeUserProfile(); openComments(p.id); };
 				postsEl.appendChild(thumb);
 			}
@@ -671,8 +736,8 @@ function doubleTapLike(container, postId) {
         if (likesEl) likesEl.textContent = parseInt(likesEl.textContent || 0) + 1;
         earnCoin('double-tap-like');
         const me = getCurrentUser();
-        if (me && supabase) {
-            supabase.from('giveme_likes').upsert({ post_id: postId, user_id: me.uid }, { onConflict: 'post_id,user_id' }).then(() => {});
+        if (me && socialSupabase) {
+            socialSupabase.from('giveme_likes').upsert({ post_id: postId, user_id: me.uid }, { onConflict: 'post_id,user_id' }).then(() => {});
         }
     }
     setTimeout(() => heart.classList.remove('animate'), 1000);
@@ -697,7 +762,7 @@ async function sendCoins(event, postId, recipientId, amount) {
     if (amount <= 0) return;
 
     const me = getCurrentUser();
-    if (!me || !supabase) {
+    if (!me || !socialSupabase) {
         alert('Prihlás sa, aby si mohol darovať coiny ostatným.');
         return;
     }
@@ -715,10 +780,10 @@ async function sendCoins(event, postId, recipientId, amount) {
     }
 
     // Persist to Supabase FIRST — deduct only on success
-    if (me && supabase && recipientId) {
+    if (me && socialSupabase && recipientId) {
         try {
             await Promise.race([
-                supabase.from('giveme_coin_donations').insert({
+                socialSupabase.from('giveme_coin_donations').insert({
                     post_id: postId,
                     donor_id: me.uid,
                     recipient_id: recipientId,
@@ -811,9 +876,9 @@ async function openComments(postId) {
     const list = document.getElementById('commentsList');
     list.innerHTML = '<div class="comment-loading">Načítavam...</div>';
 
-    if (supabase) {
+    if (socialSupabase) {
         try {
-            const { data: comments } = await supabase
+            const { data: comments } = await socialSupabase
                 .from('giveme_comments')
                 .select('id, content, created_at, user_id')
                 .eq('post_id', postId)
@@ -821,23 +886,23 @@ async function openComments(postId) {
 
             list.innerHTML = '';
             const authorIds = [...new Set((comments || []).map(c => c.user_id))];
-            const { data: profs } = authorIds.length ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds) : { data: [] };
+            const { data: profs } = authorIds.length ? await socialSupabase.from('profiles').select('id, display_name, avatar_url').in('id', authorIds) : { data: [] };
             const profMap = Object.fromEntries((profs || []).map(p => [p.id, p]));
 
             for (const c of comments || []) {
                 const p = profMap[c.user_id] || {};
                 const name = p.display_name || 'Anonym';
-                const av = p.avatar_url ? `<img src="${escapeHTML(p.avatar_url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : getAvatarEmoji(name);
                 const div = document.createElement('div');
                 div.className = 'comment-item';
                 div.innerHTML = `
-                    <div class="comment-avatar">${av}</div>
+                    <div class="comment-avatar"></div>
                     <div class="comment-body">
-                        <span class="comment-username">${escapeHTML(name)}</span>
-                        <p class="comment-content">${escapeHTML(c.content)}</p>
-                        <div class="comment-meta"><span>${formatTimeAgo(c.created_at)}</span></div>
+                        <span class="comment-username">${esc(name)}</span>
+                        <p class="comment-content">${esc(c.content)}</p>
+                        <div class="comment-meta"><span>${esc(formatTimeAgo(c.created_at))}</span></div>
                     </div>
                 `;
+                renderAvatarInto(div.querySelector('.comment-avatar'), p.avatar_url, name, { style: 'width:100%;height:100%;object-fit:cover' });
                 list.appendChild(div);
             }
         } catch (e) {
@@ -869,13 +934,13 @@ async function submitInlineComment(btn, postId) {
     if (!content) return;
 
     const me = getCurrentUser();
-    if (!me || !supabase) {
+    if (!me || !socialSupabase) {
         alert('Prihlás sa, aby si mohol komentovať.');
         return;
     }
 
     try {
-        await supabase.from('giveme_comments').insert({
+        await socialSupabase.from('giveme_comments').insert({
             post_id: postId,
             user_id: me.uid,
             content
@@ -906,13 +971,13 @@ async function submitModalComment() {
     if (!content || !currentCommentPost) return;
 
     const me = getCurrentUser();
-    if (!me || !supabase) {
+    if (!me || !socialSupabase) {
         alert('Prihlás sa, aby si mohol komentovať.');
         return;
     }
 
     try {
-        const { error } = await supabase.from('giveme_comments').insert({
+        const { error } = await socialSupabase.from('giveme_comments').insert({
             post_id: currentCommentPost,
             user_id: me.uid,
             content
@@ -924,19 +989,20 @@ async function submitModalComment() {
         newComment.className = 'comment-item';
         const name = me.name || 'Ty';
         newComment.innerHTML = `
-            <div class="comment-avatar">${me.photo ? `<img src="${escapeHTML(me.photo)}" alt="" style="width:100%;height:100%;object-fit:cover">` : getAvatarEmoji(name)}</div>
+            <div class="comment-avatar"></div>
             <div class="comment-body">
-                <span class="comment-username">${escapeHTML(name)}</span>
-                <p class="comment-content">${escapeHTML(content)}</p>
+                <span class="comment-username">${esc(name)}</span>
+                <p class="comment-content">${esc(content)}</p>
                 <div class="comment-meta"><span>práve teraz</span></div>
             </div>
         `;
+        renderAvatarInto(newComment.querySelector('.comment-avatar'), me.photo, name, { style: 'width:100%;height:100%;object-fit:cover' });
         commentsList.appendChild(newComment);
         input.value = '';
         commentsList.scrollTop = commentsList.scrollHeight;
         earnCoin('comment');
         // Aktualizuj počet komentárov v karte
-        const card = document.querySelector(`[data-post-id="${currentCommentPost}"]`);
+        const card = document.querySelector(`[data-post-id="${safeId(currentCommentPost)}"]`);
         const previewBtn = card?.querySelector('.view-comments-btn');
         if (previewBtn) {
             const m = previewBtn.textContent.match(/(\d+)/);
@@ -957,12 +1023,7 @@ function likeComment(btn) {
     }
 }
 
-// Utility: Escape HTML to prevent XSS
-function escapeHTML(str) {
-    const div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-}
+// Utility: escapovanie HTML — pozri esc() / escapeHTML vyššie (sekcia XSS HELPERS).
 
 // =============================================
 // SHARE
@@ -971,7 +1032,7 @@ function escapeHTML(str) {
 function openShare(postId) {
     currentSharePostId = postId;
     const basePath = window.location.pathname.replace(/\/[^/]*$/, '') || '/gIVEME';
-    const shareUrl = `${window.location.origin}${basePath}/?post=${postId}`;
+    const shareUrl = `${window.location.origin}${basePath}/?post=${encodeURIComponent(safeId(postId))}`;
     const input = document.getElementById('shareLinkInput');
     if (input) input.value = shareUrl;
     document.getElementById('shareModal').classList.add('show');
@@ -986,12 +1047,12 @@ function closeShare(event) {
 
 function shareAction(platform) {
     if (platform === 'download' && currentSharePostId) {
-        const card = document.querySelector(`[data-post-id="${currentSharePostId}"]`);
+        const card = document.querySelector(`[data-post-id="${safeId(currentSharePostId)}"]`);
         const img = card?.querySelector('.post-image-pixel');
         if (img?.src) {
             const a = document.createElement('a');
             a.href = img.src;
-            a.download = `giveme-pixel-${currentSharePostId}.png`;
+            a.download = `giveme-pixel-${safeId(currentSharePostId)}.png`;
             a.click();
         }
     }
@@ -1249,7 +1310,7 @@ async function publishPost() {
         return;
     }
 
-    if (!canvas || !supabase) {
+    if (!canvas || !socialSupabase) {
         alert('Pripojenie k serveru nie je dostupné. Skús obnoviť stránku.');
         return;
     }
@@ -1261,7 +1322,7 @@ async function publishPost() {
     const imageData = canvas.toDataURL('image/png');
 
     try {
-        const { error } = await supabase.from('giveme_posts').insert({
+        const { error } = await socialSupabase.from('giveme_posts').insert({
             author_id: me.uid,
             image_data: imageData,
             caption: caption || null,
@@ -1320,12 +1381,12 @@ async function handleSearch(query) {
     results.innerHTML = '<div class="search-empty">Hľadám...</div>';
 
     searchTimeout = setTimeout(async () => {
-        if (!supabase) {
+        if (!socialSupabase) {
             results.innerHTML = '<div class="search-empty">Pripojenie nie je dostupné.</div>';
             return;
         }
         try {
-            const { data: users, error } = await supabase
+            const { data: users, error } = await socialSupabase
                 .from('profiles')
                 .select('id, display_name, avatar_url')
                 .ilike('display_name', `%${query}%`)
@@ -1343,25 +1404,24 @@ async function handleSearch(query) {
 
             results.innerHTML = '';
             for (const u of users) {
-                const avatar = u.avatar_url
-                    ? `<img src="${escapeHTML(u.avatar_url)}" alt="">`
-                    : getAvatarEmoji(u.display_name);
+                const userId = safeId(u.id);
                 const isMe = me && me.uid === u.id;
                 const iFollow = me && followingIds.has(u.id);
                 const followBtn = (!isMe && me)
-                    ? `<button class="follow-btn ${iFollow ? 'followed' : ''}" onclick="event.stopPropagation(); toggleFollow(this, '${u.id}')">${iFollow ? 'Sledujem' : 'Sledovať'}</button>`
+                    ? `<button class="follow-btn ${iFollow ? 'followed' : ''}" onclick="event.stopPropagation(); toggleFollow(this, '${userId}')">${iFollow ? 'Sledujem' : 'Sledovať'}</button>`
                     : '';
 
                 const item = document.createElement('div');
                 item.className = 'search-result-item';
                 item.onclick = () => openUserProfile(u.id);
                 item.innerHTML = `
-                    <div class="search-result-avatar">${avatar}</div>
+                    <div class="search-result-avatar"></div>
                     <div class="search-result-info">
-                        <div class="search-result-name">${escapeHTML(u.display_name || 'Anonym')}</div>
+                        <div class="search-result-name">${esc(u.display_name || 'Anonym')}</div>
                     </div>
                     ${followBtn}
                 `;
+                renderAvatarInto(item.querySelector('.search-result-avatar'), u.avatar_url, u.display_name);
                 results.appendChild(item);
             }
         } catch (e) {
@@ -1424,7 +1484,7 @@ function updateConnectionBanner() {
         const banner = document.createElement('div');
         banner.id = 'giveme-connection-banner';
         banner.className = 'connection-banner connected';
-        banner.innerHTML = '<span>✅ Prepojené s účtom: ' + escapeHTML(user.name || user.email || '') + '</span>';
+        banner.innerHTML = '<span>✅ Prepojené s účtom: ' + esc(user.name || user.email || '') + '</span>';
         header.insertAdjacentElement('afterend', banner);
     } else if (!user && window.parent !== window) {
         const banner = document.createElement('div');

@@ -28,6 +28,15 @@ const CLASS_ID   = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 const SUBJECT_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 const MEMBER_ID  = '11111111-1111-1111-1111-111111111111';
 const ITEM_ID    = '22222222-2222-2222-2222-222222222222';
+const CREATED_SCHOOL = {
+  id: SCHOOL_ID,
+  name: 'Test Skola',
+  address: null,
+  ico: null,
+  type: 'basic_school',
+  created_at: '2026-08-21T10:00:00.000Z',
+  archived_at: null,
+};
 
 // ─────────────────────────────────────────────────────────────
 // Mock factories
@@ -55,6 +64,9 @@ function makeMockClient(queryCapture) {
   return {
     query: async (sql, params) => {
       queryCapture.push({ sql: sql || '', params: params || [] });
+      if (sql && sql.includes('INSERT INTO public.edu_schools')) {
+        return { rows: [{ ...CREATED_SCHOOL }], rowCount: 1 };
+      }
       if (sql && sql.includes('edu_audit_log')) return { rows: [], rowCount: 0 };
       return { rows: [], rowCount: 0 };
     },
@@ -67,11 +79,23 @@ function makeMockClient(queryCapture) {
  * - `role`: controls what getUserSchool returns (null = no membership → 403)
  * - `queryCapture`: array that receives every { sql, params } call
  */
-function makePool({ role = 'admin', queryCapture = [] } = {}) {
+function makePool({ role = 'admin', tier = 'teacher', ownTier = tier, tierError = null, queryCapture = [] } = {}) {
   return {
     // Standard query interface
     query: async (sql, params) => {
       queryCapture.push({ sql: sql || '', params: params || [] });
+
+      // getEffectiveTier — server-authoritative billing lookup for paid EDU actions
+      if (sql.includes('effective_tier')) {
+        if (tierError) throw tierError;
+        return { rows: [{ tier }], rowCount: 1 };
+      }
+
+      // Own paid tier — organization creation must never use an inherited tier.
+      if (sql.includes('FROM public.profiles') && sql.includes('tier')) {
+        if (tierError) throw tierError;
+        return { rows: [{ tier: ownTier }], rowCount: 1 };
+      }
 
       // getUserSchool — memberships + schools join (SELECT, not INSERT)
       if (
@@ -179,6 +203,7 @@ describe('Auth gate — 401 without token', () => {
 
   const protectedRoutes = [
     ['GET',    '/me'],
+    ['POST',   '/schools'],
     ['GET',    '/classes'],
     ['POST',   '/classes'],
     ['GET',    '/members'],
@@ -197,6 +222,116 @@ describe('Auth gate — 401 without token', () => {
       assert.strictEqual(status, 401);
     });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// SCHOOL CREATION PAID-TIER GATE
+// ═══════════════════════════════════════════════════════════════════
+describe('POST /schools — paid-tier gate', () => {
+  for (const tier of ['teacher', 'school', 'admin']) {
+    it(`creates a school for the ${tier} tier`, async () => {
+      const ctx = await buildServer({ pool: makePool({ tier }) });
+
+      try {
+        const { status, body } = await req(ctx.baseUrl, '/schools', {
+          method: 'POST',
+          body: JSON.stringify({ name: 'Test Skola' }),
+        });
+
+        assert.strictEqual(status, 201);
+        assert.deepStrictEqual(body, { school: CREATED_SCHOOL });
+      } finally {
+        await ctx.close();
+      }
+    });
+  }
+
+  it('returns 402 for the Free tier without starting a transaction', async () => {
+    const queries = [];
+    const ctx = await buildServer({ pool: makePool({ tier: 'free', queryCapture: queries }) });
+
+    try {
+      const { status, body } = await req(ctx.baseUrl, '/schools', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Test Skola' }),
+      });
+
+      assert.strictEqual(status, 402);
+      assert.deepStrictEqual(body, {
+        error: 'Vytvorenie školy vyžaduje platený plán (Teacher alebo School).',
+        code: 'TIER_REQUIRED',
+        required: 'teacher',
+        current: 'free',
+      });
+      assert.strictEqual(queries.some(({ sql }) => sql === 'BEGIN'), false);
+      assert.strictEqual(queries.some(({ sql }) => sql.includes('INSERT INTO public.edu_schools')), false);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('does not let an inherited Teacher tier create a school', async () => {
+    const queries = [];
+    const ctx = await buildServer({
+      pool: makePool({ tier: 'teacher', ownTier: 'free', queryCapture: queries }),
+    });
+
+    try {
+      const { status, body } = await req(ctx.baseUrl, '/schools', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Test Skola' }),
+      });
+
+      assert.strictEqual(status, 402);
+      assert.strictEqual(body.code, 'TIER_REQUIRED');
+      assert.strictEqual(body.current, 'free');
+      assert.strictEqual(queries.some(({ sql }) => sql.includes('effective_tier')), false);
+      assert.strictEqual(queries.some(({ sql }) => sql === 'BEGIN'), false);
+      assert.strictEqual(queries.some(({ sql }) => sql.includes('INSERT INTO public.edu_schools')), false);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('treats a missing own-tier column migration as Free and returns 402', async () => {
+    const queries = [];
+    const tierError = Object.assign(new Error('column profiles.tier does not exist'), { code: '42703' });
+    const ctx = await buildServer({ pool: makePool({ tierError, queryCapture: queries }) });
+
+    try {
+      const { status, body } = await req(ctx.baseUrl, '/schools', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Test Skola' }),
+      });
+
+      assert.strictEqual(status, 402);
+      assert.strictEqual(body.code, 'TIER_REQUIRED');
+      assert.strictEqual(body.current, 'free');
+      assert.strictEqual(queries.some(({ sql }) => sql === 'BEGIN'), false);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('returns a generic 500 without starting a transaction when the tier lookup fails', async () => {
+    const queries = [];
+    const tierError = Object.assign(new Error('permission denied for function effective_tier'), { code: '42501' });
+    const ctx = await buildServer({ pool: makePool({ tierError, queryCapture: queries }) });
+
+    try {
+      const { status, body } = await req(ctx.baseUrl, '/schools', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Test Skola' }),
+      });
+
+      assert.strictEqual(status, 500);
+      assert.deepStrictEqual(body, { error: 'Tier check failed' });
+      assert.strictEqual(queries.some(({ sql }) => sql === 'BEGIN'), false);
+      assert.strictEqual(queries.some(({ sql }) => sql.includes('INSERT INTO public.edu_schools')), false);
+    } finally {
+      await ctx.close();
+    }
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════

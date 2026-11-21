@@ -1,0 +1,24 @@
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;600&family=Press+Start+2P&display=swap");
+
+:root {
+  --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, monospace;
+  --font-pixel: "Press Start 2P", monospace;
+  --shell-bg: #0b1020;
+  --shell-surface: #121a2f;
+  --shell-raised: #18233f;
+  --shell-text: #f4f7ff;
+  --shell-muted: #a9b4cc;
+  --shell-violet: #8b5cf6;
+  --shell-cyan: #22d3ee;
+  --shell-yellow: #facc15;
+  --shell-danger: #fb7185;
+  --shell-success: #4ade80;
+  --shell-focus: #facc15;
+  --shell-radius: 14px;
+  --shell-space-1: .5rem;
+  --shell-space-2: .75rem;
+  --shell-space-3: 1rem;
+  --shell-space-4: 1.5rem;
+  --shell-space-5: 2rem;
+}

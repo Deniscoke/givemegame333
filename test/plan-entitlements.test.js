@@ -13,7 +13,7 @@ describe('entitlementsForPlan', () => {
 		assert.strictEqual(e.planKey, 'free');
 		assert.strictEqual(e.givemeSocial, false);
 		assert.strictEqual(e.smartaOpenAiAndTts, false);
-		assert.strictEqual(e.aiGamesPerUtcDay, 2);
+		assert.strictEqual(e.aiGamesPerUtcDay, 3);
 		assert.strictEqual(e.robotCompletionsPer24h, 1);
 		assert.strictEqual(e.soloCompletionsPer24h, 5);
 		assert.strictEqual(e.generatePerMinute, 8);

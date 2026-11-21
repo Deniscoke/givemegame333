@@ -52,7 +52,7 @@ Okrem generátora obsahuje:
 | Testing      | `node --test` (vstavané) — `test/` + `test/integration/`                   |
 | Deploy       | Vercel (primárny), Render (záloha — `render.yaml`)                         |
 
-**Závislosti** (`package.json`): cors, dotenv, express, firebase (legacy, používa sa minimálne), openai, pg, stripe.
+**Závislosti** (`package.json`): cors, dotenv, express, openai, pg, stripe.
 
 ---
 
@@ -196,7 +196,7 @@ gIVEMEGAME.IO-OPENCLAW/
 - `POST /api/billing/stripe-webhook` — RAW body (parser scoped iba na túto cestu)
 
 ### SMARTA / TTS
-- `GET /api/random-fact` (denný cap 10) · `GET /api/random-fact-test` · `GET /api/narrator-areas`
+- `GET /api/random-fact` (denný cap 10) · `GET /api/narrator-areas`
 - `POST /api/tts` (OpenAI TTS, Pro only)
 
 ### Misc

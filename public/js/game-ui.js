@@ -349,26 +349,92 @@ const GameUI = (() => {
 		}
 	}
 
+	const TOOL_NAMES = ['smarta', 'history', 'tamagochi', 'stats'];
+	let toolsReturnFocus = null;
+	let toolsInitialized = false;
+
+	function selectTool(tool = 'smarta', focusTab = false) {
+		const selectedTool = TOOL_NAMES.includes(tool) ? tool : 'smarta';
+		document.querySelectorAll('[role="tab"][data-tool]').forEach(tab => {
+			const selected = tab.dataset.tool === selectedTool;
+			tab.setAttribute('aria-selected', String(selected));
+			tab.tabIndex = selected ? 0 : -1;
+			if (selected && focusTab) tab.focus();
+		});
+		document.querySelectorAll('[role="tabpanel"][data-tool-panel]').forEach(panel => {
+			panel.hidden = panel.getAttribute('data-tool-panel') !== selectedTool;
+		});
+		return selectedTool;
+	}
+
+	function toolsAreStatic() {
+		return Boolean(window.matchMedia?.('(min-width: 1200px)').matches);
+	}
+
+	function syncToolsDisclosure(open) {
+		const staticPanel = toolsAreStatic();
+		const trigger = document.getElementById('btn-game-tools');
+		const panel = document.getElementById('game-tools-panel');
+		if (trigger) trigger.setAttribute('aria-expanded', String(staticPanel || open));
+		if (panel) panel.setAttribute('aria-hidden', String(!(staticPanel || open)));
+	}
+
+	function openTool(tool = 'smarta', trigger = null) {
+		if (trigger || !toolsReturnFocus) toolsReturnFocus = trigger || document.activeElement;
+		selectTool(tool);
+		document.body.classList.add('mobile-smarta-open');
+		document.body.classList.remove('mobile-filters-open');
+		syncToolsDisclosure(true);
+		const panel = document.getElementById('game-tools-panel');
+		if (panel && !toolsAreStatic()) panel.scrollIntoView({ block: 'start' });
+	}
+
+	function closeTools(restoreFocus = true) {
+		document.body.classList.remove('mobile-smarta-open');
+		syncToolsDisclosure(false);
+		if (restoreFocus && !toolsAreStatic()) toolsReturnFocus?.focus?.();
+		toolsReturnFocus = null;
+	}
+
+	function initTools() {
+		selectTool('smarta');
+		syncToolsDisclosure(false);
+		if (toolsInitialized) return;
+		toolsInitialized = true;
+		document.addEventListener('keydown', event => {
+			if (event.key === 'Escape' && document.body.classList.contains('mobile-smarta-open')) {
+				closeTools();
+				return;
+			}
+			const tab = event.target?.closest?.('[role="tab"][data-tool]');
+			if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+			const current = TOOL_NAMES.indexOf(tab.dataset.tool);
+			const next = event.key === 'Home' ? 0
+				: event.key === 'End' ? TOOL_NAMES.length - 1
+					: (current + (event.key === 'ArrowRight' ? 1 : -1) + TOOL_NAMES.length) % TOOL_NAMES.length;
+			event.preventDefault();
+			selectTool(TOOL_NAMES[next], true);
+		});
+		window.matchMedia?.('(min-width: 1200px)').addEventListener?.('change', () => syncToolsDisclosure(document.body.classList.contains('mobile-smarta-open')));
+	}
+
 	function toggleHistory() {
-		const rightPanel = document.querySelector('.right-panel');
-		if (rightPanel) rightPanel.scrollTop = 0;
+		openTool('history');
 	}
 
 	// ─── Mobile overlays ───
 	function toggleMobileFilters() {
 		document.body.classList.toggle('mobile-filters-open');
 		if (document.body.classList.contains('mobile-filters-open')) {
-			document.body.classList.remove('mobile-smarta-open');
+			closeTools(false);
 		}
 	}
 	function toggleMobileSmarta() {
-		document.body.classList.toggle('mobile-smarta-open');
-		if (document.body.classList.contains('mobile-smarta-open')) {
-			document.body.classList.remove('mobile-filters-open');
-		}
+		openTool('smarta');
 	}
 	function closeMobileOverlays() {
-		document.body.classList.remove('mobile-filters-open', 'mobile-smarta-open');
+		document.body.classList.remove('mobile-filters-open');
+		closeTools();
 	}
 
 	// ─── Toast ───
@@ -603,7 +669,7 @@ const GameUI = (() => {
 	return {
 		showScreen, renderGame, renderQuickView, addToHistory, clearHistory, loadHistory,
 		toggleSection, toggleTheme, openModal, closeModal,
-		openHelp, toggleFullscreen, toggleHistory,
+		openHelp, toggleFullscreen, toggleHistory, initTools, openTool, closeTools,
 		toggleMobileFilters, toggleMobileSmarta, closeMobileOverlays,
 		toast, setStatus, updateStats, renderCompetencies, renderProfileCompetencies,
 		renderRpgHudFromTalents, renderProfileRpgBlock, updateGameCardStats,

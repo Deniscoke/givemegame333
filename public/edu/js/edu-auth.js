@@ -9,7 +9,6 @@ const EduAuth = (function () {
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
 
   let _supabase = null;
-  let _accessToken = null;
   let _eduProfile = null; // { user, school }
 
   function initSupabase() {
@@ -22,22 +21,20 @@ const EduAuth = (function () {
   }
 
   async function getAccessToken() {
-    if (_accessToken) return _accessToken;
     const sb = initSupabase();
     if (!sb) return null;
     const { data: { session } } = await sb.auth.getSession();
-    if (session?.access_token) {
-      _accessToken = session.access_token;
-      return _accessToken;
-    }
-    return null;
+    return session?.access_token || null;
   }
 
   async function apiFetch(path, opts = {}) {
     const token = await getAccessToken();
     if (!token) {
       window.location.href = '/';
-      throw new Error('No auth token');
+      const error = new Error('No auth token');
+      error.code = 'AUTH_REQUIRED';
+      error.status = 401;
+      throw error;
     }
     const res = await fetch(`/api/edu${path}`, {
       ...opts,
@@ -50,7 +47,10 @@ const EduAuth = (function () {
     });
     if (res.status === 401) {
       window.location.href = '/';
-      throw new Error('Unauthorized');
+      const error = new Error('Unauthorized');
+      error.code = 'AUTH_REQUIRED';
+      error.status = 401;
+      throw error;
     }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'API error');
@@ -74,3 +74,6 @@ const EduAuth = (function () {
 
   return { initSupabase, getAccessToken, apiFetch, loadProfile, getProfile, logout };
 })();
+
+// Stable browser interface for pages that consume the shared EDU session.
+if (typeof window !== 'undefined') window.EduAuth = EduAuth;

@@ -31,7 +31,20 @@ const {
 	getUserBillingState,
 	hasPaidAccess,
 	getUserPlan,
-	PLAN_PRO
+	PLAN_PRO,
+	billingConfiguration,
+	billingReady,
+	billingWebhookAvailable,
+	billingEventUserId,
+	getStripe,
+	FREE_LIMITS,
+	hasIntegrationOwnershipEvidence,
+	ensureCustomer,
+	normalizeConsentIp,
+	persistBillingConsent,
+	withSubscriptionAdvisoryLock,
+	processSubscriptionEvent,
+	getEffectiveTier
 } = require('./lib/billing');
 const { entitlementsForPlan, nextUtcMidnightIso } = require('./lib/plan-entitlements');
 const {
@@ -40,6 +53,30 @@ const {
 	countRobotChallengesLast24h,
 	countSoloCompletionsLast24h,
 } = require('./lib/plan-usage');
+const {
+	parseLimit,
+	createDailyCounter,
+	admitAiGeneration,
+	hashIp,
+	cleanText,
+	sanitizeGenerateFilters,
+	sanitizeRemix,
+	resolveOutputLanguage,
+	isAuthOutage,
+	createCachedProbe,
+	cacheControlForPath,
+} = require('./lib/ai-guard');
+const { validateCoinLog } = require('./lib/coin-log-policy');
+
+// Free-tier soft cap: level grows from XP, but is displayed/enforced at FREE_LIMITS.maxLevel.
+// Talents/perks gated by level will therefore remain locked past the cap until user upgrades.
+function applyLevelCap(progression, tier) {
+	if (!progression) return progression;
+	if (tier && tier !== 'free') return progression;
+	const cap = FREE_LIMITS.maxLevel;
+	if ((progression.level || 0) <= cap) return progression;
+	return { ...progression, level: cap, capped: true, capReason: 'free_tier' };
+}
 
 const SESSION_JOIN_COST = 100;
 const COMPLETION_BONUS  = 100;
@@ -97,6 +134,10 @@ app.use(cors({
     : '*',
   credentials: false,
 }));
+
+// Stripe webhook — RAW body parser scoped iba na webhook path (PRED express.json).
+// Handler route je definovaný nižšie v súbore; tu len presmerujeme body na Buffer.
+app.use('/api/billing/stripe-webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 
@@ -244,7 +285,13 @@ if (SUPABASE_DB_URL) {
 	try {
 		coinsDbPool = new Pool({
 			connectionString: SUPABASE_DB_URL,
-			ssl: SUPABASE_DB_URL.includes('supabase.co') ? { rejectUnauthorized: false } : undefined
+			ssl: SUPABASE_DB_URL.includes('supabase.co') ? { rejectUnauthorized: false } : undefined,
+			// Fail fast instead of hanging until Vercel's 60 s maxDuration.
+			connectionTimeoutMillis: 5000,
+			idleTimeoutMillis: 10000,
+			// Client-side query timeout. A server-side statement_timeout startup parameter
+			// can be rejected by Supabase's transaction pooler (port 6543).
+			query_timeout: 10000
 		});
 		coinsDbPool.on('error', (err) => console.error('[Coins] Database pool error:', err.message));
 		console.log('[Coins] Database pool inicializovaný.');
@@ -258,20 +305,52 @@ if (SUPABASE_DB_URL) {
 
 const SUPABASE_AUTH_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/auth/v1/user` : '';
 
+const SUPABASE_AUTH_TIMEOUT_MS = 5000;
+
+/**
+ * Verify a Supabase access token. Throws on failure; errors caused by an
+ * outage (network, timeout, 429/5xx) carry `authUnavailable = true` so callers
+ * can answer 503 instead of blaming the user's token.
+ */
 async function fetchSupabaseUser(accessToken) {
 	if (!accessToken || !SUPABASE_AUTH_ENDPOINT || !SUPABASE_ANON_KEY) return null;
-	const resp = await fetch(SUPABASE_AUTH_ENDPOINT, {
-		headers: {
-			apikey: SUPABASE_ANON_KEY,
-			Authorization: `Bearer ${accessToken}`
-		}
-	});
-	if (!resp.ok) {
-		const errText = await resp.text().catch(() => '');
-		throw new Error(`Supabase user lookup failed (${resp.status}) ${errText}`);
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), SUPABASE_AUTH_TIMEOUT_MS);
+	let resp;
+	try {
+		resp = await fetch(SUPABASE_AUTH_ENDPOINT, {
+			headers: {
+				apikey: SUPABASE_ANON_KEY,
+				Authorization: `Bearer ${accessToken}`
+			},
+			signal: controller.signal
+		});
+	} catch (fetchErr) {
+		clearTimeout(timer);
+		const err = new Error(`Supabase user lookup unreachable: ${fetchErr.name || 'Error'}`);
+		err.authUnavailable = isAuthOutage({ error: fetchErr });
+		throw err;
 	}
-	const data = await resp.json();
-	return { id: data.id, email: data.email || null, raw: data };
+	try {
+		if (!resp.ok) {
+			const errText = await resp.text().catch(() => '');
+			const err = new Error(`Supabase user lookup failed (${resp.status}) ${errText.slice(0, 200)}`);
+			err.status = resp.status;
+			err.authUnavailable = isAuthOutage({ status: resp.status });
+			throw err;
+		}
+		const data = await resp.json();
+		return { id: data.id, email: data.email || null, raw: data };
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+function respondAuthUnavailable(res) {
+	return res.status(503).json({
+		error: 'Overenie prihlásenia je dočasne nedostupné. Skúste znova o chvíľu.',
+		code: 'AUTH_UNAVAILABLE'
+	});
 }
 
 async function requireSupabaseUser(req, res) {
@@ -290,8 +369,32 @@ async function requireSupabaseUser(req, res) {
 		if (!user) throw new Error('Token verification failed');
 		return user;
 	} catch (err) {
-		const status = err.message.includes('401') ? 401 : 403;
+		if (err.authUnavailable) {
+			console.warn('[Auth] Supabase verification unavailable:', err.message.slice(0, 120));
+			respondAuthUnavailable(res);
+			return null;
+		}
+		const status = err.status === 401 || err.message.includes('401') ? 401 : 403;
 		res.status(status).json({ error: 'Neplatný Supabase token', code: 'INVALID_TOKEN' });
+		return null;
+	}
+}
+
+/**
+ * Like optionalSupabaseUser, but rethrows outage errors (err.authUnavailable)
+ * so the caller can answer 503 instead of silently downgrading a logged-in
+ * user to guest. Invalid tokens still resolve to null.
+ */
+async function optionalSupabaseUserStrict(req) {
+	const authHeader = req.headers.authorization || '';
+	if (!authHeader.startsWith('Bearer ')) return null;
+	const token = authHeader.slice(7).trim();
+	if (!token) return null;
+	try {
+		const user = await fetchSupabaseUser(token);
+		return user || null;
+	} catch (err) {
+		if (err.authUnavailable) throw err;
 		return null;
 	}
 }
@@ -385,12 +488,20 @@ if (coinsDbPool) {
 // ─── OpenAI klient ───
 let openai = null;
 
+// Vercel maxDuration is 60 s — keep a single OpenAI call well below that.
+const OPENAI_TIMEOUT_MS = 25000;
+const OPENAI_MAX_RETRIES = 1;
+
+function createOpenAIClient(apiKey) {
+	return new OpenAI({ apiKey, timeout: OPENAI_TIMEOUT_MS, maxRetries: OPENAI_MAX_RETRIES });
+}
+
 function initOpenAI(apiKey) {
 	if (!apiKey || apiKey === 'sk-your-openai-api-key-here') {
 		console.warn('[Server] OpenAI API kľúč nie je nastavený.');
 		return false;
 	}
-	openai = new OpenAI({ apiKey });
+	openai = createOpenAIClient(apiKey);
 	console.log('[Server] OpenAI klient inicializovaný.');
 	return true;
 }
@@ -691,7 +802,7 @@ function validateSafety(game) {
 
 // ─── One-shot repair call for structurally invalid AI output ───
 // Uses low temperature and a minimal focused prompt — not a full regeneration.
-async function callRepairAPI(brokenOutput, errors, useModel, aiLanguage) {
+async function callRepairAPI(brokenOutput, errors, useModel, aiLanguage, requestOptions) {
 	const prompt = `The following game JSON has validation errors. Fix ALL errors listed below and return ONLY a corrected valid JSON object.
 
 ERRORS TO FIX:
@@ -715,7 +826,7 @@ RULES:
 			{ role: 'system', content: 'You are a JSON repair assistant. Your only job is to fix validation errors in game JSON objects. Return only valid JSON.' },
 			{ role: 'user', content: prompt }
 		]
-	});
+	}, requestOptions);
 }
 
 // ─── Didaktická navigácia (research-backed) ───
@@ -820,7 +931,22 @@ function cleanupRateLimitMap() {
 		if (data.resetAt < now) generateGameRateMap.delete(key);
 	}
 }
-setInterval(cleanupRateLimitMap, 60 * 1000);
+const generateGameRateLimitCleanupTimer = setInterval(cleanupRateLimitMap, 60 * 1000);
+generateGameRateLimitCleanupTimer.unref();
+
+// ─── Daily AI caps (per-instance, in-memory SOFT caps) ───
+// Each Vercel instance keeps its own counters, so the effective ceiling is
+// limit × warm instances; the real hard ceiling is the OpenAI project budget.
+// Logged-in users with a DB connection are capped by plan_usage_daily instead
+// of the guest counter; the global breaker covers every generation.
+const GUEST_AI_DAILY_LIMIT = parseLimit(process.env.GUEST_AI_DAILY_LIMIT, 5);
+const AI_GLOBAL_DAILY_LIMIT = parseLimit(process.env.AI_GLOBAL_DAILY_LIMIT, 300);
+const guestAiDailyCounter = createDailyCounter({ limit: GUEST_AI_DAILY_LIMIT });
+const globalAiDailyCounter = createDailyCounter({ limit: AI_GLOBAL_DAILY_LIMIT });
+
+function clientIp(req) {
+	return req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+}
 
 function checkGenerateGameRateLimit(key, limit) {
 	const now = Date.now();
@@ -836,11 +962,18 @@ function checkGenerateGameRateLimit(key, limit) {
 
 // ─── API endpoint ───
 app.post('/api/generate-game', async (req, res, next) => {
-	const ip = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+	const ip = clientIp(req);
 	let limit = entitlementsForPlan(false).generatePerMinute;
 	let key = `ip:${ip}`;
+	let user = null;
 	try {
-		const user = await optionalSupabaseUser(req);
+		user = await optionalSupabaseUserStrict(req);
+	} catch (e) {
+		console.warn('[GenerateGame] auth unavailable:', e.message.slice(0, 120));
+		return respondAuthUnavailable(res);
+	}
+	req.genUser = user;
+	try {
 		if (user && coinsDbPool) {
 			key = `user:${user.id}`;
 			const state = await getUserBillingState(coinsDbPool, user.id);
@@ -859,7 +992,15 @@ app.post('/api/generate-game', async (req, res, next) => {
 	}
 	next();
 }, async (req, res) => {
-	const { filters, remix } = req.body;
+	const body = req.body || {};
+
+	// ─── Input limits: filters go straight into the prompt ───
+	const sanitized = sanitizeGenerateFilters(body.filters);
+	if (!sanitized.ok) {
+		return res.status(sanitized.status).json({ error: sanitized.error, code: sanitized.code });
+	}
+	const filters = sanitized.filters;
+	const remix = sanitizeRemix(body.remix);
 
 	// API kľúč výhradne z .env (nikdy z klienta)
 	const effectiveKey = process.env.OPENAI_API_KEY;
@@ -873,14 +1014,19 @@ app.post('/api/generate-game', async (req, res, next) => {
 
 	// Inicializuj klienta ak treba
 	if (!openai) {
-		openai = new OpenAI({ apiKey: effectiveKey });
+		openai = createOpenAIClient(effectiveKey);
 	}
 
-	const genUser = await optionalSupabaseUser(req);
+	const genUser = req.genUser || null;
 	let genPaid = false;
 	if (genUser && coinsDbPool) {
-		const st = await getUserBillingState(coinsDbPool, genUser.id);
-		genPaid = hasPaidAccess(st);
+		try {
+			const st = await getUserBillingState(coinsDbPool, genUser.id);
+			genPaid = hasPaidAccess(st);
+		} catch (e) {
+			console.error('[GenerateGame] billing state check failed:', e.message);
+			return res.status(503).json({ error: 'Databáza je dočasne nedostupná. Skúste znova o chvíľu.', code: 'DB_UNAVAILABLE' });
+		}
 	}
 	const genEnt = entitlementsForPlan(genPaid);
 	if (genUser && coinsDbPool && genEnt.aiGamesPerUtcDay != null) {
@@ -896,15 +1042,30 @@ app.post('/api/generate-game', async (req, res, next) => {
 				});
 			}
 		} catch (e) {
-			console.warn('[GenerateGame] plan_usage_daily check:', e.message);
+			// Fail closed: without the usage count we cannot enforce the plan quota.
+			console.error('[GenerateGame] plan_usage_daily check failed:', e.message);
+			return res.status(503).json({ error: 'Databáza je dočasne nedostupná. Skúste znova o chvíľu.', code: 'DB_UNAVAILABLE' });
 		}
 	}
 
-	const f = filters || {};
+	// ─── Guest daily cap + global daily breaker (consumed only when admitted) ───
+	const isGuest = !(genUser && coinsDbPool);
+	const admission = admitAiGeneration({
+		globalCounter: globalAiDailyCounter,
+		guestCounter: guestAiDailyCounter,
+		isGuest,
+		ipKey: `ip:${clientIp(req)}`
+	});
+	if (!admission.ok) {
+		console.warn(`[GenerateGame] ${admission.body.code} ip=${hashIp(clientIp(req))}`);
+		return res.status(admission.status).json(admission.body);
+	}
+
+	const f = filters;
 	const filterDescription = buildFilterDescription(f);
 	const didacticGuidance = buildDidacticGuidance(f);
-	const aiLanguage = f.aiLanguage || 'Czech';
-	const langCode = f.lang || 'cs';
+	// Output language: honour lang / language code from the request, default sk.
+	const { code: langCode, name: aiLanguage } = resolveOutputLanguage(f);
 
 	// ─── RPG avatar stats for personalized generation ───────────────
 	let rpgProfileBlock = '';
@@ -982,9 +1143,10 @@ NEPREHÁŇAJ personalizáciu — jemne uprednostni aktivity ladené s najvyšš�
 		cs: 'ÚKOL: Vygeneruj jednu originální hru/aktivitu.\nPOUŽIJ VŠECHNY vstupy z panelu výše — každý filtr je tvůj brief.\nSTYL: Piš Gen Z — jednoduše, uvolněně, s příklady. Žádný akademický žargon.\nPŘÍKLADY: V instrukcích, reflexních otázkách a poznámkách vždy uveď konkrétní příklady (např. "Honza hází míč Zuzce a říká její jméno").\nPřed odpovědí zkontroluj, zda jsi splnil VŠECHNA omezení.\nOdpověz JEDNÍM JSON objektem.',
 		en: 'TASK: Generate one original game/activity.\nUSE ALL inputs from the panel above — every filter is your brief.\nSTYLE: Write Gen Z — simple, relaxed, with examples. No academic jargon.\nEXAMPLES: In instructions, reflection prompts, and notes always include concrete examples (e.g. "John throws the ball to Sarah and says her name").\nBefore responding, verify you met ALL constraints.\nRespond with ONE JSON object.',
 		de: 'AUFGABE: Generiere ein originelles Spiel/Aktivität.\nVERWENDE ALLE Eingaben aus dem Panel oben — jeder Filter ist dein Brief.\nSTIL: Schreibe Gen Z — einfach, locker, mit Beispielen. Kein akademischer Jargon.\nBEISPIELE: In Anweisungen, Reflexionsfragen und Notizen immer konkrete Beispiele angeben (z.B. "Hans wirft den Ball zu Petra und sagt ihren Namen").\nVor der Antwort prüfe, ob du ALLE Einschränkungen erfüllt hast.\nAntworte mit EINEM JSON-Objekt.',
+		tr: 'GÖREV: Orijinal bir oyun/etkinlik oluştur.\nYukarıdaki paneldeki TÜM girdileri KULLAN — her filtre senin brifindir.\nSTİL: Gen Z tarzında yaz — basit, rahat, örneklerle. Akademik jargon yok.\nÖRNEKLER: Talimatlarda, yansıtma sorularında ve notlarda her zaman somut örnekler ver (ör. "Ali topu Ayşe\'ye atar ve onun adını söyler").\nYanıtlamadan önce TÜM kısıtlamalara uyduğunu kontrol et.\nTEK bir JSON nesnesiyle yanıt ver.',
 		es: 'TAREA: Genera un juego/actividad original.\nUSA TODAS las entradas del panel de arriba — cada filtro es tu brief.\nESTILO: Escribe Gen Z — simple, relajado, con ejemplos. Sin jerga académica.\nEJEMPLOS: En instrucciones, preguntas de reflexión y notas siempre incluye ejemplos concretos (ej. "Juan lanza la pelota a María y dice su nombre").\nAntes de responder, verifica que cumpliste TODAS las restricciones.\nResponde con UN objeto JSON.',
 	};
-	const taskBlock = langInstructions[langCode] || langInstructions.cs;
+	const taskBlock = langInstructions[langCode] || langInstructions.sk;
 
 	const userContent = `🌐 LANGUAGE: ${aiLanguage}. Write EVERY text field in ${aiLanguage}. Do NOT use English unless the language IS English.
 ══════════════════════════════════════
@@ -1016,13 +1178,13 @@ The following reference material was uploaded by the facilitator. Use it to ENRI
 - WRITE THE OUTPUT IN ${aiLanguage}.
 
 ${knowledgeSummary}
-═══ END SOURCE OF KNOWLEDGE ═══` : ''}${(remix && typeof remix === 'object' && remix.title) ? `
+═══ END SOURCE OF KNOWLEDGE ═══` : ''}${remix ? `
 ──────────────────────────────────────
 REMIX — Create a VARIATION (don't plagiarize, just get inspired):
 Original game: "${remix.title}"
 Original mode: ${remix.mode || 'not specified'}
-Original competences: ${(remix.rvp?.kompetence || []).join(', ') || 'not specified'}
-Original learning goals: ${(remix.learningGoals || []).slice(0, 3).join(' | ') || 'not specified'}
+Original competences: ${remix.kompetence.join(', ') || 'not specified'}
+Original learning goals: ${remix.learningGoals.join(' | ') || 'not specified'}
 Keep mode, learning goals and competences. Change mechanics, materials, title, and procedure SIGNIFICANTLY.
 Write the remix in ${aiLanguage}.
 ──────────────────────────────────────` : ''}`;
@@ -1043,6 +1205,11 @@ Write the remix in ${aiLanguage}.
 		return /^gpt-4o|^gpt-4-turbo|^gpt-3\.5-turbo-(?:1106|0125|16k)/.test(modelId);
 	}
 
+	// One shared time budget for every OpenAI call in this request (main, 404 fallback,
+	// repair), so the chain finishes before Vercel's 60 s maxDuration kills it.
+	const genDeadline = Date.now() + 50000;
+	const genRequestOptions = () => ({ timeout: Math.max(3000, genDeadline - Date.now()), maxRetries: 0 });
+
 	async function callAPI(useModel) {
 		const isLegacy = /^gpt-5\./.test(useModel); // GPT-5 uses max_completion_tokens
 		const opts = {
@@ -1057,7 +1224,7 @@ Write the remix in ${aiLanguage}.
 		if (supportsJsonFormat(useModel)) {
 			opts.response_format = { type: 'json_object' };
 		}
-		return openai.chat.completions.create(opts);
+		return openai.chat.completions.create(opts, genRequestOptions());
 	}
 
 	// Extracts a JSON object from raw AI output.
@@ -1105,7 +1272,7 @@ Write the remix in ${aiLanguage}.
 			game = JSON.parse(gameJSON);
 		} catch (parseErr) {
 			console.warn('[API] JSON parse zlyhalo, skúšam repair...');
-			const repairResp = await callRepairAPI(content, ['Output is not valid JSON — fix it'], REPAIR_MODEL, aiLanguage);
+			const repairResp = await callRepairAPI(content, ['Output is not valid JSON — fix it'], REPAIR_MODEL, aiLanguage, genRequestOptions());
 			const repairContent = repairResp.choices[0]?.message?.content || '';
 			game = JSON.parse(extractJSON(repairContent)); // throws SyntaxError if still broken
 		}
@@ -1114,7 +1281,7 @@ Write the remix in ${aiLanguage}.
 		let validationErrors = validateGame(game);
 		if (validationErrors.length > 0) {
 			console.warn(`[API] Validácia zlyhala (${validationErrors.length} chýb), skúšam repair...`, validationErrors);
-			const repairResp = await callRepairAPI(gameJSON, validationErrors, REPAIR_MODEL, aiLanguage);
+			const repairResp = await callRepairAPI(gameJSON, validationErrors, REPAIR_MODEL, aiLanguage, genRequestOptions());
 			const repairContent = repairResp.choices[0]?.message?.content || '';
 			const repairedGame = JSON.parse(extractJSON(repairContent));
 			validationErrors = validateGame(repairedGame);
@@ -1254,11 +1421,11 @@ app.post('/api/coins/log', async (req, res) => {
 	if (!coinApiReady()) return respondCoinApiDisabled(res);
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
-	const { amount, action, metadata } = req.body || {};
-	if (!Number.isInteger(amount) || typeof action !== 'string' || !action.trim()) {
-		return res.status(400).json({ error: 'amount (integer) a action (string) sú povinné' });
+	const checked = validateCoinLog(req.body);
+	if (!checked.ok) {
+		return res.status(400).json({ error: checked.error, code: checked.code });
 	}
-	const actionTrim = action.trim();
+	const { amount, action: actionTrim, metadata } = checked;
 	if (actionTrim === 'robot_challenge' && amount > 0) {
 		try {
 			const bill = await getUserBillingState(coinsDbPool, user.id);
@@ -1303,18 +1470,37 @@ app.post('/api/coins/log', async (req, res) => {
 	}
 });
 
-// ─── Billing API (Payment Link MVP — manual provisioning) ───
-// Čítaj STRIPE_PAYMENT_LINK_PRO_MONTHLY pri každom requeste (serverless + aktuálne env z Vercelu).
+// ─── Billing API ───
+
+function billingCheckoutAvailable() {
+	return coinApiReady() && billingReady();
+}
 
 /** Verejný endpoint — žiadne tajomstvá; UI vie či je platba zapnutá a kontakt na podporu. */
 app.get('/api/billing/public-config', (req, res) => {
 	res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-	const link = (process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '').trim();
 	const support = (process.env.BILLING_SUPPORT_EMAIL || '').trim();
+	const config = billingConfiguration();
+	const checkoutAvailable = billingCheckoutAvailable();
 	res.json({
-		upgradeAvailable: Boolean(link),
+		// Compatibility field now describes the supported secure Checkout path.
+		// The legacy Payment Link endpoint remains retired.
+		upgradeAvailable: checkoutAvailable,
+		legacyPaymentLinkRetired: true,
+		checkoutPath: '/pricing.html',
+		subscriptionBillingEnabled: checkoutAvailable,
+		billingMessage: checkoutAvailable
+			? null
+			: 'Online platby jsou dočasně nedostupné. Zkuste to prosím později nebo kontaktujte podporu.',
 		supportEmail: support || null,
-		proPlanLabel: 'Pro Teacher Monthly'
+		proPlanLabel: 'Pro Teacher Monthly',
+		legal: {
+			termsUrl: config.legal.termsUrl,
+			privacyUrl: config.legal.privacyUrl,
+			contactUrl: config.legal.contactUrl,
+			tosVersion: config.legal.tosVersion,
+			privacyVersion: config.legal.privacyVersion,
+		}
 	});
 });
 
@@ -1372,11 +1558,423 @@ app.get('/api/billing/state', async (req, res) => {
 });
 
 app.get('/api/billing/upgrade-url', async (req, res) => {
+	res.status(410).json({
+		error: 'Tento způsob platby už není podporován. Použijte zabezpečený výběr plánu.',
+		code: 'LEGACY_PAYMENT_LINK_RETIRED',
+		checkoutPath: '/pricing.html'
+	});
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Subscription-based billing (tier system, Stripe Checkout + Webhooks)
+// ═══════════════════════════════════════════════════════════════════
+
+// GET /api/billing/tier — aktuálny efektívny tier + detaily subscription
+app.get('/api/billing/tier', async (req, res) => {
+	if (!coinApiReady()) return res.status(503).json({ error: 'Service unavailable' });
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
-	const url = (process.env.STRIPE_PAYMENT_LINK_PRO_MONTHLY || '').trim();
-	if (!url) return res.status(503).json({ error: 'Upgrade not configured', code: 'BILLING_DISABLED' });
-	res.json({ url }); // Payment Link URL — no secret, safe to expose
+	try {
+		const tier = await getEffectiveTier(coinsDbPool, user.id);
+		const { rows } = await coinsDbPool.query(
+			`SELECT tier AS sub_tier, status, current_period_end, cancel_at_period_end, trial_end
+			 FROM public.billing_subscriptions
+			 WHERE user_id = $1
+			 ORDER BY
+			   CASE WHEN status IN ('active', 'trialing') THEN 0 ELSE 1 END,
+			   CASE tier WHEN 'school' THEN 2 WHEN 'teacher' THEN 1 ELSE 0 END DESC,
+			   updated_at DESC
+			 LIMIT 1`,
+			[user.id]
+		);
+		res.json({
+			tier,
+			subscription: rows[0] || null,
+			free_limits: FREE_LIMITS,
+			billing_configured: billingCheckoutAvailable()
+		});
+	} catch (err) {
+		console.error('[Billing] tier fetch failed:', err.message);
+		res.status(500).json({ error: 'Tier fetch failed' });
+	}
+});
+
+// POST /api/billing/checkout — vytvorí Stripe Checkout Session
+// Body: {
+//   plan: 'teacher_monthly' | 'teacher_yearly',
+//   withdrawalConsent: true   // povinné — používateľ súhlasí s okamžitým plnením
+// }
+app.post('/api/billing/checkout', async (req, res) => {
+	const config = billingConfiguration();
+	if (!billingCheckoutAvailable()) {
+		console.error('[Billing] checkout disabled; missing or invalid configuration:', config.missing.join(', '));
+		return res.status(503).json({
+			error: 'Online platby jsou dočasně nedostupné.',
+			code: 'BILLING_DISABLED'
+		});
+	}
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+
+	const { plan, withdrawalConsent } = req.body || {};
+	if (!['teacher_monthly', 'teacher_yearly'].includes(plan)) {
+		return res.status(400).json({ error: 'Neplatný plán.', code: 'BAD_PLAN' });
+	}
+	const priceId = config.prices[plan];
+	if (!priceId) return res.status(400).json({ error: 'Neplatný plán.', code: 'BAD_PLAN' });
+	const requestId = req.get('Idempotency-Key');
+	if (!requestId || !/^[A-Za-z0-9_-]{8,100}$/.test(requestId)) {
+		return res.status(400).json({ error: 'Neplatný požadavek na platbu.', code: 'INVALID_REQUEST_ID' });
+	}
+
+	// § 1837 OZ — bez výslovného súhlasu nepustíme platbu
+	if (withdrawalConsent !== true) {
+		return res.status(400).json({
+			error: 'Pro pokračování je nutné potvrdit souhlas se zahájením plnění před uplynutím lhůty pro odstoupení.',
+			code: 'WITHDRAWAL_CONSENT_REQUIRED'
+		});
+	}
+
+	try {
+		// Ulož consent PRED vytvorením Checkout session (audit trail)
+		const ip = normalizeConsentIp(req.ip);
+		await persistBillingConsent(coinsDbPool, user.id, ip);
+
+		const customerId = await ensureCustomer(coinsDbPool, user);
+		const origin = config.origin;
+		const session = await getStripe().checkout.sessions.create({
+			mode: 'subscription',
+			customer: customerId,
+			line_items: [{ price: priceId, quantity: 1 }],
+			subscription_data: {
+				metadata: {
+					supabase_user_id: user.id,
+					plan,
+					tos_version: config.legal.tosVersion,
+					privacy_version: config.legal.privacyVersion
+				}
+			},
+			allow_promotion_codes: true,
+			billing_address_collection: 'auto',
+			automatic_tax: { enabled: true },
+			success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+			cancel_url:  `${origin}/pricing.html?canceled=1`,
+			client_reference_id: user.id,
+			metadata: {
+				supabase_user_id: user.id,
+				plan,
+				tos_version: config.legal.tosVersion,
+				privacy_version: config.legal.privacyVersion,
+				withdrawal_consent: 'true'
+			}
+		}, { idempotencyKey: `checkout_${user.id}_${requestId}` });
+		res.json({ url: session.url });
+	} catch (err) {
+		console.error('[Billing] checkout failed:', err.message);
+		res.status(500).json({ error: 'Platbu se nepodařilo zahájit.', code: 'CHECKOUT_ERROR' });
+	}
+});
+
+// GET /api/billing/legal-versions — frontend zobrazí aktuálne verzie v consent modale
+app.get('/api/billing/legal-versions', (req, res) => {
+	const config = billingConfiguration();
+	res.json({
+		tos_version: config.legal.tosVersion,
+		privacy_version: config.legal.privacyVersion,
+		withdrawal_text: config.legal.withdrawalText,
+		terms_url: config.legal.termsUrl,
+		privacy_url: config.legal.privacyUrl,
+		contact_url: config.legal.contactUrl,
+		billing_enabled: billingCheckoutAvailable(),
+	});
+});
+
+// POST /api/billing/portal — Customer Portal (manage subscription, cancel, update card)
+app.post('/api/billing/portal', async (req, res) => {
+	if (!coinApiReady()) {
+		return res.status(503).json({ error: 'Správa předplatného je dočasně nedostupná.', code: 'DB_UNAVAILABLE' });
+	}
+	const config = billingConfiguration();
+	if (!billingReady()) {
+		console.error('[Billing] portal disabled; missing or invalid configuration:', config.missing.join(', '));
+		return res.status(503).json({ error: 'Správa předplatného je dočasně nedostupná.', code: 'BILLING_DISABLED' });
+	}
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	try {
+		const { rows } = await coinsDbPool.query(
+			`SELECT stripe_customer_id FROM public.billing_subscriptions
+			 WHERE user_id = $1 LIMIT 1`,
+			[user.id]
+		);
+		if (!rows[0]?.stripe_customer_id) {
+			return res.status(404).json({ error: 'Nemáš aktívne predplatné', code: 'NO_CUSTOMER' });
+		}
+		const portal = await getStripe().billingPortal.sessions.create({
+			customer: rows[0].stripe_customer_id,
+			return_url: `${config.origin}/account.html`
+		});
+		res.json({ url: portal.url });
+	} catch (err) {
+		console.error('[Billing] portal failed:', err.message);
+		res.status(500).json({ error: 'Správu předplatného se nepodařilo otevřít.', code: 'PORTAL_ERROR' });
+	}
+});
+
+function stripeObjectId(value) {
+	return typeof value === 'string' ? value : value?.id || null;
+}
+
+async function billingCustomerOwner(customerId, queryable = coinsDbPool) {
+	if (!customerId) return null;
+	const { rows } = await queryable.query(
+		`SELECT user_id FROM public.billing_subscriptions
+		 WHERE stripe_customer_id = $1
+		 GROUP BY user_id
+		 LIMIT 2`,
+		[customerId]
+	);
+	if (rows.length > 1) {
+		const error = new Error('Conflicting billing ownership signals');
+		error.code = 'BILLING_OWNERSHIP_CONFLICT';
+		throw error;
+	}
+	return rows[0]?.user_id || null;
+}
+
+async function durableBillingSubscription(subscriptionId, queryable = coinsDbPool) {
+	if (!subscriptionId) return null;
+	const { rows } = await queryable.query(
+		`SELECT user_id, tier, stripe_customer_id, stripe_subscription_id, stripe_price_id,
+		        EXTRACT(EPOCH FROM current_period_start)::double precision AS current_period_start,
+		        EXTRACT(EPOCH FROM current_period_end)::double precision AS current_period_end,
+		        cancel_at_period_end,
+		        EXTRACT(EPOCH FROM trial_end)::double precision AS trial_end
+		 FROM public.billing_subscriptions
+		 WHERE stripe_subscription_id = $1
+		 LIMIT 1`,
+		[subscriptionId]
+	);
+	return rows[0] || null;
+}
+
+function billingOwnershipConflict(message = 'Conflicting billing ownership signals') {
+	const error = new Error(message);
+	error.code = 'BILLING_OWNERSHIP_CONFLICT';
+	return error;
+}
+
+function reconcileDurableOwner(userId, durableSubscription) {
+	if (!durableSubscription) return userId;
+	const durableUserId = billingEventUserId(
+		{ metadata: { supabase_user_id: durableSubscription.user_id } },
+		'customer.subscription.updated',
+		true
+	);
+	if (!durableUserId) {
+		const error = new Error('Durable billing subscription has no valid owner');
+		error.code = 'UNRESOLVED_BILLING_USER';
+		throw error;
+	}
+	if (userId && userId !== durableUserId) throw billingOwnershipConflict();
+	return userId || durableUserId;
+}
+
+function canceledDurableSubscription(durableSubscription) {
+	return {
+		id: durableSubscription.stripe_subscription_id,
+		object: 'subscription',
+		customer: durableSubscription.stripe_customer_id,
+		status: 'canceled',
+		metadata: { supabase_user_id: durableSubscription.user_id },
+		cancel_at_period_end: false,
+		trial_end: durableSubscription.trial_end ?? null,
+		items: {
+			data: [{
+				price: { id: durableSubscription.stripe_price_id },
+				current_period_start: durableSubscription.current_period_start ?? null,
+				current_period_end: durableSubscription.current_period_end ?? null,
+			}],
+		},
+	};
+}
+
+function billingMutationSubscriptionId(eventType, object) {
+	if (eventType === 'checkout.session.completed') return stripeObjectId(object?.subscription);
+	if (
+		eventType === 'customer.subscription.created'
+		|| eventType === 'customer.subscription.updated'
+		|| eventType === 'customer.subscription.deleted'
+	) return stripeObjectId(object?.id);
+	return null;
+}
+
+function isMissingStripeSubscription(error) {
+	return error?.code === 'resource_missing'
+		&& (error?.statusCode === undefined || error.statusCode === 404);
+}
+
+async function retrieveCanonicalSubscription(stripe, subscriptionId, eventType, deletedSnapshot) {
+	try {
+		const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+		if (!subscription || subscription.id !== subscriptionId) {
+			const error = new Error('Stripe returned an invalid subscription snapshot');
+			error.code = 'INVALID_STRIPE_SUBSCRIPTION';
+			throw error;
+		}
+		return subscription;
+	} catch (error) {
+		if (eventType === 'customer.subscription.deleted' && isMissingStripeSubscription(error)) {
+			return deletedSnapshot;
+		}
+		throw error;
+	}
+}
+
+// POST /api/billing/stripe-webhook — spracuje Stripe udalosti
+// Raw body parser je aplikovaný vyššie na /api/billing/stripe-webhook
+app.post('/api/billing/stripe-webhook', async (req, res) => {
+	const config = billingConfiguration();
+	if (!billingWebhookAvailable(coinsDbPool)) {
+		console.error(
+			'[Billing] webhook disabled; database ready:',
+			Boolean(coinsDbPool),
+			'missing or invalid runtime configuration:',
+			config.webhookMissing.join(', ')
+		);
+		return res.status(503).json({ error: 'Billing unavailable' });
+	}
+	const stripe = getStripe();
+	const sig = req.headers['stripe-signature'];
+
+	let event;
+	try {
+		event = stripe.webhooks.constructEvent(req.body, sig, config.webhookSecret);
+	} catch (err) {
+		console.error('[Billing] webhook signature failed:', err.message);
+		return res.status(400).json({ error: 'Invalid webhook signature' });
+	}
+
+	try {
+		const obj = event.data.object;
+		const eventCustomerId = stripeObjectId(obj?.customer);
+		const subscriptionId = billingMutationSubscriptionId(event.type, obj);
+		const isMutationEvent = event.type === 'checkout.session.completed'
+			|| event.type === 'customer.subscription.created'
+			|| event.type === 'customer.subscription.updated'
+			|| event.type === 'customer.subscription.deleted';
+		const knownCustomerUserId = await billingCustomerOwner(eventCustomerId);
+		const durableSubscription = isMutationEvent && subscriptionId
+			? await durableBillingSubscription(subscriptionId)
+			: null;
+		const integrationOwned = hasIntegrationOwnershipEvidence(obj, Boolean(knownCustomerUserId))
+			|| Boolean(durableSubscription);
+		let userId = billingEventUserId(obj, event.type, integrationOwned, knownCustomerUserId);
+		userId = reconcileDurableOwner(userId, durableSubscription);
+		if (
+			durableSubscription?.stripe_customer_id
+			&& eventCustomerId
+			&& durableSubscription.stripe_customer_id !== eventCustomerId
+		) throw billingOwnershipConflict('Conflicting billing customer signals');
+
+		if (isMutationEvent && integrationOwned && !subscriptionId) {
+			const error = new Error('Integration billing event has no subscription');
+			error.code = 'MISSING_STRIPE_SUBSCRIPTION';
+			throw error;
+		}
+
+		let result;
+		if (isMutationEvent && integrationOwned) {
+			result = await withSubscriptionAdvisoryLock(coinsDbPool, subscriptionId, async (client) => {
+				// Ownership and local state may have changed while this request waited.
+				const lockedDurableSubscription = await durableBillingSubscription(subscriptionId, client);
+				let lockedKnownCustomerUserId = await billingCustomerOwner(eventCustomerId, client);
+				let lockedIntegrationOwned = hasIntegrationOwnershipEvidence(obj, Boolean(lockedKnownCustomerUserId))
+					|| Boolean(lockedDurableSubscription);
+				let lockedUserId = billingEventUserId(
+					obj,
+					event.type,
+					lockedIntegrationOwned,
+					lockedKnownCustomerUserId
+				);
+				lockedUserId = reconcileDurableOwner(lockedUserId, lockedDurableSubscription);
+				if (
+					lockedDurableSubscription?.stripe_customer_id
+					&& eventCustomerId
+					&& lockedDurableSubscription.stripe_customer_id !== eventCustomerId
+				) throw billingOwnershipConflict('Conflicting billing customer signals');
+
+				let subscription = null;
+				let trustedTier;
+				try {
+					subscription = await retrieveCanonicalSubscription(
+						stripe,
+						subscriptionId,
+						event.type,
+						event.type === 'customer.subscription.deleted' ? obj : null
+					);
+				} catch (error) {
+					const reconcileMissing = isMissingStripeSubscription(error)
+						&& (event.type === 'customer.subscription.updated' || event.type === 'checkout.session.completed');
+					if (!reconcileMissing) throw error;
+					if (lockedDurableSubscription) {
+						subscription = canceledDurableSubscription(lockedDurableSubscription);
+						trustedTier = lockedDurableSubscription.tier;
+					}
+				}
+
+				if (subscription) {
+					const canonicalCustomerId = stripeObjectId(subscription.customer);
+					if (eventCustomerId && canonicalCustomerId && eventCustomerId !== canonicalCustomerId) {
+						throw billingOwnershipConflict('Conflicting billing customer signals');
+					}
+					const canonicalKnownCustomerUserId = canonicalCustomerId === eventCustomerId
+						? lockedKnownCustomerUserId
+						: await billingCustomerOwner(canonicalCustomerId, client);
+					lockedIntegrationOwned = hasIntegrationOwnershipEvidence(
+						subscription,
+						Boolean(canonicalKnownCustomerUserId)
+					) || Boolean(lockedDurableSubscription);
+					const canonicalUserId = billingEventUserId(
+						subscription,
+						'customer.subscription.updated',
+						lockedIntegrationOwned,
+						canonicalKnownCustomerUserId
+					);
+					if (lockedUserId && canonicalUserId && lockedUserId !== canonicalUserId) {
+						throw billingOwnershipConflict();
+					}
+					lockedUserId = lockedUserId || canonicalUserId;
+				}
+
+				return processSubscriptionEvent(
+					coinsDbPool,
+					event,
+					subscription,
+					lockedUserId,
+					process.env,
+					{ client, integrationOwned: lockedIntegrationOwned, trustedTier }
+				);
+			});
+		} else {
+			if (event.type === 'invoice.payment_failed') {
+				// A subscription update is authoritative for entitlement changes.
+				console.log(`[Billing] payment_failed for user ${userId} sub ${obj.subscription}`);
+			}
+			result = await processSubscriptionEvent(
+				coinsDbPool,
+				event,
+				null,
+				userId,
+				process.env,
+				{ integrationOwned }
+			);
+		}
+		res.json({ received: true, duplicate: result.duplicate });
+	} catch (err) {
+		console.error('[Billing] webhook handler failed:', err.message);
+		res.status(500).json({ error: 'Webhook processing failed' });
+	}
 });
 
 // ─── Mode-click coin award — server-authoritative with daily cap ───
@@ -1510,10 +2108,16 @@ app.post('/api/verify-completion', async (req, res) => {
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
 
-	const { photo_base64, challenge_description, game_title } = req.body || {};
-	if (!photo_base64 || !challenge_description) {
+	const { photo_base64 } = req.body || {};
+	const rawChallenge = (req.body || {}).challenge_description;
+	const rawTitle = (req.body || {}).game_title;
+	if (typeof photo_base64 !== 'string' || typeof rawChallenge !== 'string' || !photo_base64 || !rawChallenge.trim()
+		|| (rawTitle != null && typeof rawTitle !== 'string')) {
 		return res.status(400).json({ error: 'Chýba fotka alebo popis výzvy', code: 'MISSING_DATA' });
 	}
+	// Free text goes into the vision prompt — clamp like generate-game filters.
+	const challenge_description = cleanText(rawChallenge);
+	const game_title = rawTitle ? cleanText(rawTitle) : '';
 
 	// Limit base64 size (~5 MB image → ~6.7 MB base64)
 	if (photo_base64.length > 8_000_000) {
@@ -2746,7 +3350,8 @@ app.get('/api/rpg/talents', async (req, res) => {
     const unlocked = unlockedRows.map(r => r.talent_id);
 
     // Compute RPG progression and effective stats from unlocked talents
-    const progression = computeRpgLevel(profile.rpg_xp || 0);
+    const tier = await getEffectiveTier(coinsDbPool, user.id).catch(() => 'free');
+    const progression = applyLevelCap(computeRpgLevel(profile.rpg_xp || 0), tier);
     const talentManifest = getTalentManifest();
     const unlockedTalents = unlocked
       .map(id => talentManifest.find(t => t.id === id))
@@ -2916,7 +3521,8 @@ app.get('/api/rpg/perks', async (req, res) => {
 		const { rows: profRows } = await queryCoinsDb(
 			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
 		);
-		const { level } = computeRpgLevel(profRows[0]?.rpg_xp || 0);
+		const tier = await getEffectiveTier(coinsDbPool, user.id).catch(() => 'free');
+		const { level } = applyLevelCap(computeRpgLevel(profRows[0]?.rpg_xp || 0), tier);
 
 		const { rows: perks } = await queryCoinsDb(
 			`SELECT level, perk_key, icon, title, description, cooldown_hours, duration_minutes
@@ -2983,7 +3589,8 @@ app.post('/api/rpg/perks/:key/use', async (req, res) => {
 		const { rows: profRows } = await queryCoinsDb(
 			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
 		);
-		const { level } = computeRpgLevel(profRows[0]?.rpg_xp || 0);
+		const tier = await getEffectiveTier(coinsDbPool, user.id).catch(() => 'free');
+		const { level } = applyLevelCap(computeRpgLevel(profRows[0]?.rpg_xp || 0), tier);
 		if (level < perk.level) {
 			return res.status(403).json({
 				error: `Perk sa odomkne na leveli ${perk.level}. Máš ${level}.`,
@@ -3237,29 +3844,6 @@ try {
 	console.log('[API] RVP CZ načítaný pre random-fact.');
 } catch (e) { console.warn('[API] rvp.json not loaded:', e.message); }
 
-// ─── Debug: test OpenAI pre vypraváča ───
-app.get('/api/random-fact-test', async (req, res) => {
-	const key = process.env.OPENAI_API_KEY;
-	const hasKey = key && key !== 'sk-your-openai-api-key-here';
-	if (!hasKey) {
-		return res.json({ ok: false, error: 'OPENAI_API_KEY nie je nastavený v .env' });
-	}
-	try {
-		const client = new OpenAI({ apiKey: key });
-		const { data } = await client.chat.completions.create({
-			model: 'gpt-4o-mini',
-			max_tokens: 50,
-			messages: [{ role: 'user', content: 'Say hello in one word.' }]
-		});
-		const choice = data?.choices?.[0];
-		const text = choice?.message?.content?.trim();
-		const finishReason = choice?.finish_reason;
-		return res.json({ ok: true, model: 'gpt-4o-mini', response: text, finish_reason: finishReason, raw: !!choice });
-	} catch (err) {
-		return res.json({ ok: false, error: err.message, code: err?.code });
-	}
-});
-
 // ─── Narrator oblasti (pre výber v UI) ───
 app.get('/api/narrator-areas', (req, res) => {
 	const areas = [{ id: '', name: 'Náhodná oblasť' }];
@@ -3319,7 +3903,7 @@ app.get('/api/random-fact', async (req, res) => {
 	}
 
 	// OpenAI API — GPT-5.4 (Chat) pre generovanie, TTS pre čítanie
-	if (!openai) openai = new OpenAI({ apiKey: effectiveKey });
+	if (!openai) openai = createOpenAIClient(effectiveKey);
 	const langNames = { sk: 'Slovenčina', cs: 'Čeština', de: 'Deutsch', en: 'English', es: 'Español' };
 	const langName = langNames[lang] || 'Slovenčina';
 
@@ -3469,6 +4053,7 @@ app.post('/api/tts', async (req, res) => {
 	try {
 		const response = await fetch('https://api.openai.com/v1/audio/speech', {
 			method: 'POST',
+			signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
 				'Content-Type': 'application/json'
@@ -3497,10 +4082,18 @@ app.post('/api/tts', async (req, res) => {
 });
 
 // ─── Status endpoint ───
-app.get('/api/status', (req, res) => {
+// Cheap DB liveness probe: SELECT 1, 2 s timeout, cached 30 s. Reports only
+// 'ok' | 'down' | 'disabled' — never connection details.
+const dbHealthProbe = coinsDbPool
+	? createCachedProbe({ probe: () => coinsDbPool.query('SELECT 1'), ttlMs: 30000, timeoutMs: 2000 })
+	: null;
+
+app.get('/api/status', async (req, res) => {
 	const hasKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'sk-your-openai-api-key-here');
+	const db = dbHealthProbe ? await dbHealthProbe() : 'disabled';
 	res.json({
 		status: 'ok',
+		db,
 		hasApiKey: hasKey,
 		model: process.env.OPENAI_MODEL || 'gpt-4o',
 		engine: openai ? 'ai' : 'local',
@@ -3520,6 +4113,8 @@ app.get('/api/status', (req, res) => {
 app.get('/choose.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'choose.html')));
 
 // ─── gIVEMEEDU frontend pages ───
+app.get('/student', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'student', 'index.html')));
+app.get('/student/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'student', 'index.html')));
 app.get('/edu', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
 app.get('/edu/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
 app.get('/edu/index.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'index.html')));
@@ -3527,6 +4122,10 @@ app.get('/edu/classes.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'e
 app.get('/edu/gradebook.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'gradebook.html')));
 app.get('/edu/attendance.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'attendance.html')));
 app.get('/edu/members.html', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'edu', 'members.html')));
+
+// ─── INVOK institution dashboard ───
+app.get('/institution', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'institution', 'index.html')));
+app.get('/institution/', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'institution', 'index.html')));
 
 // ─── Shareable game page — serves game.html for any valid UUID path ───
 app.get('/game/:id', (req, res) => {
@@ -3538,7 +4137,13 @@ app.get('/game/:id', (req, res) => {
 });
 
 // ─── Statický file serving (po API route, aby /api/* fungovalo) ───
-app.use(express.static(PUBLIC_DIR));
+// HTML always revalidates; versioned assets (?v=N) are cached for 1 h.
+app.use(express.static(PUBLIC_DIR, {
+	setHeaders(res, filePath) {
+		const cc = cacheControlForPath(filePath);
+		if (cc) res.setHeader('Cache-Control', cc);
+	}
+}));
 
 // ─── Spustenie servera (lokálne) / export pre Vercel ───
 const PORT = process.env.PORT || 3000;

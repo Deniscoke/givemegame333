@@ -17,9 +17,8 @@
   --line: rgba(255,255,255,0.12);
   --pixel-shadow: 4px 4px 0 0 #000;
   --pixel-shadow-lg: 6px 6px 0 0 #000;
-  --font-pixel: 'Press Start 2P', monospace;
-  --font-read: 'VT323', 'Courier New', monospace;
-  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-read: var(--font-body);
+  --font-ui: var(--font-body);
 }
 
 * { box-sizing: border-box; }
@@ -29,7 +28,8 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-ui);
+  font-family: var(--font-body);
+  font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
@@ -61,6 +61,9 @@ body::before {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-family: var(--font-pixel);
   font-size: 14px;
   letter-spacing: 0.5px;
@@ -79,6 +82,9 @@ body::before {
   font-size: 14px;
 }
 .nav-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--ink-dim);
   transition: color .2s;
 }
@@ -89,9 +95,11 @@ body::before {
 /* ═══════════════════ BUTTONS ═══════════════════ */
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px;
   padding: 11px 18px;
-  font-family: var(--font-pixel);
-  font-size: 11px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   border: 2px solid #000;
@@ -116,7 +124,7 @@ body::before {
 }
 .btn-ghost:hover { background: rgba(255,255,255,0.08); }
 
-.btn-lg { padding: 15px 26px; font-size: 13px; }
+.btn-lg { padding: 15px 26px; font-size: 17px; }
 .btn-full { width: 100%; }
 
 /* ═══════════════════ HERO ═══════════════════ */
@@ -182,7 +190,8 @@ body::before {
 }
 
 .h1 {
-  font-family: var(--font-pixel);
+  font-family: var(--font-body);
+  font-weight: 700;
   font-size: 32px;
   line-height: 1.35;
   margin: 0 0 22px;
@@ -238,8 +247,10 @@ body::before {
   margin-top: 18px;
 }
 .hc-dot-btn {
-  width: 16px;
-  height: 16px;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   background: #1a1140;
   border: 3px solid #000;
   box-shadow: 2px 2px 0 0 #000;
@@ -265,8 +276,8 @@ body::before {
   padding: 10px 14px;
   background: var(--accent-3);
   border-bottom: 3px solid #000;
-  font-family: var(--font-pixel);
-  font-size: 9px;
+  font-family: var(--font-data);
+  font-size: 11px;
   color: #fff;
 }
 .hc-dot { width: 10px; height: 10px; background: #000; border-radius: 0; }
@@ -275,7 +286,7 @@ body::before {
 .hc-screen {
   padding: 18px;
   background: #0f0a2e;
-  font-family: var(--font-read);
+  font-family: var(--font-body);
   font-size: 19px;
   line-height: 1.4;
 }
@@ -288,8 +299,8 @@ body::before {
 }
 .hc-row:last-child { border-bottom: none; }
 .hc-label {
-  font-family: var(--font-pixel);
-  font-size: 9px;
+  font-family: var(--font-data);
+  font-size: 11px;
   color: var(--accent-2);
   padding-top: 4px;
 }
@@ -328,8 +339,9 @@ body::before {
 .what-card:hover { background: rgba(255,255,255,0.07); }
 .what-ico { font-size: 36px; margin-bottom: 12px; }
 .what-card h3 {
-  font-family: var(--font-pixel);
-  font-size: 12px;
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 700;
   margin: 0 0 12px;
   color: var(--accent);
   letter-spacing: 0.5px;
@@ -343,7 +355,8 @@ body::before {
 
 /* ═══════════════════ HEADINGS (shared) ═══════════════════ */
 .h2 {
-  font-family: var(--font-pixel);
+  font-family: var(--font-body);
+  font-weight: 700;
   font-size: 22px;
   line-height: 1.4;
   text-shadow: 3px 3px 0 #000;
@@ -378,15 +391,16 @@ body::before {
   position: relative;
 }
 .step-n {
-  font-family: var(--font-pixel);
+  font-family: var(--font-data);
   font-size: 34px;
   color: var(--accent-2);
   text-shadow: 3px 3px 0 #000;
   margin-bottom: 12px;
 }
 .step h3 {
-  font-family: var(--font-pixel);
-  font-size: 11px;
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 700;
   margin: 0 0 10px;
   color: var(--accent);
   letter-spacing: 1px;
@@ -426,7 +440,7 @@ body::before {
   align-items: start;
 }
 .walk-n {
-  font-family: var(--font-pixel);
+  font-family: var(--font-data);
   font-size: 36px;
   color: var(--accent-2);
   text-shadow: 3px 3px 0 #000;
@@ -435,8 +449,9 @@ body::before {
   text-align: center;
 }
 .walk-body h3 {
-  font-family: var(--font-pixel);
-  font-size: 13px;
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 700;
   color: var(--accent);
   margin: 0 0 10px;
   letter-spacing: 0.5px;
@@ -457,7 +472,7 @@ body::before {
 }
 .walk-chip {
   font-family: var(--font-pixel);
-  font-size: 9px;
+  font-size: 10px;
   padding: 8px 12px;
   background: rgba(255,255,255,0.06);
   border: 2px solid #000;
@@ -487,8 +502,8 @@ body::before {
   font-size: 18px;
 }
 .mini-l {
-  font-family: var(--font-pixel);
-  font-size: 9px;
+  font-family: var(--font-data);
+  font-size: 11px;
   color: var(--accent-2);
   padding-top: 3px;
 }
@@ -502,8 +517,9 @@ body::before {
   display: flex; flex-direction: column; gap: 6px;
 }
 .walk-input-label {
-  font-family: var(--font-pixel);
-  font-size: 9px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
   color: var(--accent-2);
   letter-spacing: 1px;
 }
@@ -527,8 +543,9 @@ body::before {
 }
 .walk-gen-btn {
   display: inline-block;
-  font-family: var(--font-pixel);
-  font-size: 12px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 700;
   background: var(--accent);
   color: #fff;
   padding: 12px 20px;
@@ -604,8 +621,9 @@ body::before {
 }
 .feat-ico { font-size: 28px; margin-bottom: 10px; }
 .feat h4 {
-  font-family: var(--font-pixel);
-  font-size: 11px;
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 700;
   margin: 0 0 8px;
   color: var(--accent-2);
   letter-spacing: 0.5px;
@@ -657,21 +675,22 @@ body::before {
   background: var(--accent-2);
   color: #000;
   font-family: var(--font-pixel);
-  font-size: 9px;
+  font-size: 10px;
   padding: 6px 12px;
   border: 2px solid #000;
   letter-spacing: 1px;
 }
 .plan-name {
-  font-family: var(--font-pixel);
-  font-size: 14px;
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 700;
   color: var(--accent);
   margin-bottom: 14px;
   letter-spacing: 1px;
 }
 .plan-featured .plan-name { color: var(--accent-2); }
 .plan-price {
-  font-family: var(--font-pixel);
+  font-family: var(--font-data);
   margin-bottom: 22px;
 }
 .plan-price .price { font-size: 28px; text-shadow: 3px 3px 0 #000; }
@@ -723,8 +742,9 @@ body::before {
 .faq summary {
   padding: 18px 22px;
   cursor: pointer;
-  font-family: var(--font-pixel);
-  font-size: 12px;
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 700;
   color: var(--accent-2);
   letter-spacing: 0.5px;
   list-style: none;
@@ -753,7 +773,8 @@ body::before {
   position: relative; z-index: 2;
 }
 .final-cta h2 {
-  font-family: var(--font-pixel);
+  font-family: var(--font-body);
+  font-weight: 700;
   font-size: 26px;
   margin: 0 0 14px;
   text-shadow: 4px 4px 0 #000;
@@ -777,8 +798,9 @@ body::before {
 }
 .footer .brand.small { font-size: 11px; }
 .footer h5 {
-  font-family: var(--font-pixel);
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 700;
   color: var(--accent-2);
   margin: 0 0 16px;
   letter-spacing: 1px;
@@ -789,6 +811,11 @@ body::before {
   font-size: 18px;
   color: var(--ink-dim);
   padding: 4px 0;
+}
+.footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 .footer a:hover { color: var(--accent-2); }
 .small-text {
@@ -891,7 +918,7 @@ body::before {
 
 @media (max-width: 520px) {
   .brand { font-size: 11px; }
-  .nav-cta .btn { padding: 9px 12px; font-size: 9px; }
+  .nav-cta .btn { padding: 9px 12px; font-size: 15px; }
   .hc-row { grid-template-columns: 70px 1fr; }
   .footer { grid-template-columns: 1fr; }
 }

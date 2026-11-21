@@ -2,7 +2,7 @@
  * public/edu/js/assessments.js — INVOK Assessment frontend (MVP)
  *
  * Vanilla JS, IIFE module. Depends on:
- *   - window.EduAuth (from edu-auth.js) — for getToken()
+ *   - window.EduAuth (from edu-auth.js) — for getAccessToken()
  *   - window.givemegame_t (from script.js, if loaded) — optional i18n
  *
  * Architecture: tab-based UI (list / create / results / summary), plus a
@@ -23,9 +23,11 @@
 	// ─── API client wrapper ────────────────────────────────────────────
 	async function api(path, opts) {
 		opts = opts || {};
-		const token = await (window.EduAuth && window.EduAuth.getToken
-			? window.EduAuth.getToken()
-			: Promise.resolve(null));
+		const auth = window.EduAuth;
+		const getToken = auth && (auth.getAccessToken || auth.getToken);
+		const token = getToken
+			? await getToken.call(auth)
+			: null;
 		const headers = Object.assign({}, opts.headers || {});
 		if (token) headers['Authorization'] = 'Bearer ' + token;
 		if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
@@ -33,8 +35,12 @@
 		const ct = res.headers.get('content-type') || '';
 		const data = ct.includes('application/json') ? await res.json() : await res.text();
 		if (!res.ok) {
-			const err = new Error((data && data.error) || ('HTTP ' + res.status));
-			err.code = (data && data.code) || ('HTTP_' + res.status);
+			const authFailed = res.status === 401;
+			const err = new Error(authFailed
+				? t('assess_auth_expired', 'Prihlásenie vypršalo. Obnov kontext a skús to znova.')
+				: ((data && data.error) || ('HTTP ' + res.status)));
+			err.code = (data && data.code) || (authFailed ? 'AUTH_REQUIRED' : ('HTTP_' + res.status));
+			err.status = res.status;
 			err.data = data;
 			throw err;
 		}
@@ -76,22 +82,127 @@
 	}
 
 	// ─── List ──────────────────────────────────────────────────────────
+	let _authorizedClasses = [];
+	let _selectedClassId = '';
+	let _schoolRole = null;
+	let _contextState = 'idle';
+	let _classContextPromise = null;
+
+	async function loadAttemptContext() {
+		if (_contextState === 'ready') {
+			return { role: _schoolRole, classes: _authorizedClasses };
+		}
+		if (_classContextPromise) return _classContextPromise;
+
+		_contextState = 'loading';
+		_classContextPromise = Promise.all([
+			api('/api/edu/me'),
+			api('/api/edu/classes')
+		]).then(([profile, classData]) => {
+			_schoolRole = profile && profile.school ? profile.school.role : null;
+			const serverClasses = Array.isArray(classData && classData.classes)
+				? classData.classes
+				: [];
+			_authorizedClasses = _schoolRole === 'student'
+				? serverClasses.filter(item =>
+					item && typeof item.id === 'string' && item.id.length > 0)
+				: [];
+			_selectedClassId = _authorizedClasses.length ? _authorizedClasses[0].id : '';
+			_contextState = 'ready';
+			return { role: _schoolRole, classes: _authorizedClasses };
+		}).catch(err => {
+			_contextState = 'error';
+			_classContextPromise = null;
+			throw err;
+		});
+
+		return _classContextPromise;
+	}
+
+	function selectedAuthorizedClassId() {
+		return _contextState === 'ready'
+			&& _schoolRole === 'student'
+			&& _authorizedClasses.some(item => item.id === _selectedClassId)
+			? _selectedClassId
+			: null;
+	}
+
+	function renderClassContext(classes) {
+		if (!classes.length) return '';
+		const options = classes.map(item => {
+			const detail = [item.name, item.grade_level, item.school_year]
+				.filter(value => value !== null && value !== undefined && value !== '')
+				.join(' · ');
+			return '<option value="' + esc(item.id) + '">'
+				+ esc(detail || item.id) + '</option>';
+		}).join('');
+		return [
+			'<div class="assess-card assess-class-context assess-form">',
+			'<label for="assessment-class-context">',
+				esc(t('assess_class_context', 'Kontext pokusu')),
+			'</label>',
+			'<select id="assessment-class-context">',
+				options,
+				'<option value="">',
+					esc(t('assess_solo_context', 'Sólový pokus (bez triedy)')),
+				'</option>',
+			'</select>',
+			'</div>'
+		].join('');
+	}
+
+	function bindClassContext(container) {
+		if (!_authorizedClasses.length) return;
+		const select = container.querySelector('#assessment-class-context');
+		if (!select) return;
+		select.value = _selectedClassId;
+		select.addEventListener('change', () => {
+			const nextId = select.value;
+			_selectedClassId = _authorizedClasses.some(item => item.id === nextId)
+				? nextId
+				: '';
+		});
+	}
+
+	function renderContextFailure(container, error) {
+		const message = error && error.message
+			? error.message
+			: t('assess_context_failed', 'Kontext pokusu sa nepodarilo načítať.');
+		container.innerHTML = [
+			'<div class="assess-card assess-error" role="status">',
+				'<p>', esc(message), '</p>',
+				'<button type="button" class="assess-btn secondary" id="assessment-context-retry">',
+					esc(t('assess_retry_context', 'Skúsiť znova')),
+				'</button>',
+			'</div>'
+		].join('');
+		const retry = container.querySelector('#assessment-context-retry');
+		if (retry) retry.addEventListener('click', () => loadList());
+	}
+
 	async function loadList() {
 		const container = document.getElementById('assess-list-container');
 		container.innerHTML = '<p class="assess-empty">' + esc(t('assess_loading', 'Načítavam...')) + '</p>';
 		try {
-			const { items } = await api('/api/assessments');
+			const [{ items }, context] = await Promise.all([
+				api('/api/assessments'),
+				loadAttemptContext()
+			]);
+			const classContext = renderClassContext(context.classes);
 			if (!items.length) {
-				container.innerHTML = '<p class="assess-empty">' + esc(t('assess_empty', 'Zatiaľ žiadne assessmenty.')) + '</p>';
+				container.innerHTML = classContext
+					+ '<p class="assess-empty">' + esc(t('assess_empty', 'Zatiaľ žiadne assessmenty.')) + '</p>';
+				bindClassContext(container);
 				return;
 			}
-			container.innerHTML = items.map(renderCard).join('');
+			container.innerHTML = classContext + items.map(renderCard).join('');
+			bindClassContext(container);
 			container.querySelectorAll('[data-take]').forEach(b => {
 				b.addEventListener('click', () => startTake(b.dataset.take));
 			});
 		} catch (e) {
 			showError(e.message);
-			container.innerHTML = '';
+			renderContextFailure(container, e);
 		}
 	}
 
@@ -118,11 +229,16 @@
 
 	// ─── Take flow ─────────────────────────────────────────────────────
 	async function startTake(assessmentId) {
+		if (_contextState !== 'ready') {
+			showError(t('assess_context_required', 'Najprv obnov kontext pokusu.'));
+			return;
+		}
 		try {
 			const detail = await api('/api/assessments/' + assessmentId);
+			const classId = selectedAuthorizedClassId();
 			const { attempt_id } = await api('/api/assessments/' + assessmentId + '/start', {
 				method: 'POST',
-				body: '{}'
+				body: JSON.stringify(classId ? { class_id: classId } : {})
 			});
 			renderTakeUI(detail, attempt_id);
 		} catch (e) {

@@ -62,6 +62,25 @@ All write operations on educational records are logged to `edu_audit_log` with:
 
 Audit log failures are non-fatal: they log to console but do not block the write operation. This is intentional to prevent audit log downtime from disrupting classroom use. In production, audit failures should trigger an alert.
 
+Migration `021_audit_append_only.sql` adds a `BEFORE UPDATE OR DELETE` trigger
+that raises an exception for every caller, including the service role. This is
+the existing append-only control for stored audit rows; release verification
+must confirm migration `021` and trigger `edu_audit_log_immutable` are present
+in each external Supabase environment. A database owner can still deliberately
+drop or disable the trigger, so database-owner access remains privileged.
+
+Assessment RLS was published in immutable migration
+`029_assessment_security.sql`. The class/school scope helper and replacement
+attempt policies are an additive follow-up in
+`031_assessment_scope_security.sql`; deployed `029` files must not be edited
+because environments may already track their SHA-256 checksum. The `031`
+helper is `SECURITY DEFINER` with an empty `search_path`, reads `auth.uid()`
+internally, and qualifies referenced public objects. Migration
+`032_assessment_scope_evidence.sql` adds immutable, database-stamped membership
+and enrollment scope evidence to assessment attempts, hardens its insert/update
+path, and supports reporting from that historical evidence instead of mutable
+current membership.
+
 Email lookups via `GET /users/by-email` are also audit-logged (searched email + found/not-found result).
 
 ---
@@ -95,8 +114,37 @@ The following are organizational/legal requirements that code alone cannot satis
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Rate limiter is per-instance (not global) | Medium | Acceptable for current scale; upgrade to Redis in Sprint 2 |
-| `edu_audit_log` has no write-protect or WORM guarantee | Medium | Audits can be altered by service role; consider append-only trigger |
+| Append-only audit protection depends on migration `021` being applied and its trigger remaining enabled | Medium | Verify `edu_audit_log_immutable` after migration/deploy; restrict database-owner access and alert on trigger changes |
 | No CSRF protection on API routes | Low | All routes require `Authorization: Bearer` header; CSRF does not apply to token-auth APIs |
 | `profiles.email` column assumed — may not exist | Low | Verify column exists in your Supabase instance before using `/users/by-email` |
 | No per-field encryption on grade data | Low | Grades are stored as plain text; field-level encryption is out of scope for Sprint 1 |
 | Long-lived Supabase sessions | Low | Session expiry is controlled by Supabase auth settings, not the EDU backend |
+
+---
+
+## Deployment credentials and billing handoff
+
+Stripe Checkout uses server-only credentials and a signed webhook at
+`POST /api/billing/stripe-webhook`. The deployment must provide the complete
+configuration documented in [`docs/BILLING_MVP.md`](docs/BILLING_MVP.md); the
+Stripe secret key and webhook signing secret must never reach browser code,
+commits, tickets, or logs.
+
+Only the monthly and yearly Teacher prices are required for self-service
+Checkout. `STRIPE_PRICE_SCHOOL_YEARLY` is an optional mapping for a
+contact-led, externally provisioned School subscription; there is no
+self-service School checkout. Subscription mutation events are reconciled from
+the canonical Stripe subscription while holding a per-subscription PostgreSQL
+advisory lock before the local transaction mutates billing state.
+
+`VERCEL_KEYS.md` and common local key-dump names are ignored to prevent future
+accidental additions. Ignore rules do not affect files already tracked or values
+already present in Git history. The repository owner must rotate any committed
+credentials and remove them from history through an approved incident-response
+process. This documentation change performs neither action and does not contact
+external systems.
+
+Before release, run a secret-marker check that reports only the filename and
+marker type (for example, a provider-key prefix or a connection-string marker),
+never matched values. Treat any positive result outside documented placeholders
+or test fixtures as an incident requiring owner action.

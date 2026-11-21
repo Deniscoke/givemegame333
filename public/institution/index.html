@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090A18">
+  <title>INVOK — dopad vzdelávania</title>
+  <link rel="stylesheet" href="/ui/tokens.css">
+  <link rel="stylesheet" href="/ui/shell.css">
+  <link rel="stylesheet" href="/institution/institution.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Preskočiť na obsah</a>
+  <div class="app-shell">
+    <div data-edu-shell data-edu-shell-autoload></div>
+
+    <main id="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">INVOK / EVIDENCIA DOPADU</p>
+          <h1>Čo sa po workshope zmenilo?</h1>
+          <p class="lede">Porovnajte vstupné a výstupné meranie štyroch kompetenčných modulov.</p>
+        </div>
+
+        <form class="filter-rail" aria-label="Filtre reportu">
+          <div class="field">
+            <label for="school-filter">Škola</label>
+            <select id="school-filter" name="school" disabled>
+              <option>Načítavam školy…</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="class-filter">Trieda</label>
+            <select id="class-filter" name="class" disabled>
+              <option value="">Všetky triedy</option>
+            </select>
+          </div>
+        </form>
+      </header>
+
+      <div id="status" class="status" role="status" aria-live="polite">Pripájam bezpečné údaje školy…</div>
+
+      <section id="dashboard-content" hidden aria-label="Výsledky vybraného kontextu">
+        <section class="summary-strip" aria-label="Súhrn dôkazov">
+          <article><span class="metric-label">Párované merania</span><strong id="metric-pairs">—</strong><small>pre/post párov naprieč modulmi</small></article>
+          <article><span class="metric-label">Priemer pred</span><strong id="metric-pre">—</strong><small>vstupná úroveň</small></article>
+          <article><span class="metric-label">Priemer po</span><strong id="metric-post">—</strong><small>výstupná úroveň</small></article>
+          <article class="accent-card"><span class="metric-label">Priemerná zmena</span><strong id="metric-delta">—</strong><small>percentuálnych bodov</small></article>
+        </section>
+
+        <div id="evidence-view" class="evidence-grid">
+          <section class="trail-panel" aria-labelledby="impact-trail-title">
+            <div class="section-heading">
+              <div><p class="eyebrow">PRE → POST</p><h2 id="impact-trail-title">Impact Trail</h2></div>
+              <p>Priemerný posun podľa modulu</p>
+            </div>
+            <div id="impact-trails" class="impact-trails"></div>
+          </section>
+
+          <aside class="cohort-panel" aria-labelledby="cohort-title">
+            <p class="eyebrow">KONTEXT</p>
+            <h2 id="cohort-title">Dôkazová stopa</h2>
+            <dl>
+              <div><dt>Škola</dt><dd id="context-school">—</dd></div>
+              <div><dt>Trieda</dt><dd id="context-class">Všetky triedy</dd></div>
+              <div><dt>Odovzdané pokusy</dt><dd id="context-attempts">—</dd></div>
+              <div><dt>Priemerné skóre</dt><dd id="context-score">—</dd></div>
+            </dl>
+            <button id="export-evidence" type="button" disabled>Exportovať CSV <span aria-hidden="true">↓</span></button>
+            <p id="export-note" class="export-note">Export obsahuje agregované dáta bez mien žiakov.</p>
+          </aside>
+        </div>
+
+        <section id="detail-panel" class="detail-panel" aria-labelledby="detail-title">
+          <div class="section-heading">
+            <div><p class="eyebrow">DETAIL</p><h2 id="detail-title">Moduly a zmena</h2></div>
+            <p id="detail-count">0 modulov</p>
+          </div>
+          <div class="table-scroll" tabindex="0" aria-label="Posúvateľná tabuľka výsledkov">
+            <table>
+              <caption>Porovnanie párovaných vstupných a výstupných meraní podľa INVOK modulu</caption>
+              <thead><tr><th scope="col">Modul</th><th scope="col">Žiaci s párom</th><th scope="col">Pred</th><th scope="col">Po</th><th scope="col">Zmena</th></tr></thead>
+              <tbody id="detail-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="empty-state" class="state-panel" hidden aria-labelledby="empty-title">
+        <span aria-hidden="true">◇</span><h2 id="empty-title">Zatiaľ bez párovaných meraní</h2>
+        <p>Pre tento výber potrebujeme aspoň jeden odovzdaný pre-test aj post-test toho istého žiaka a modulu.</p>
+      </section>
+
+      <section id="access-state" class="state-panel state-warning" hidden aria-labelledby="access-title">
+        <span aria-hidden="true">!</span><h2 id="access-title">Tento report je pre pedagógov</h2>
+        <p>Inštitucionálne výsledky môžu prezerať učitelia a administrátori. Ak rolu potrebujete zmeniť, obráťte sa na správcu školy.</p>
+        <a href="/edu/">Späť do EDU</a>
+      </section>
+
+      <section id="error-state" class="state-panel state-warning" hidden aria-labelledby="error-title">
+        <span aria-hidden="true">!</span><h2 id="error-title">Údaje sa nepodarilo načítať</h2>
+        <p id="error-message">Skontrolujte pripojenie a skúste to znova.</p>
+        <button id="retry-load" type="button">Skúsiť znova</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="/edu/js/edu-auth.js"></script>
+  <script src="/edu/js/edu-shell.js"></script>
+  <script src="/institution/institution.js"></script>
+</body>
+</html>

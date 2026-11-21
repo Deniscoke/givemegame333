@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="sk">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23633cff'/><text x='16' y='22' font-size='14' fill='white' text-anchor='middle' font-family='sans-serif'>G</text></svg>">
-	<title>gIVEMEGAME.IO — Login</title>
-	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+	<title>gIVEMEGAME.IO — Prihlásenie</title>
+	<link rel="stylesheet" href="/ui/tokens.css">
+	<link rel="stylesheet" href="/ui/shell.css">
 	<style>
 		*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,10 +15,14 @@
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			font-family: 'VT323', monospace;
+			font-family: var(--font-body);
+			font-size: 16px;
+			line-height: 1.55;
 			background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
 			color: #fff;
-			overflow: hidden;
+			overflow-x: hidden;
+			overflow-y: auto;
+			padding: 24px 0;
 		}
 
 		/* Animated background grid */
@@ -86,8 +91,9 @@
 			border-radius: 10px;
 			background: rgba(255,255,255,0.05);
 			color: #fff;
-			font-family: 'VT323', monospace;
-			font-size: 20px;
+			font-family: var(--font-body);
+			font-size: 18px;
+			font-weight: 700;
 			cursor: pointer;
 			transition: all 0.2s;
 			margin-bottom: 12px;
@@ -142,8 +148,10 @@
 			flex-wrap: wrap;
 		}
 		.login-lang-btn {
-			font-family: 'Press Start 2P', monospace;
-			font-size: 9px;
+			min-height: 44px;
+			font-family: var(--font-body);
+			font-size: 14px;
+			font-weight: 700;
 			padding: 8px 12px;
 			background: rgba(255,255,255,0.06);
 			color: rgba(255,255,255,0.9);
@@ -164,7 +172,10 @@
 		}
 
 		.btn-skip {
-			display: inline-block;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 44px;
 			margin-top: 16px;
 			padding: 10px 16px;
 			font-size: 14px;
@@ -174,6 +185,23 @@
 			border-radius: 8px;
 			transition: all 0.2s;
 			-webkit-tap-highlight-color: transparent;
+		}
+		.login-footer .footer-brand {
+			font-family: var(--font-pixel);
+			font-size: 10px;
+		}
+		.btn-skip--highlight {
+			color: #fff;
+			border-color: #06d6a0;
+			box-shadow: 0 0 0 2px rgba(6, 214, 160, 0.35);
+			animation: skip-pulse 1.6s ease-in-out 3;
+		}
+		@keyframes skip-pulse {
+			0%, 100% { box-shadow: 0 0 0 2px rgba(6, 214, 160, 0.35); }
+			50% { box-shadow: 0 0 0 6px rgba(6, 214, 160, 0.15); }
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.btn-skip--highlight { animation: none; }
 		}
 		.btn-skip:hover, .btn-skip:active {
 			color: rgba(255,255,255,0.9);
@@ -208,7 +236,7 @@
 		<div class="brand">
 			<span class="brand-give">gIVE</span><span class="brand-me">ME</span><span class="brand-game">GAME</span><span class="brand-io">.IO</span>
 		</div>
-		<div class="tagline">Educational Game Generator</div>
+		<h1 class="tagline">Generátor vzdelávacích hier</h1>
 
 		<!-- Language selector — viditeľný hneď na logine -->
 		<div class="login-lang-row">
@@ -227,7 +255,7 @@
 				<path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
 				<path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
 			</svg>
-			Sign in with Google
+			Prihlásiť sa cez Google
 		</button>
 
 		<div class="error-msg" id="error-msg"></div>
@@ -235,7 +263,7 @@
 		<a href="/index.html" class="btn-skip" id="btn-skip">Hrať bez prihlásenia</a>
 
 		<div class="login-footer">
-			<span class="brand-give" style="font-family:'Press Start 2P';font-size:8px;">IW</span>
+			<span class="brand-give footer-brand">IW</span>
 			&copy; 2026 IndiWeb
 		</div>
 	</div>
@@ -262,14 +290,55 @@
 	<script>
 	(function() {
 		const KEY = 'givemegame_preferred_lang';
-		const saved = localStorage.getItem(KEY) || 'cs';
+		// BEGIN resolveInitialLang (čistá funkcia — rovnaká kópia je v script.js, testuje test/frontend-ux.test.js)
+		function resolveInitialLang(saved, browserLangs) {
+			const SUPPORTED = ['sk', 'cs', 'en', 'de', 'es', 'tr'];
+			const norm = (v) => String(v || '').trim().toLowerCase().split(/[-_]/)[0];
+			if (SUPPORTED.includes(norm(saved))) return norm(saved);
+			const list = Array.isArray(browserLangs) ? browserLangs : [browserLangs];
+			for (const l of list) {
+				if (SUPPORTED.includes(norm(l))) return norm(l);
+			}
+			return 'sk';
+		}
+		// END resolveInitialLang
+		let storedLang = null;
+		try { storedLang = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
+		let currentLang = resolveInitialLang(
+			storedLang,
+			(navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language]
+		);
+
+		// Malý prekladač pre login stránku (index.html má vlastný v script.js)
+		let strings = null;
+		function loadStrings(lang) {
+			return fetch('/data/i18n/' + encodeURIComponent(lang) + '.json')
+				.then(r => (r.ok ? r.json() : null))
+				.then(d => { if (lang === currentLang) strings = d; return d; })
+				.catch(() => null);
+		}
+		window.givemegame_loginT = function(key, fallback) {
+			return (strings && typeof strings[key] === 'string') ? strings[key] : (fallback || key);
+		};
+		// Preložené texty, ktoré už sú zobrazené (napr. hláška o výpadku prihlásenia), obnov po zmene jazyka
+		function refreshVisible() {
+			document.querySelectorAll('[data-login-i18n]').forEach(el => {
+				el.textContent = window.givemegame_loginT(el.getAttribute('data-login-i18n'), el.textContent);
+			});
+		}
+		function applyLang(lang) {
+			currentLang = lang;
+			document.documentElement.lang = lang;
+			document.querySelectorAll('.login-lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+			loadStrings(lang).then(refreshVisible);
+		}
+
+		applyLang(currentLang);
 		document.querySelectorAll('.login-lang-btn').forEach(btn => {
-			btn.classList.toggle('active', btn.dataset.lang === saved);
 			btn.addEventListener('click', function() {
 				const lang = this.dataset.lang;
-				localStorage.setItem(KEY, lang);
-				document.querySelectorAll('.login-lang-btn').forEach(b => b.classList.remove('active'));
-				this.classList.add('active');
+				try { localStorage.setItem(KEY, lang); } catch (e) { /* storage blocked */ }
+				applyLang(lang);
 			});
 		});
 	})();
@@ -277,6 +346,7 @@
 
 	<!-- Supabase Auth SDK -->
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+	<script src="/js/post-login-router.js"></script>
 	<script>
 	(function() {
 		'use strict';
@@ -295,9 +365,49 @@
 			console.error('[Login] Supabase init failed:', e);
 		}
 
+		const loginT = (key, fallback) => (window.givemegame_loginT ? window.givemegame_loginT(key, fallback) : fallback);
+
 		function showError(msg) {
 			const el = document.getElementById('error-msg');
-			if (el) { el.textContent = msg; el.style.display = 'block'; }
+			if (el) { el.removeAttribute('data-login-i18n'); el.textContent = msg; el.style.display = 'block'; }
+		}
+
+		// Preložená chyba — data-login-i18n zabezpečí prepnutie pri zmene jazyka
+		function showErrorKey(key, fallback) {
+			const el = document.getElementById('error-msg');
+			if (!el) return;
+			el.textContent = loginT(key, fallback);
+			el.setAttribute('data-login-i18n', key);
+			el.style.display = 'block';
+		}
+
+		function highlightGuestOption() {
+			const skip = document.getElementById('btn-skip');
+			if (!skip) return;
+			skip.classList.add('btn-skip--highlight');
+			try { skip.focus({ preventScroll: true }); } catch (e) { skip.focus(); }
+		}
+
+		// Overí, či je Supabase Auth dosiahnuteľný, skôr než pošleme používateľa na Google.
+		// Nedosiahnuteľný = sieťová chyba, timeout (4 s) alebo 5xx. 4xx berieme ako "server žije".
+		const AUTH_HEALTH_TIMEOUT_MS = 4000;
+		async function isAuthReachable() {
+			const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+			const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, AUTH_HEALTH_TIMEOUT_MS);
+			try {
+				const res = await fetch(SUPABASE_URL + '/auth/v1/health', {
+					method: 'GET',
+					headers: { apikey: SUPABASE_ANON_KEY },
+					cache: 'no-store',
+					signal: ctrl ? ctrl.signal : undefined
+				});
+				return res.status < 500;
+			} catch (e) {
+				console.warn('[Login] Auth health check failed:', e && e.name);
+				return false;
+			} finally {
+				clearTimeout(timer);
+			}
 		}
 
 		function resetGoogleButton() {
@@ -305,10 +415,18 @@
 			if (!btn) return;
 			btn.classList.remove('loading');
 			btn.disabled = false;
-			btn.innerHTML = '<svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Sign in with Google';
+			btn.innerHTML = '<svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Prihlásiť sa cez Google';
 		}
 
-		async function saveUserAndRedirect(user) {
+		let redirectPromise = null;
+
+		function saveUserAndRedirect(user) {
+			if (!redirectPromise) redirectPromise = persistUserAndRedirect(user);
+			return redirectPromise;
+		}
+
+		async function persistUserAndRedirect(user) {
+			const pendingLobby = sessionStorage.getItem('givemegame_pending_lobby');
 			// Ulož profil do Supabase (ak existuje tabuľka profiles)
 			if (supabase) {
 				const { error } = await supabase.from('profiles').upsert({
@@ -327,7 +445,11 @@
 			}));
 			// Krátke oneskorenie — Supabase musí uložiť session do localStorage pred redirectom
 			await new Promise(r => setTimeout(r, 150));
-			window.location.href = '/choose.html';
+			const { data: { session } } = await supabase.auth.getSession();
+			const schoolRole = await window.PostLoginRouter.fetchSchoolRole(session?.access_token, window.fetch);
+			const destination = window.PostLoginRouter.destinationFor({ pendingLobby, schoolRole });
+			window.location.href = destination;
+			if (pendingLobby) sessionStorage.removeItem('givemegame_pending_lobby');
 		}
 
 		function checkOAuthError() {
@@ -351,14 +473,23 @@
 
 			if (!supabase) {
 				resetGoogleButton();
-				showError('Supabase sa nenačítal. Skontrolujte sieť alebo vypnite blokovanie reklám.');
+				showErrorKey('login_sdk_failed', 'Prihlásenie sa nenačítalo. Skontroluj pripojenie alebo vypni blokovanie reklám.');
+				highlightGuestOption();
 				return;
 			}
 
 			const origin = window.location.origin;
 			if (!origin || origin === 'null' || origin.startsWith('file:')) {
+				console.warn('[Login] Page opened from file:// — OAuth needs the app served over http(s).');
 				resetGoogleButton();
-				showError('Spustite server (npm start) a otvorte http://localhost:3000');
+				showErrorKey('login_open_via_web', 'Prihlásenie funguje len na webovej adrese aplikácie.');
+				return;
+			}
+
+			if (!(await isAuthReachable())) {
+				resetGoogleButton();
+				showErrorKey('login_auth_unavailable', 'Prihlásenie je dočasne nedostupné. Môžeš zatiaľ hrať bez prihlásenia.');
+				highlightGuestOption();
 				return;
 			}
 
@@ -373,11 +504,13 @@
 					window.location.href = data.url;
 					return;
 				}
-				throw new Error('Google nie je zapnutý v Supabase. Dashboard → Authentication → Providers.');
+				// Pre vývojára: Google provider nie je zapnutý (Supabase Dashboard → Authentication → Providers)
+				throw new Error('OAuth provider returned no redirect URL');
 			} catch (err) {
 				console.error('[Login]', err);
 				resetGoogleButton();
-				showError(err.message || 'Prihlásenie zlyhalo.');
+				showErrorKey('login_failed', 'Prihlásenie zlyhalo. Skús to znova alebo hraj bez prihlásenia.');
+				highlightGuestOption();
 			}
 		}
 

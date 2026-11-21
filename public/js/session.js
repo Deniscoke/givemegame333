@@ -50,6 +50,74 @@ const Session = (() => {
 	let _channel   = null;  // Supabase Realtime channel
 	let _pollTimer = null;  // fallback polling interval for lobby participants
 	let _lastKnownStatus = 'waiting'; // track session status for poll-based transition
+	let _activeModal = null;
+	let _modalReturnFocus = null;
+	let _inertedBackground = [];
+
+	function setFocusedState(active) {
+		const focused = Boolean(active);
+		document.body.classList.toggle('session-focused', focused);
+		if (focused) document.body.classList.remove('mobile-filters-open', 'mobile-smarta-open');
+	}
+
+	function _modalFocusables(modal) {
+		if (!modal || typeof modal.querySelectorAll !== 'function') return [];
+		return Array.from(modal.querySelectorAll(
+			'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+		)).filter((element) => !element.hidden && !element.disabled);
+	}
+
+	function _handleModalKeydown(event) {
+		if (!_activeModal) return;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			if (_activeModal.id === 'session-join-modal') _closeJoinModal();
+			else if (_activeModal.id === 'session-lobby-modal') _closeLobby();
+			return;
+		}
+		if (event.key !== 'Tab') return;
+
+		const focusables = _modalFocusables(_activeModal);
+		if (!focusables.length) return;
+		const first = focusables[0];
+		const last = focusables[focusables.length - 1];
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		} else if (!_activeModal.contains(document.activeElement)) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
+
+	function _activateModal(modal, initialFocusId) {
+		if (!modal) return;
+		if (_activeModal && _activeModal !== modal) _deactivateModal(_activeModal, false);
+		_modalReturnFocus = document.activeElement && !modal.contains(document.activeElement)
+			? document.activeElement
+			: null;
+		_inertedBackground = Array.from(document.body?.children || [])
+			.filter((element) => element !== modal)
+			.map((element) => ({ element, inert: Boolean(element.inert) }));
+		_inertedBackground.forEach(({ element }) => { element.inert = true; });
+		_activeModal = modal;
+		setTimeout(() => document.getElementById(initialFocusId)?.focus(), 50);
+	}
+
+	function _deactivateModal(modal, restoreFocus = true) {
+		if (!modal || _activeModal !== modal) return;
+		_inertedBackground.forEach(({ element, inert }) => { element.inert = inert; });
+		_inertedBackground = [];
+		_activeModal = null;
+		const returnFocus = _modalReturnFocus;
+		_modalReturnFocus = null;
+		if (restoreFocus && returnFocus?.isConnected !== false && typeof returnFocus?.focus === 'function') {
+			returnFocus.focus();
+		}
+	}
 
 	// ─── Public API ───────────────────────────────────────────────
 
@@ -218,35 +286,33 @@ const Session = (() => {
 		if (!modal) {
 			modal = document.createElement('div');
 			modal.id = 'session-join-modal';
-			modal.className = 'modal-overlay';
-			modal.style.cssText = 'display:flex;z-index:10000';
+			modal.className = 'modal-overlay session-modal';
+			modal.addEventListener('keydown', _handleModalKeydown);
 			document.body.appendChild(modal);
 		}
-		modal.style.display = 'flex';
+		modal.hidden = false;
 		modal.innerHTML = `
-			<div class="modal-box" style="max-width:360px;text-align:center">
-				<div class="modal-header" style="justify-content:center">
-					<h3>🎮 ${_t('sess_join_title','Pripojiť sa k session')}</h3>
-				</div>
-				<p style="opacity:0.6;font-size:12px;margin-bottom:16px">
+			<div class="session-dialog session-dialog--join" role="dialog" aria-modal="true" aria-labelledby="session-join-title">
+				<header class="session-dialog__header">
+					<h2 id="session-join-title">🎮 ${_t('sess_join_title','Pripojiť sa k session')}</h2>
+				</header>
+				<p class="session-dialog__hint">
 					${_t('sess_join_hint','Zadaj 6-znakový kód od hostitela')}
 				</p>
-				<input id="join-code-input" type="text" maxlength="6"
+				<input id="join-code-input" class="session-code-input" type="text" maxlength="6"
 					placeholder="XXXXXX"
-					style="width:100%;font-size:24px;text-align:center;letter-spacing:6px;text-transform:uppercase;
-					       padding:10px;border-radius:8px;border:2px solid var(--accent,#633cff);background:var(--bg,#1a1a2e);color:var(--text,#fff);margin-bottom:12px;box-sizing:border-box"
 					oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
 					onkeydown="if(event.key==='Enter')Session._submitJoin()">
-				<div id="join-error" style="color:#f87171;font-size:12px;min-height:18px;margin-bottom:8px"></div>
-				<div style="display:flex;gap:8px">
-					<button class="btn btn-retro" style="flex:1" onclick="Session._closeJoinModal()">${_t('cancel','Zrušiť')}</button>
-					<button id="btn-join-submit" class="btn btn-retro" style="flex:2;background:var(--accent,#633cff);color:#fff"
+				<div id="join-error" class="session-dialog__error" aria-live="polite"></div>
+				<div class="session-actions">
+					<button class="btn btn-retro session-action session-action--secondary" onclick="Session._closeJoinModal()">${_t('cancel','Zrušiť')}</button>
+					<button id="btn-join-submit" class="btn btn-retro session-action session-action--primary"
 					        onclick="Session._submitJoin()">
 						${_t('sess_btn_join','Pripojiť sa')} · ${JOIN_COST} 🪙
 					</button>
 				</div>
 			</div>`;
-		setTimeout(() => document.getElementById('join-code-input')?.focus(), 50);
+		_activateModal(modal, 'join-code-input');
 	}
 
 	function _submitJoin() {
@@ -256,7 +322,8 @@ const Session = (() => {
 
 	function _closeJoinModal() {
 		const modal = document.getElementById('session-join-modal');
-		if (modal) modal.style.display = 'none';
+		if (modal) modal.hidden = true;
+		_deactivateModal(modal);
 	}
 
 	function _setJoinLoading(on) {
@@ -296,6 +363,7 @@ const Session = (() => {
 	}
 
 	function _onSessionUpdate(session) {
+		_lastKnownStatus = session.status;
 		_renderStatus(session.status);
 
 		if (session.status === 'active') {
@@ -309,6 +377,7 @@ const Session = (() => {
 
 	function _onActive(session) {
 		_stopPoll(); // session started, no need to poll lobby anymore
+		setFocusedState(true);
 
 		// Load and render the game for everyone (host + participants).
 		// Host already has currentGame loaded in most cases, but on mobile
@@ -358,6 +427,7 @@ const Session = (() => {
 	}
 
 	function _onReflection() {
+		setFocusedState(true);
 		if (!window.currentGame) return;
 		const modal = document.getElementById('reflection-modal');
 		if (modal?.style.display === 'flex') return; // already open
@@ -381,6 +451,7 @@ const Session = (() => {
 		_fetchAndShowMyReward();
 		_closeLobby();
 		_hideSessionBadge();
+		setFocusedState(false);
 		_channel?.unsubscribe();
 		_channel = null;
 		_clearPersist();
@@ -420,9 +491,12 @@ const Session = (() => {
 		try {
 			const pending = sessionStorage.getItem('givemegame_pending_lobby');
 			if (pending) {
-				sessionStorage.removeItem('givemegame_pending_lobby');
 				const token = await _token();
-				if (token) { await _restoreOrJoin(pending); return; }
+				if (token) {
+					await _restoreOrJoin(pending);
+					sessionStorage.removeItem('givemegame_pending_lobby');
+					return;
+				}
 			}
 		} catch {}
 
@@ -537,17 +611,21 @@ const Session = (() => {
 		if (!modal) {
 			modal = document.createElement('div');
 			modal.id = 'session-lobby-modal';
-			modal.className = 'modal-overlay';
+			modal.className = 'modal-overlay session-modal';
 			// Backdrop click closes the lobby — important on mobile where the
 			// ✕ button can be hard to hit with a thumb. Stop propagation on the
 			// inner box so clicks inside the dialog don't dismiss it.
 			modal.addEventListener('click', (e) => {
 				if (e.target === modal) _closeLobby();
 			});
+			modal.addEventListener('keydown', _handleModalKeydown);
 			document.body.appendChild(modal);
 		}
-		modal.style.display = 'flex';
+		setFocusedState(true);
+		if (_lastKnownStatus === 'waiting') _showSessionBadge();
+		modal.hidden = false;
 		_renderLobby();
+		_activateModal(modal, 'session-lobby-close');
 	}
 
 	// In-game floating badge: lets the host re-open the lobby (or quit the session)
@@ -557,50 +635,30 @@ const Session = (() => {
 		if (!badge) {
 			badge = document.createElement('div');
 			badge.id = 'session-badge';
-			badge.style.cssText = [
-				'position:fixed',
-				'top:12px',
-				'right:12px',
-				'z-index:9000',
-				'display:flex',
-				'gap:6px',
-				'align-items:center',
-				'padding:8px 12px',
-				'border-radius:999px',
-				'background:rgba(0,0,0,0.78)',
-				'color:#fff',
-				'font-size:13px',
-				'font-weight:600',
-				'box-shadow:0 4px 14px rgba(0,0,0,0.35)',
-				'backdrop-filter:blur(8px)',
-				'-webkit-backdrop-filter:blur(8px)',
-				'cursor:pointer',
-				'min-height:40px'  // touch target ≥ 40px
-			].join(';');
+			badge.className = 'session-badge';
 			document.body.appendChild(badge);
 		}
 		badge.innerHTML = `
-			<span>🎮 ${_code}</span>
+			<span class="session-badge__code">🎮 ${_code}</span>
 			<button onclick="event.stopPropagation();Session._openLobbyFromBadge()"
-			        style="background:rgba(255,255,255,0.15);border:0;color:#fff;border-radius:999px;
-			               padding:6px 10px;font-size:12px;cursor:pointer;min-height:32px"
+			        class="session-badge__action session-badge__action--open"
 			        aria-label="${_t('sess_open_lobby','Otvoriť lobby')}">📋</button>
 			<button onclick="event.stopPropagation();Session._quitSession()"
-			        style="background:rgba(248,113,113,0.85);border:0;color:#fff;border-radius:999px;
-			               padding:6px 10px;font-size:12px;cursor:pointer;min-height:32px"
+			        class="session-badge__action session-badge__action--leave"
 			        aria-label="${_t('sess_quit','Opustiť session')}">✕</button>
 		`;
-		badge.style.display = 'flex';
+		badge.hidden = false;
 	}
 
 	function _hideSessionBadge() {
 		const badge = document.getElementById('session-badge');
-		if (badge) badge.style.display = 'none';
+		if (badge) badge.hidden = true;
 	}
 
 	function _openLobbyFromBadge() {
 		if (!_code) return;
 		_openLobby();
+		if (_lastKnownStatus === 'waiting') _startPoll();
 		_refreshParticipants();
 	}
 
@@ -616,6 +674,7 @@ const Session = (() => {
 		_clearPersist();
 		_closeLobby();
 		_hideSessionBadge();
+		setFocusedState(false);
 		_code = null; _sessionId = null; _isHost = false; _lastKnownStatus = 'waiting';
 		GameUI.toast(_t('sess_quit_done', '👋 Opustil si session'));
 	}
@@ -625,43 +684,42 @@ const Session = (() => {
 		if (!modal) return;
 
 		modal.innerHTML = `
-			<div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
-				<div class="modal-header">
-					<h3>🎮 Session Lobby</h3>
-					<button class="modal-close" onclick="Session._closeLobby()" aria-label="${_t('close','Zavrieť')}"
-					        style="min-width:44px;min-height:44px;font-size:20px;line-height:1;cursor:pointer">✕</button>
-				</div>
-				<div style="text-align:center;font-size:36px;letter-spacing:10px;padding:16px 0;
-				            font-weight:700;color:var(--accent,#633cff)">${_code}</div>
-				<p style="text-align:center;opacity:0.6;font-size:12px;margin-bottom:10px">
+			<div class="session-dialog session-dialog--lobby" role="dialog" aria-modal="true" aria-labelledby="session-lobby-title" onclick="event.stopPropagation()">
+				<header class="session-dialog__header">
+					<h2 id="session-lobby-title">🎮 Session Lobby</h2>
+					<button id="session-lobby-close" class="modal-close" onclick="Session._closeLobby()" aria-label="${_t('close','Zavrieť')}"
+					        type="button">✕</button>
+				</header>
+				<div class="session-code">${_code}</div>
+				<p class="session-dialog__hint">
 					${_t('sess_lobby_code_hint','Hráči zadajú tento kód · Vstup stojí {cost} 🪙').replace('{cost}', JOIN_COST)}
 				</p>
-				<div style="display:flex;gap:6px;margin-bottom:14px">
-					<input id="lobby-share-url" readonly value="${_shareUrl()}"
-						style="flex:1;font-size:11px;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);
-						       background:rgba(0,0,0,0.25);color:var(--text,#fff)"
+				<div class="session-share">
+					<input id="lobby-share-url" class="session-share__url" readonly value="${_shareUrl()}"
 						onclick="this.select()">
-					<button class="btn btn-retro" style="padding:6px 10px;font-size:12px"
-					        onclick="Session._copyShareLink()" title="${_t('sess_copy_link','Skopírovať odkaz')}">📋</button>
+					<button class="btn btn-retro session-share__copy"
+						        onclick="Session._copyShareLink()" title="${_t('sess_copy_link','Skopírovať odkaz')}">📋</button>
 				</div>
-				<div id="lobby-status" style="text-align:center;font-size:13px;opacity:0.8;margin-bottom:12px">
+				<div id="lobby-status" class="session-status" aria-live="polite">
 					${_t('sess_status_waiting','⏳ Čakám na hráčov...')}
 				</div>
-				<div id="lobby-participants" style="margin-bottom:16px;min-height:40px"></div>
+				<div id="lobby-participants" class="session-participants" aria-live="polite"></div>
 				${_isHost ? `
-					<button id="btn-lobby-start" class="btn-primary" style="width:100%;margin-bottom:8px"
+					<div class="session-actions">
+					<button id="btn-lobby-start" class="btn-primary session-action session-action--primary"
 					        onclick="Session.start()">
 						${_t('sess_btn_start','▶️ Štart — odráta {cost} 🪙 každému').replace('{cost}', JOIN_COST)}
 					</button>
+					<button id="btn-lobby-complete" class="btn-primary session-action session-action--primary" hidden
+					        onclick="Session.complete()">
+						${_t('sess_btn_complete','✅ Potvrdiť dokončenie a udeliť body')}
+					</button>
+					</div>
 				` : `
-					<p style="text-align:center;font-size:12px;opacity:0.5">
+					<p class="session-dialog__waiting">
 						${_t('sess_wait_host','Čakaj na štart hostitela...')}
 					</p>
 				`}
-				<button id="btn-lobby-complete" class="btn-primary" style="width:100%;display:none"
-				        onclick="Session.complete()">
-					${_t('sess_btn_complete','✅ Potvrdiť dokončenie a udeliť body')}
-				</button>
 			</div>`;
 	}
 
@@ -716,25 +774,23 @@ const Session = (() => {
 		const rows = [];
 		if (_isHost) {
 			rows.push(`
-				<div style="display:flex;justify-content:space-between;align-items:center;
-				            padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px">
+				<div class="session-participant session-participant--host">
 					<span>👑 ${esc(hostLabel)}</span>
-					<span style="opacity:0.5">🎮</span>
+					<span class="session-participant__state">🎮</span>
 				</div>`);
 		}
 		rows.push(...list.map(p => `
-			<div style="display:flex;justify-content:space-between;align-items:center;
-			            padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px">
+			<div class="session-participant">
 				<span>${esc(p.display_name || nameFb)}</span>
-				<span style="opacity:0.5">${p.reflection_done ? `✅ ${esc(reflLabel)}` : '⏳'}</span>
+				<span class="session-participant__state">${p.reflection_done ? `✅ ${esc(reflLabel)}` : '⏳'}</span>
 			</div>`));
 
 		if (rows.length === 0) {
-			el.innerHTML = `<p style="opacity:0.4;text-align:center;font-size:12px">${esc(_t('sess_no_players','Žiadni hráči ešte...'))}</p>`;
+			el.innerHTML = `<p class="session-participants__empty">${esc(_t('sess_no_players','Žiadni hráči ešte...'))}</p>`;
 			return;
 		}
 
-		const header = `<div style="opacity:0.6;font-size:11px;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">
+		const header = `<div class="session-participants__count">
 			${esc(countLbl)} · ${list.length}${_isHost ? ` (+ ${esc(hostLabel.toLowerCase())})` : ''}
 		</div>`;
 
@@ -743,13 +799,14 @@ const Session = (() => {
 
 	function _showCompleteButton() {
 		const btn = document.getElementById('btn-lobby-complete');
-		if (btn) btn.style.display = '';
+		if (btn) btn.hidden = false;
 	}
 
 	function _closeLobby() {
 		const modal = document.getElementById('session-lobby-modal');
-		if (modal) modal.style.display = 'none';
+		if (modal) modal.hidden = true;
 		_stopPoll();
+		_deactivateModal(modal);
 	}
 
 	function _startPoll() {
@@ -817,6 +874,7 @@ const Session = (() => {
 
 	return {
 		create, join, start, complete, openJoinDialog,
+		setFocusedState,
 		_closeLobby, _submitJoin, _closeJoinModal,
 		_copyShareLink, _shareNative,
 		_openLobbyFromBadge, _quitSession,

@@ -85,6 +85,13 @@ const Library = (() => {
 		await loadLibrary();
 	}
 
+	async function openRequestedView(search = window.location.search) {
+		const params = new URLSearchParams(search || '');
+		if (params.get('view') !== 'library') return false;
+		await open();
+		return true;
+	}
+
 	function close() {
 		const modal = document.getElementById('library-modal');
 		if (modal) modal.style.display = 'none';
@@ -430,7 +437,11 @@ const Library = (() => {
 		}
 	}
 
-	return { open, close, saveCurrentGame, loadLibrary, _toggleFav, _delete, _share, _edit, _saveEdit, _cancelEdit, _submitRating, _renderFiltered, _remix };
+	document.addEventListener('DOMContentLoaded', () => {
+		openRequestedView().catch(() => {});
+	}, { once: true });
+
+	return { open, openRequestedView, close, saveCurrentGame, loadLibrary, _toggleFav, _delete, _share, _edit, _saveEdit, _cancelEdit, _submitRating, _renderFiltered, _remix };
 })();
 
 // Expose globally so App can bridge it as `const Library = window.Library`

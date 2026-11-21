@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Môj účet — gIVEMEGAME.IO</title>
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23633cff'/><text x='16' y='22' font-size='14' fill='white' text-anchor='middle' font-family='sans-serif'>G</text></svg>">
+	<link rel="stylesheet" href="style.css?v=1">
+	<link rel="stylesheet" href="/ui/tokens.css">
+	<link rel="stylesheet" href="/ui/shell.css">
+	<style>
+		body { display: block; min-height: 100vh; height: auto; width: 100%; overflow-x: hidden; overflow-y: auto; }
+		.account-page { max-width: 720px; margin: 40px auto; padding: 24px; }
+		.account-page { font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+		.account-page h1 { font-family: var(--font-body); font-size: 28px; font-weight: 700; margin-bottom: 20px; }
+		.account-page h2 { font-family: var(--font-body); font-size: 20px; font-weight: 700; margin: 24px 0 12px; opacity: .9; }
+		.card { background: rgba(0,0,0,.25); border: 2px solid var(--border, #333); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+		.row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,.1); }
+		.row:last-child { border-bottom: none; }
+		.row .label { opacity: .7; font-size: 16px; }
+		.row .value { font-family: var(--font-data); font-size: 16px; }
+		.badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-family: var(--font-pixel); }
+		.badge.free     { background: #4a4a5e; color: #fff; }
+		.badge.teacher  { background: #4ade80; color: #000; }
+		.badge.school   { background: #60a5fa; color: #000; }
+		.badge.admin    { background: #f472b6; color: #000; }
+		.status.active   { color: #4ade80; }
+		.status.past_due { color: #f87171; }
+		.status.canceled { color: #f59e0b; }
+		.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 20px; font-family: var(--font-body); font-size: 16px; font-weight: 700; cursor: pointer; border-radius: 8px; text-decoration: none; border: 2px solid; text-align: center; }
+		.btn-primary { background: #633cff; border-color: #633cff; color: #fff; }
+		.btn-primary:hover { background: #7c5dff; }
+		.btn-ghost { background: transparent; border-color: #555; color: inherit; }
+		.btn-ghost:hover { background: rgba(255,255,255,.05); }
+		.btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+		.alert { padding: 14px; border-radius: 8px; margin: 12px 0; font-size: 16px; line-height: 1.55; }
+		.alert.info { background: rgba(96,165,250,.15); border: 1px solid #60a5fa; }
+		.alert.warn { background: rgba(245,158,11,.15); border: 1px solid #f59e0b; }
+		.loading { opacity: .5; font-style: italic; }
+		.billing-notice { display: none; }
+		a { color: #7c5dff; }
+	</style>
+</head>
+<body class="mode-party">
+	<div class="account-page">
+		<h1>Môj účet</h1>
+
+		<div class="card" id="user-card">
+			<h2>Profil</h2>
+			<div class="row"><span class="label">E-mail</span><span class="value" id="user-email">—</span></div>
+			<div class="row"><span class="label">Meno</span><span class="value" id="user-name">—</span></div>
+		</div>
+
+		<div class="card" id="plan-card">
+			<h2>Predplatné</h2>
+			<div class="alert warn billing-notice" id="billing-notice" role="status"></div>
+			<div class="row">
+				<span class="label">Aktuálny plán</span>
+				<span class="value"><span class="badge" id="tier-badge">…</span></span>
+			</div>
+			<div class="row" id="status-row" style="display:none">
+				<span class="label">Stav</span>
+				<span class="value"><span class="status" id="sub-status">—</span></span>
+			</div>
+			<div class="row" id="period-row" style="display:none">
+				<span class="label">Platí do</span>
+				<span class="value" id="period-end">—</span>
+			</div>
+			<div class="row" id="cancel-row" style="display:none">
+				<span class="label">Zrušenie</span>
+				<span class="value" id="cancel-info">—</span>
+			</div>
+
+			<div id="consent-row" class="row" style="display:none">
+				<span class="label">Súhlas s okamžitým plnením</span>
+				<span class="value" id="consent-info">—</span>
+			</div>
+
+			<div id="plan-actions" class="btn-row"></div>
+
+			<div class="alert info" id="free-hint" style="display:none">
+				Vo Free pláne máte <strong>3 generované hry denne</strong>, úroveň do 5 a 1 súbežnú lobby.
+				Chcete viac? <a href="/pricing.html">Pozrite si plány</a>.
+			</div>
+		</div>
+
+		<div class="card">
+			<h2>Právne informácie</h2>
+			<div class="row">
+				<a href="#" data-legal-link="terms">Obchodné podmienky</a>
+				<span class="value" id="tos-version">—</span>
+			</div>
+			<div class="row">
+				<a href="#" data-legal-link="privacy">Zásady ochrany osobných údajov</a>
+				<span class="value" id="privacy-version">—</span>
+			</div>
+			<div class="row">
+				<a href="#" data-legal-link="contact">Kontakt / Impressum</a>
+				<span></span>
+			</div>
+		</div>
+
+		<div style="text-align:center; margin-top:30px;">
+			<a href="/index.html" class="btn btn-ghost">← Späť do aplikácie</a>
+		</div>
+	</div>
+
+	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+	<script>
+	(function () {
+		const SUPABASE_URL = 'https://vhpkkbixshfyytohkruv.supabase.co';
+		const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZocGtrYml4c2hmeXl0b2hrcnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMDAzNzcsImV4cCI6MjA4ODY3NjM3N30.umrrhSqC9LW2Wlcs5y4uCViVfZmqyHcMbaPQaQiMbR0';
+		const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+			auth: { detectSessionInUrl: true, persistSession: true }
+		});
+
+		const TIER_LABELS = { free: 'Free', teacher: 'Teacher', school: 'School', admin: 'Admin' };
+		const STATUS_LABELS = {
+			trialing: 'Skúšobné obdobie', active: 'Aktívne', past_due: 'Platba neprebehla',
+			canceled: 'Zrušené', incomplete: 'Nedokončené', incomplete_expired: 'Vypršalo',
+			unpaid: 'Nezaplatené', paused: 'Pozastavené'
+		};
+
+		function fmtDate(s) {
+			if (!s) return '—';
+			try { return new Date(s).toLocaleDateString('sk-SK'); } catch { return s; }
+		}
+
+		async function openPortal(token) {
+			try {
+				const res = await fetch('/api/billing/portal', {
+					method: 'POST',
+					headers: { 'Authorization': `Bearer ${token}` }
+				});
+				const json = await res.json();
+				if (!res.ok || !json.url) throw new Error(json.error || 'Portál zlyhal');
+				window.location.href = json.url;
+			} catch (err) {
+				alert('Nepodarilo sa otvoriť portál: ' + err.message);
+			}
+		}
+
+		async function load() {
+			const { data: { session } } = await sb.auth.getSession();
+			if (!session) {
+				window.location.href = '/login.html?redirect=/account.html';
+				return;
+			}
+			document.getElementById('user-email').textContent = session.user.email || '—';
+			document.getElementById('user-name').textContent =
+				session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '—';
+
+			const token = session.access_token;
+			const tierBadge = document.getElementById('tier-badge');
+			const actionsEl = document.getElementById('plan-actions');
+			const billingNotice = document.getElementById('billing-notice');
+
+			try {
+				const [tierRes, versRes, configRes] = await Promise.all([
+					fetch('/api/billing/tier', { headers: { 'Authorization': `Bearer ${token}` } }),
+					fetch('/api/billing/legal-versions'),
+					fetch('/api/billing/public-config')
+				]);
+				const tierData = await tierRes.json();
+				const versData = await versRes.json();
+				const configData = await configRes.json();
+				const subscription = tierData.subscription || {};
+
+				const tier = tierData.tier || 'free';
+				tierBadge.textContent = TIER_LABELS[tier] || tier;
+				tierBadge.className = 'badge ' + tier;
+
+				document.getElementById('tos-version').textContent = versData.tos_version ? ('v ' + versData.tos_version) : '';
+				document.getElementById('privacy-version').textContent = versData.privacy_version ? ('v ' + versData.privacy_version) : '';
+				const legalUrls = {
+					terms: configData.legal?.termsUrl,
+					privacy: configData.legal?.privacyUrl,
+					contact: configData.legal?.contactUrl,
+				};
+				document.querySelectorAll('[data-legal-link]').forEach((link) => {
+					const url = legalUrls[link.dataset.legalLink];
+					if (url) link.href = url;
+					else {
+						link.removeAttribute('href');
+						link.setAttribute('aria-disabled', 'true');
+						link.title = 'Odkaz zatiaľ nie je nakonfigurovaný';
+					}
+				});
+
+				if (subscription.status) {
+					document.getElementById('status-row').style.display = '';
+					const st = document.getElementById('sub-status');
+					st.textContent = STATUS_LABELS[subscription.status] || subscription.status;
+					st.className = 'status ' + subscription.status;
+				}
+				if (subscription.current_period_end) {
+					document.getElementById('period-row').style.display = '';
+					document.getElementById('period-end').textContent = fmtDate(subscription.current_period_end);
+				}
+				if (subscription.cancel_at_period_end) {
+					document.getElementById('cancel-row').style.display = '';
+					document.getElementById('cancel-info').textContent = 'Predplatné sa skončí na konci obdobia';
+				}
+
+				const billingEnabled = tierData.billing_configured && configData.subscriptionBillingEnabled;
+				if (!billingEnabled) {
+					billingNotice.textContent = configData.billingMessage || 'Online platby sú dočasne nedostupné.';
+					billingNotice.style.display = 'block';
+				} else if (tier === 'free') {
+					document.getElementById('free-hint').style.display = '';
+					const a = document.createElement('a');
+					a.href = '/pricing.html';
+					a.className = 'btn btn-primary';
+					a.textContent = 'Prejsť na platený plán';
+					actionsEl.appendChild(a);
+				} else {
+					const btn = document.createElement('button');
+					btn.className = 'btn btn-primary';
+					btn.textContent = 'Spravovať predplatné';
+					btn.addEventListener('click', () => openPortal(token));
+					actionsEl.appendChild(btn);
+
+					const changeLink = document.createElement('a');
+					changeLink.href = '/pricing.html';
+					changeLink.className = 'btn btn-ghost';
+					changeLink.textContent = 'Zmeniť plán';
+					actionsEl.appendChild(changeLink);
+				}
+			} catch (err) {
+				tierBadge.textContent = '—';
+				const warning = document.createElement('div');
+				warning.className = 'alert warn';
+				warning.textContent = 'Nepodarilo sa načítať stav predplatného: ' + err.message;
+				actionsEl.replaceChildren(warning);
+			}
+		}
+
+		load();
+	})();
+	</script>
+</body>
+</html>
