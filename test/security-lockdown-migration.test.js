@@ -137,3 +137,20 @@ describe('033 security lockdown migration', () => {
 		assert.doesNotMatch(code, /\b(DELETE\s+FROM|TRUNCATE\s+(TABLE\s+)?public)\b/i);
 	});
 });
+
+describe('033 profile upsert privileges (found on a real Postgres run)', () => {
+	it('grants UPDATE (id) so browser profile upserts (ON CONFLICT (id) DO UPDATE) work', () => {
+		assert.match(code, /GRANT\s+UPDATE\s*\(\s*id\s*\)\s*ON\s+public\.profiles\s+TO\s+authenticated/i);
+		const login = fs.readFileSync(path.join(__dirname, '..', 'public', 'login.html'), 'utf8');
+		assert.match(login, /from\('profiles'\)\.upsert\(/);
+		// The own-row policy without WITH CHECK keeps id pinned to auth.uid().
+		const m001 = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '001_profiles_and_follows.sql'), 'utf8');
+		assert.match(m001, /CREATE POLICY "Users can update own profile"\s+ON public\.profiles FOR UPDATE USING \(auth\.uid\(\) = id\);/);
+		assert.doesNotMatch(code, /DROP\s+POLICY[^;]*"Users can update own profile"/i);
+	});
+
+	it('the gIVEME double-tap like upsert ignores duplicates (no UPDATE policy exists on giveme_likes)', () => {
+		const frontend = fs.readFileSync(path.join(__dirname, '..', 'public', 'gIVEME', 'script.js'), 'utf8');
+		assert.match(frontend, /from\('giveme_likes'\)\.upsert\([^;]*ignoreDuplicates: true/);
+	});
+});

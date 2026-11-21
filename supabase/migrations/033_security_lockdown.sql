@@ -54,6 +54,16 @@ GRANT SELECT (
   coins, games_generated, games_exported
 ) ON public.profiles TO authenticated;
 
+-- Browser profile upserts (login.html persistUserAndRedirect, coins.js save)
+-- send INSERT ... ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id, ...;
+-- Postgres requires UPDATE on every SET column, including id. 030 granted
+-- column UPDATE without id, so those upserts failed with 42501 on a real
+-- database (found on the first local Postgres run). UPDATE (id) is safe:
+-- "Users can update own profile" has no WITH CHECK, so its USING clause
+-- (auth.uid() = id) also checks the new row and id cannot be changed to
+-- another user's id; id is also a FK to auth.users.
+GRANT UPDATE (id) ON public.profiles TO authenticated;
+
 -- ─── 2. follows: social graph only for signed-in users ───
 DROP POLICY IF EXISTS "Users can view all follows" ON public.follows;
 DROP POLICY IF EXISTS "follows_select_authenticated" ON public.follows;

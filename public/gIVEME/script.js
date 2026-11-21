@@ -737,7 +737,9 @@ function doubleTapLike(container, postId) {
         earnCoin('double-tap-like');
         const me = getCurrentUser();
         if (me && socialSupabase) {
-            socialSupabase.from('giveme_likes').upsert({ post_id: postId, user_id: me.uid }, { onConflict: 'post_id,user_id' }).then(() => {});
+            // ignoreDuplicates → ON CONFLICT DO NOTHING: a repeated double-tap on an
+            // already-liked post must not need an UPDATE RLS policy (there is none).
+            socialSupabase.from('giveme_likes').upsert({ post_id: postId, user_id: me.uid }, { onConflict: 'post_id,user_id', ignoreDuplicates: true }).then(() => {});
         }
     }
     setTimeout(() => heart.classList.remove('animate'), 1000);
