@@ -106,7 +106,7 @@ const Narrator = (() => {
 	}
 
 	function getLangBcp47(lang) {
-		return lang === 'sk' ? 'sk-SK' : lang === 'cs' ? 'cs-CZ' : lang === 'de' ? 'de-DE' : lang === 'es' ? 'es-ES' : 'en-US';
+		return window.ReadAloud ? window.ReadAloud.langToBcp47(lang) : (lang === 'sk' ? 'sk-SK' : lang === 'cs' ? 'cs-CZ' : lang === 'de' ? 'de-DE' : lang === 'es' ? 'es-ES' : lang === 'tr' ? 'tr-TR' : 'en-US');
 	}
 
 	function getPreferredVoice(lang) {
