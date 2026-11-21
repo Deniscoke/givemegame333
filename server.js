@@ -289,7 +289,9 @@ if (SUPABASE_DB_URL) {
 			// Fail fast instead of hanging until Vercel's 60 s maxDuration.
 			connectionTimeoutMillis: 5000,
 			idleTimeoutMillis: 10000,
-			statement_timeout: 10000
+			// Client-side query timeout. A server-side statement_timeout startup parameter
+			// can be rejected by Supabase's transaction pooler (port 6543).
+			query_timeout: 10000
 		});
 		coinsDbPool.on('error', (err) => console.error('[Coins] Database pool error:', err.message));
 		console.log('[Coins] Database pool inicializovaný.');
@@ -800,7 +802,7 @@ function validateSafety(game) {
 
 // ─── One-shot repair call for structurally invalid AI output ───
 // Uses low temperature and a minimal focused prompt — not a full regeneration.
-async function callRepairAPI(brokenOutput, errors, useModel, aiLanguage) {
+async function callRepairAPI(brokenOutput, errors, useModel, aiLanguage, requestOptions) {
 	const prompt = `The following game JSON has validation errors. Fix ALL errors listed below and return ONLY a corrected valid JSON object.
 
 ERRORS TO FIX:
@@ -824,7 +826,7 @@ RULES:
 			{ role: 'system', content: 'You are a JSON repair assistant. Your only job is to fix validation errors in game JSON objects. Return only valid JSON.' },
 			{ role: 'user', content: prompt }
 		]
-	});
+	}, requestOptions);
 }
 
 // ─── Didaktická navigácia (research-backed) ───
@@ -1203,6 +1205,11 @@ Write the remix in ${aiLanguage}.
 		return /^gpt-4o|^gpt-4-turbo|^gpt-3\.5-turbo-(?:1106|0125|16k)/.test(modelId);
 	}
 
+	// One shared time budget for every OpenAI call in this request (main, 404 fallback,
+	// repair), so the chain finishes before Vercel's 60 s maxDuration kills it.
+	const genDeadline = Date.now() + 50000;
+	const genRequestOptions = () => ({ timeout: Math.max(3000, genDeadline - Date.now()), maxRetries: 0 });
+
 	async function callAPI(useModel) {
 		const isLegacy = /^gpt-5\./.test(useModel); // GPT-5 uses max_completion_tokens
 		const opts = {
@@ -1217,7 +1224,7 @@ Write the remix in ${aiLanguage}.
 		if (supportsJsonFormat(useModel)) {
 			opts.response_format = { type: 'json_object' };
 		}
-		return openai.chat.completions.create(opts);
+		return openai.chat.completions.create(opts, genRequestOptions());
 	}
 
 	// Extracts a JSON object from raw AI output.
@@ -1265,7 +1272,7 @@ Write the remix in ${aiLanguage}.
 			game = JSON.parse(gameJSON);
 		} catch (parseErr) {
 			console.warn('[API] JSON parse zlyhalo, skúšam repair...');
-			const repairResp = await callRepairAPI(content, ['Output is not valid JSON — fix it'], REPAIR_MODEL, aiLanguage);
+			const repairResp = await callRepairAPI(content, ['Output is not valid JSON — fix it'], REPAIR_MODEL, aiLanguage, genRequestOptions());
 			const repairContent = repairResp.choices[0]?.message?.content || '';
 			game = JSON.parse(extractJSON(repairContent)); // throws SyntaxError if still broken
 		}
@@ -1274,7 +1281,7 @@ Write the remix in ${aiLanguage}.
 		let validationErrors = validateGame(game);
 		if (validationErrors.length > 0) {
 			console.warn(`[API] Validácia zlyhala (${validationErrors.length} chýb), skúšam repair...`, validationErrors);
-			const repairResp = await callRepairAPI(gameJSON, validationErrors, REPAIR_MODEL, aiLanguage);
+			const repairResp = await callRepairAPI(gameJSON, validationErrors, REPAIR_MODEL, aiLanguage, genRequestOptions());
 			const repairContent = repairResp.choices[0]?.message?.content || '';
 			const repairedGame = JSON.parse(extractJSON(repairContent));
 			validationErrors = validateGame(repairedGame);

@@ -318,11 +318,11 @@ describe('ai-guard: createCachedProbe', () => {
 });
 
 describe('ai-guard: cacheControlForPath', () => {
-	it('html revalidates, assets cache 1 h, others untouched', () => {
+	it('html/js/css revalidate, media cache 1 h, others untouched', () => {
 		assert.equal(cacheControlForPath('/x/public/index.html'), 'no-cache');
 		assert.equal(cacheControlForPath('C:\\x\\public\\edu\\INDEX.HTML'), 'no-cache');
-		assert.equal(cacheControlForPath('/x/script.js'), 'public, max-age=3600');
-		assert.equal(cacheControlForPath('/x/style.css'), 'public, max-age=3600');
+		assert.equal(cacheControlForPath('/x/script.js'), 'public, max-age=0, must-revalidate');
+		assert.equal(cacheControlForPath('/x/style.css'), 'public, max-age=0, must-revalidate');
 		assert.equal(cacheControlForPath('/x/img/a.webp'), 'public, max-age=3600');
 		assert.equal(cacheControlForPath('/x/fonts/a.woff2'), 'public, max-age=3600');
 		assert.equal(cacheControlForPath('/x/data/i18n/sk.json'), null);
