@@ -210,7 +210,6 @@ const RpgAvatar = (() => {
     } else {
       modal.classList.add('rpg-avatar-picker-overlay');
     }
-    modal.style.display = 'flex';
 
     const avatars = _data.available || [];
     const currentId = _data.current_avatar_id;
@@ -247,11 +246,13 @@ const RpgAvatar = (() => {
       </div>`;
 
     modal.querySelectorAll('[data-action="close-picker"]').forEach(btn => {
-      btn.addEventListener('click', () => { modal.style.display = 'none'; });
+      btn.addEventListener('click', () => _closePicker(modal));
     });
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
-    });
+    // Assigned (not added) so reopening the picker does not stack listeners.
+    // With PxModal the backdrop click is handled there; this is the fallback.
+    modal.onclick = (e) => {
+      if (e.target === modal) _closePicker(modal);
+    };
 
     modal.querySelectorAll('.rpg-avatar-option').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -274,15 +275,43 @@ const RpgAvatar = (() => {
       });
     });
 
+    _openPickerOverlay(modal);
+
     modal.querySelector('[data-action="deselect-avatar"]')?.addEventListener('click', async () => {
       const result = await select(null);
       if (result.ok) {
         renderProfileAvatar('rpg-avatar-container');
         _updateProfileHeaderAvatar(null);
-        modal.style.display = 'none';
+        _closePicker(modal);
         if (window.GameUI?.toast) GameUI.toast('Avatar zruseny');
       }
     });
+  }
+
+  /**
+   * Show the picker through PxModal so it sits on top of the modal stack:
+   * Tab stays inside the picker (not the RPG screen behind it), Escape
+   * closes the picker first and focus goes back to the button that opened it.
+   * Opened after the content is rendered so focus lands on a real control.
+   */
+  function _openPickerOverlay(modal) {
+    if (window.PxModal) {
+      // Reopening while open: keep the original opener for focus restore.
+      const prev = window.PxModal.isOpen(modal)
+        ? window.PxModal._stack.find((s) => s.el === modal)?.returnFocus
+        : null;
+      window.PxModal.open(modal, prev ? { display: 'flex', returnFocus: prev } : { display: 'flex' });
+    } else {
+      modal.style.display = 'flex';
+    }
+  }
+
+  function _closePicker(modal) {
+    if (window.PxModal?.isOpen(modal)) {
+      window.PxModal.close(modal);
+      return;
+    }
+    modal.style.display = 'none';
   }
 
   function _updateProfileHeaderAvatar(avatarId) {
