@@ -115,7 +115,7 @@ function makeElement(tag, attrs = {}, text = '') {
 	return el;
 }
 
-function loadScriptInVm() {
+function loadScriptInVm({ initialized = false } = {}) {
 	const cookingLabel = makeElement('span', { 'data-i18n': 'mode_cooking', class: 'mode-name' }, 'Vaření');
 	const description = makeElement('textarea', { 'data-i18n-placeholder': 'description_placeholder', placeholder: 'Krátký popis nebo zadání hry...' });
 	const filtersBtn = makeElement('button', { 'data-i18n-aria-label': 'filters', 'aria-label': 'Filtry' });
@@ -145,6 +145,7 @@ function loadScriptInVm() {
 	const never = new Promise(() => {});
 	const networkCalls = [];
 	const toasts = [];
+	const awards = [];
 	const store = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
 	const localStorage = store();
 	const supabaseClient = {
@@ -181,7 +182,7 @@ function loadScriptInVm() {
 		GameUI: { initTools() {}, toast: (msg) => toasts.push(msg), setStatus() {}, updateStats() {}, loadHistory() {} },
 		GameData: { load: () => never },
 		GameAPI: { checkServer: () => never },
-		Coins: { load: () => never },
+		Coins: { load: () => never, award: (reason) => awards.push(reason) },
 		Timer: { setOnComplete() {} },
 		supabase: { createClient: () => supabaseClient }
 	};
@@ -190,8 +191,14 @@ function loadScriptInVm() {
 	ctx.addEventListener = () => {};
 	ctx.removeEventListener = () => {};
 	vm.createContext(ctx);
-	vm.runInContext(`${read('public/script.js')}\n;globalThis.__App = App;`, ctx, { filename: 'public/script.js' });
-	return { ctx, App: ctx.__App, cookingLabel, description, filtersBtn, htmlEl, networkCalls, toasts, localStorage };
+	let src = read('public/script.js');
+	if (initialized) {
+		// Simulate the state after init() has finished (the DB stubs never settle in this vm)
+		assert.ok(src.includes('let isInitializing = true;'), 'isInitializing declaration not found');
+		src = src.replace('let isInitializing = true;', 'let isInitializing = false;');
+	}
+	vm.runInContext(`${src}\n;globalThis.__App = App;`, ctx, { filename: 'public/script.js' });
+	return { ctx, App: ctx.__App, cookingLabel, description, filtersBtn, htmlEl, networkCalls, toasts, awards, localStorage };
 }
 
 const flush = async (n = 20) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
@@ -281,6 +288,38 @@ describe('H7: keyboard handler', () => {
 		}
 	});
 
+	const chip = (cls, tagName = 'BUTTON') => ({ tagName, classList: { contains: (c) => c === cls } });
+
+	test('Space/Enter after a mouse click on a .btn-mode or .btn-toggle generates instead of re-clicking it', () => {
+		for (const cls of ['btn-mode', 'btn-toggle']) {
+			const el = chip(cls);
+			for (const k of [' ', 'Enter']) {
+				assert.equal(keyboardAction(key(k, { target: el }), ctx({ activeElement: el, pointerFocused: true })), 'generate', `${JSON.stringify(k)} on mouse-focused .${cls}`);
+			}
+		}
+	});
+
+	test('a keyboard-focused .btn-mode (Tab) still activates natively', () => {
+		const el = chip('btn-mode');
+		assert.equal(keyboardAction(key(' ', { target: el }), ctx({ activeElement: el, pointerFocused: false })), null);
+		assert.equal(keyboardAction(key('Enter', { target: el }), ctx({ activeElement: el })), null);
+	});
+
+	test('mouse focus on an ordinary button or link keeps native behaviour', () => {
+		for (const el of [chip('btn-retro'), chip('other', 'A'), { tagName: 'BUTTON' }]) {
+			assert.equal(keyboardAction(key(' ', { target: el }), ctx({ activeElement: el, pointerFocused: true })), null);
+		}
+	});
+
+	test('bindKeyboard tracks pointer focus on mode/filter chips and passes it to keyboardAction', () => {
+		const src = read('public/script.js');
+		const fn = src.slice(src.indexOf('function bindKeyboard()'), src.indexOf('// ─── Zavírání modalů'));
+		assert.match(fn, /addEventListener\('pointerdown'/);
+		assert.match(fn, /closest\('\.btn-mode, \.btn-toggle'\)/);
+		assert.match(fn, /addEventListener\('focusout'/);
+		assert.match(fn, /pointerFocused: !!pointerFocusEl && active === pointerFocusEl/);
+	});
+
 	test('form fields are never hijacked', () => {
 		for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT']) {
 			const el = { tagName };
@@ -316,6 +355,28 @@ describe('H7: keyboard handler', () => {
 		const html = read('public/index.html');
 		for (const k of ['S', 'T', 'M']) assert.ok(html.includes(`<span class="help-key">Alt+Shift+${k}</span>`), `Alt+Shift+${k}`);
 		for (const lang of LANGS) assert.match(dicts[lang].welcome_hint, /Alt\+Shift\+S/, `${lang} welcome_hint`);
+	});
+});
+
+describe('setMode: repeat activation of the same mode', () => {
+	test('selecting the current mode again does not award mode_click, toast or re-run anything', () => {
+		const env = loadScriptInVm({ initialized: true });
+		env.App.setMode('party');
+		assert.deepEqual(env.awards, [], 'party is already the current mode');
+		env.App.setMode('cooking');
+		assert.deepEqual(env.awards, ['mode_click']);
+		const toastsAfterSwitch = env.toasts.length;
+		for (let i = 0; i < 30; i++) env.App.setMode('cooking'); // held Enter on the focused button
+		assert.deepEqual(env.awards, ['mode_click'], 'repeat activations must not request more awards');
+		assert.equal(env.toasts.length, toastsAfterSwitch, 'no repeat toast');
+		env.App.setMode('party');
+		assert.deepEqual(env.awards, ['mode_click', 'mode_click']);
+	});
+
+	test('the first setMode during init still applies the default mode', () => {
+		const src = read('public/script.js');
+		const fn = src.slice(src.indexOf('function setMode(mode)'), src.indexOf('function getMode()'));
+		assert.match(fn, /if \(mode === currentMode && !isInitializing\) return;/);
 	});
 });
 

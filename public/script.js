@@ -723,12 +723,20 @@ const App = (() => {
 	// Enter/Space na tlačidle, odkaze či <summary> fungovali normálne.
 	// Jednoklávesové skratky majú modifikátor Alt+Shift (WCAG 2.1.4); e.code,
 	// lebo Alt mení e.key (macOS) a nezávisí to od rozloženia klávesnice.
+	// Režimové tlačidlá (.btn-mode) a prepínače (.btn-toggle) si v Chrome/Firefoxe
+	// po kliknutí myšou nechajú fokus. Ak fokus prišiel z myši (ctx.pointerFocused),
+	// berieme ich ako „nič nemá fokus“, aby Space po kliknutí na režim generoval hru
+	// a neklikal znova na tlačidlo. Pri fokuse z klávesnice (Tab) Enter/Space tlačidlo
+	// normálne aktivuje.
 	function keyboardAction(e, ctx) {
 		const target = e.target || {};
 		const tag = target.tagName;
 		if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return null;
 		const active = ctx.activeElement;
-		const nothingFocused = !active || active === ctx.body || active === ctx.documentElement;
+		const cls = active && active.classList;
+		const isChip = !!(cls && (cls.contains('btn-mode') || cls.contains('btn-toggle')));
+		const nothingFocused = !active || active === ctx.body || active === ctx.documentElement ||
+			(isChip && !!ctx.pointerFocused);
 		const noMods = !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
 		if ((e.key === ' ' || e.key === 'Enter') && noMods) {
 			return nothingFocused ? 'generate' : null;
@@ -748,10 +756,21 @@ const App = (() => {
 	// END keyboardAction
 
 	function bindKeyboard() {
+		// Prvok, ktorý dostal fokus kliknutím myšou/dotykom (nie z klávesnice).
+		let pointerFocusEl = null;
+		document.addEventListener('pointerdown', (e) => {
+			const t = e.target;
+			pointerFocusEl = (t && typeof t.closest === 'function') ? t.closest('.btn-mode, .btn-toggle') : null;
+		}, true);
+		document.addEventListener('focusout', (e) => {
+			if (e.target === pointerFocusEl) pointerFocusEl = null;
+		}, true);
 		document.addEventListener('keydown', (e) => {
 			const selection = window.getSelection ? String(window.getSelection() || '') : '';
+			const active = document.activeElement;
 			const action = keyboardAction(e, {
-				activeElement: document.activeElement,
+				activeElement: active,
+				pointerFocused: !!pointerFocusEl && active === pointerFocusEl,
 				body: document.body,
 				documentElement: document.documentElement,
 				hasGame: !!currentGame,
@@ -796,6 +815,9 @@ const App = (() => {
 
 	function setMode(mode) {
 		if (!MODES.includes(mode)) return;
+		// Opakovaná aktivácia toho istého režimu (Enter auto-repeat, dvojklik) nesmie
+		// znova udeliť mode_click, ukázať toast ani reštartovať hudbu.
+		if (mode === currentMode && !isInitializing) return;
 		currentMode = mode;
 
 		// Přepni CSS třídu na body
