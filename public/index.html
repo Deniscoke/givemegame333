@@ -5,14 +5,23 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23633cff'/><text x='16' y='22' font-size='14' fill='white' text-anchor='middle' font-family='sans-serif'>G</text></svg>">
 	<title data-i18n="page_title">gIVEMEGAME.IO — Generátor vzdelávacích hier</title>
-	<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+	<!-- Press Start 2P, Atkinson Hyperlegible and IBM Plex Mono come from ui/tokens.css; VT323 is legacy-only -->
+	<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+	<!-- Bootstrap Icons: only for parts not yet migrated to the pixel sprite (ui/icons/px-icons.svg) -->
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 	<link rel="stylesheet" href="style.css?v=22">
 	<link rel="stylesheet" href="/ui/tokens.css">
 	<link rel="stylesheet" href="/ui/generator-shell.css">
 	<link rel="stylesheet" href="/ui/session-shell.css">
+	<!-- Pixel design system (docs/design-system.md): tokens → components → motion → screen layer -->
+	<link rel="stylesheet" href="/ui/px-tokens.css?v=1">
+	<link rel="stylesheet" href="/ui/px-components.css?v=1">
+	<link rel="stylesheet" href="/ui/px-motion.css?v=1">
+	<link rel="stylesheet" href="/ui/px-type-floor.css?v=1">
+	<link rel="stylesheet" href="/ui/px-apply.css?v=1">
+	<link rel="stylesheet" href="/ui/px-mode-decor.css?v=1">
 </head>
-<body class="mode-party generator-shell">
+<body class="mode-party generator-shell px-v2" data-mode="party">
 
 	<div class="mobile-overlay-backdrop" id="mobile-overlay-backdrop" onclick="App.UI.closeMobileOverlays()" aria-hidden="true"></div>
 	<div id="app-layout">
@@ -23,44 +32,44 @@
 				<span class="brand-give">gIVE</span><span class="brand-me">ME</span><span class="brand-game">GAME</span><span class="brand-io">.IO</span>
 			</div>
 
-			<!-- COIN DISPLAY -->
-			<div class="coin-display" id="coin-display" title="gIVEMECOIN" onclick="App.Coins.toggleHistory()">
-				<span class="coin-icon">🪙</span>
-				<span class="coin-count" id="coin-count">0</span>
-			</div>
-
-			<!-- SHARE LINK (viditeľné len cez ngrok) -->
-			<div class="share-link-wrap" id="share-link-wrap" style="display:none" title="Skopíruj a pošli kamarátovi" data-i18n-title="share_link_hint">
-				<button type="button" class="btn-share-link" id="btn-share-link" title="Skopíruj odkaz pre kamaráta">
-					🔗 <span data-i18n="share_link">Zdieľať</span>
+			<!-- STATUS PILLS: coin, share (ngrok only), robot challenge -->
+			<div class="header-status">
+				<button type="button" class="coin-display px-pill px-pill--gold" id="coin-display" title="gIVEMECOIN" aria-label="gIVEMECOIN" onclick="App.Coins.toggleHistory()">
+					<svg class="px-icon coin-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-coin"></use></svg>
+					<span class="coin-count" id="coin-count">0</span>
 				</button>
-				<span class="share-link-url" id="share-link-url"></span>
-			</div>
 
-			<!-- ROBOT CHALLENGE BUTTON -->
-			<button class="btn-robot-challenge" id="btn-robot-challenge" onclick="App.RobotChallenge.open()" title="Robot Challenge — zarob coiny!" data-i18n-title="robot_challenge_title">
-				<span data-i18n="robot_challenge">🤖 Challenge</span>
-			</button>
+				<div class="share-link-wrap" id="share-link-wrap" style="display:none" title="Skopíruj a pošli kamarátovi" data-i18n-title="share_link_hint">
+					<button type="button" class="btn-share-link px-pill" id="btn-share-link" title="Skopíruj odkaz pre kamaráta">
+						<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-share"></use></svg> <span data-i18n="share_link">Zdieľať</span>
+					</button>
+					<span class="share-link-url" id="share-link-url"></span>
+				</div>
+
+				<button type="button" class="btn-robot-challenge px-pill px-pill--accent" id="btn-robot-challenge" onclick="App.RobotChallenge.open()" title="Robot Challenge — zarob coiny!" data-i18n-title="robot_challenge_title">
+					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-robot"></use></svg> <span data-i18n="robot_challenge">Challenge</span>
+				</button>
+			</div>
 
 			<div class="header-actions">
-				<a href="/edu/index.html" class="btn btn-retro btn-action-header" title="gIVEMEEDU — Školské rozhranie" aria-label="gIVEMEEDU — Školské rozhranie" data-i18n-title="edu_link_title" data-i18n-aria-label="edu_link_title" style="text-decoration:none;font-size:16px">🏫</a>
-				<button class="btn btn-retro btn-action-header btn-mobile-filters mobile-only" id="btn-mobile-filters" onclick="App.UI.toggleMobileFilters()" title="Filtre" aria-label="Filtre" data-i18n-title="filters" data-i18n-aria-label="filters">
-					<i class="bi bi-sliders"></i>
+				<a href="/edu/index.html" class="px-iconbtn" title="gIVEMEEDU — Školské rozhranie" aria-label="gIVEMEEDU — Školské rozhranie" data-i18n-title="edu_link_title" data-i18n-aria-label="edu_link_title"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-school"></use></svg></a>
+				<button type="button" class="px-iconbtn btn-mobile-filters mobile-only" id="btn-mobile-filters" onclick="App.UI.toggleMobileFilters()" title="Filtre" aria-label="Filtre" data-i18n-title="filters" data-i18n-aria-label="filters">
+					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-filter"></use></svg>
 				</button>
-				<button class="btn btn-retro btn-action-header btn-game-tools" id="btn-game-tools" onclick="App.UI.openTool('smarta', this)" aria-controls="game-tools-panel" aria-expanded="false" title="SMARTA, questy, profil a postup" data-i18n-title="tools_button_title">
-					<i class="bi bi-grid-3x3-gap"></i> <span data-i18n="tools_button">Nástroje</span>
+				<button type="button" class="px-btn btn-game-tools" id="btn-game-tools" onclick="App.UI.openTool('smarta', this)" aria-controls="game-tools-panel" aria-expanded="false" title="SMARTA, questy, profil a postup" data-i18n-title="tools_button_title">
+					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-tools"></use></svg> <span data-i18n="tools_button">Nástroje</span>
 				</button>
-				<button class="btn btn-retro btn-action-header" onclick="App.UI.openHelp()" title="Pomocník" aria-label="Pomocník" data-i18n-title="help" data-i18n-aria-label="help">
-					<i class="bi bi-question-circle"></i>
+				<button type="button" class="px-iconbtn" onclick="App.UI.openHelp()" title="Pomocník" aria-label="Pomocník" data-i18n-title="help" data-i18n-aria-label="help">
+					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-help"></use></svg>
 				</button>
-				<button class="btn btn-retro btn-action-header" id="btn-library" onclick="App.Library.open()" title="Knižnica hier" aria-label="Knižnica hier" data-i18n-title="library_title" data-i18n-aria-label="library_title">
-					<i class="bi bi-collection"></i>
+				<button type="button" class="px-iconbtn" id="btn-library" onclick="App.Library.open()" title="Knižnica hier" aria-label="Knižnica hier" data-i18n-title="library_title" data-i18n-aria-label="library_title">
+					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-library"></use></svg>
 				</button>
-				<button class="btn btn-retro btn-action-header desktop-only" onclick="App.UI.toggleFullscreen()" title="Fullscreen" aria-label="Fullscreen" data-i18n-title="fullscreen" data-i18n-aria-label="fullscreen">
-					<i class="bi bi-arrows-fullscreen"></i>
+				<button type="button" class="px-iconbtn desktop-only" onclick="App.UI.toggleFullscreen()" title="Fullscreen" aria-label="Fullscreen" data-i18n-title="fullscreen" data-i18n-aria-label="fullscreen">
+					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-fullscreen"></use></svg>
 				</button>
 				<details class="preferences-menu">
-					<summary aria-label="Účet a nastavenia" data-i18n-aria-label="settings_menu_aria"><i class="bi bi-gear"></i> <span data-i18n="settings">Nastavenia</span></summary>
+					<summary class="px-iconbtn" aria-label="Účet a nastavenia" title="Nastavenia" data-i18n-aria-label="settings_menu_aria" data-i18n-title="settings"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-settings"></use></svg><span class="px-visually-hidden" data-i18n="settings">Nastavenia</span></summary>
 					<div class="preferences-menu__content">
 						<span class="preferences-menu__label" data-i18n="language">Jazyk</span>
 						<div class="lang-selector" id="lang-selector">
@@ -71,9 +80,9 @@
 							<button class="btn-lang" data-lang="es" title="Español">ES</button>
 							<button class="btn-lang" data-lang="tr" title="Türkçe">TR</button>
 						</div>
-						<button class="btn btn-retro btn-action-header btn-phone" id="btn-phone" onclick="App.Profile.open()" title="Profil a gIVEMECOIN" data-i18n-title="account_coins_title" data-i18n="account_coins">Účet a gIVEMECOIN</button>
-						<button class="btn btn-retro btn-action-header btn-music" id="btn-music" onclick="App.Music.toggle()" title="Hudba" data-i18n-title="music"><i class="bi bi-music-note-beamed" id="music-icon"></i> <span data-i18n="music">Hudba</span></button>
-						<button class="btn btn-retro btn-action-header" onclick="App.UI.toggleTheme()" data-i18n-title="appearance"><i class="bi bi-moon-fill" id="theme-icon"></i> <span data-i18n="appearance_label">Vzhľad</span></button>
+						<button type="button" class="px-btn px-btn--block btn-phone" id="btn-phone" onclick="App.Profile.open()" title="Profil a gIVEMECOIN" data-i18n-title="account_coins_title"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-user"></use></svg> <span data-i18n="account_coins">Účet a gIVEMECOIN</span></button>
+						<button type="button" class="px-btn px-btn--block btn-music" id="btn-music" onclick="App.Music.toggle()" title="Hudba" data-i18n-title="music"><svg class="px-icon" id="music-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-music"></use></svg> <span data-i18n="music">Hudba</span></button>
+						<button type="button" class="px-btn px-btn--block" onclick="App.UI.toggleTheme()" data-i18n-title="appearance"><svg class="px-icon" id="theme-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-moon"></use></svg> <span data-i18n="appearance_label">Vzhľad</span></button>
 					</div>
 				</details>
 			</div>
@@ -85,14 +94,14 @@
 			<!-- ─── LEFT PANEL: MODE + FILTERS ─── -->
 			<aside class="left-panel">
 				<button id="btn-join-session" class="btn btn-retro btn-join-session" onclick="Session.openJoinDialog()" title="Pripoj sa do session" data-i18n-title="join_session_title">
-					<i class="bi bi-key"></i> <span data-i18n="join_session">Pripojiť sa do hry</span>
+					<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-key"></use></svg> <span data-i18n="join_session">Pripojiť sa do hry</span>
 				</button>
 
 				<section id="creation-basics" aria-label="Základné nastavenia hry" data-i18n-aria-label="creation_basics_aria">
 
 				<!-- MODE SELECTOR -->
 				<div class="panel-section mode-section">
-					<label class="panel-label"><i class="bi bi-joystick"></i> <span data-i18n="mode">Mód</span></label>
+					<label class="panel-label"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-play"></use></svg> <span data-i18n="mode">Mód</span></label>
 					<div class="mode-grid" id="mode-grid">
 						<button class="btn-mode active" data-mode="party" onclick="App.setMode('party')">
 							<span class="mode-emoji">🎉</span>
@@ -118,12 +127,16 @@
 							<span class="mode-emoji">🧘</span>
 							<span class="mode-name" data-i18n="mode_meditation">Meditácia</span>
 						</button>
+						<button class="btn-mode" data-mode="online" onclick="App.setMode('online')" title="Hra cez internet — každý hrá zo svojho mobilu alebo počítača" data-i18n-title="mode_online_title">
+							<span class="mode-emoji">🌐</span>
+							<span class="mode-name" data-i18n="mode_online">Online</span>
+						</button>
 					</div>
 				</div>
 
 				<!-- MAIN FILTERS -->
 				<div class="panel-section">
-					<label class="panel-label"><i class="bi bi-sliders"></i> <span data-i18n="filters">Filtre</span></label>
+					<label class="panel-label"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-filter"></use></svg> <span data-i18n="filters">Filtre</span></label>
 
 					<div class="filter-group">
 						<label class="filter-label" id="filter-age-label" for="filter-age-band" data-i18n="age">Vek</label>
@@ -215,116 +228,117 @@
 					</div>
 					</div>
 
-					<details id="advanced-options">
-						<summary data-i18n="advanced_options">Rozšírené možnosti</summary>
-						<div class="advanced-options__content">
+				<details id="advanced-options" class="panel-section px-panel">
+					<summary class="panel-label advanced-options__summary"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-settings"></use></svg> <span data-i18n="advanced_options">Rozšírené možnosti</span></summary>
+					<div class="advanced-options__content">
 
-					<!-- ENERGY LEVEL (all modes) -->
-					<div class="filter-group">
-						<label class="filter-label" data-i18n="energy">Energia</label>
-						<select id="filter-energy" class="form-select">
-							<option value="" data-i18n="any_option_f">Akákoľvek</option>
-							<option value="low" data-i18n="energy_low">Chill</option>
-							<option value="medium" data-i18n="energy_medium">Normal</option>
-							<option value="high" data-i18n="energy_high">Tryhard</option>
-						</select>
-					</div>
-
-					<!-- ACTIVITY MODE (circus only) -->
-					<div class="filter-group filter-circus-only" id="filter-group-activity" style="display:none;">
-						<label class="filter-label" data-i18n="activity_mode">Typ aktivity</label>
-						<select id="filter-activity" class="form-select">
-							<option value="" data-i18n="any_option">Akýkoľvek</option>
-							<option value="solo" data-i18n="activity_solo">Solo</option>
-							<option value="pair" data-i18n="activity_pair">Duo</option>
-							<option value="group" data-i18n="activity_group">Squad</option>
-							<option value="mass" data-i18n="activity_mass">Full server</option>
-						</select>
-					</div>
-
-					<!-- EMOTIONAL DEPTH (reflection only) -->
-					<div class="filter-group filter-reflection-only" id="filter-group-depth" style="display:none;">
-						<label class="filter-label" data-i18n="emotional_depth">Deep level</label>
-						<select id="filter-depth" class="form-select">
-							<option value="" data-i18n="any_option_f">Akákoľvek</option>
-							<option value="light" data-i18n="depth_light">Easy</option>
-							<option value="medium" data-i18n="depth_medium">Medium</option>
-							<option value="deep" data-i18n="depth_deep">Deep dive</option>
-						</select>
-					</div>
-					<!-- CUISINE TYPE (cooking only) -->
-					<div class="filter-group filter-cooking-only" id="filter-group-cuisine" style="display:none;">
-						<label class="filter-label" data-i18n="cuisine_type">Typ kuchyne</label>
-						<select id="filter-cuisine" class="form-select">
-							<option value="" data-i18n="any_option_f">Akákoľvek</option>
-							<option value="sweet" data-i18n="cuisine_sweet">Sladký vibe</option>
-							<option value="savory" data-i18n="cuisine_savory">Slaný flex</option>
-							<option value="healthy" data-i18n="cuisine_healthy">Zdravý grind</option>
-							<option value="international" data-i18n="cuisine_international">World tour</option>
-						</select>
-					</div>
-
-					<!-- FOCUS TYPE (meditation only) -->
-					<div class="filter-group filter-meditation-only" id="filter-group-focus" style="display:none;">
-						<label class="filter-label" data-i18n="focus_type">Zameranie</label>
-						<select id="filter-focus" class="form-select">
-							<option value="" data-i18n="any_option_f">Akákoľvek</option>
-							<option value="breath" data-i18n="focus_breath">Dych</option>
-							<option value="body" data-i18n="focus_body">Body scan</option>
-							<option value="visualization" data-i18n="focus_visualization">Vizualizácia</option>
-							<option value="movement" data-i18n="focus_movement">Pohyb (jóga)</option>
-						</select>
-					</div>
-
-				<!-- RVP FILTERS (classroom mode primarily, but available always) -->
-				<div class="panel-section" id="rvp-filters-section">
-					<label class="panel-label"><i class="bi bi-mortarboard"></i> <span data-i18n="rvp_filters">EDU Setup</span></label>
-
-					<div class="filter-group">
-						<label class="filter-label" data-i18n="school_level">Level</label>
-						<select id="filter-stupen" class="form-select">
-							<option value="" data-i18n="any_option">Akýkoľvek</option>
-							<option value="prvni" data-i18n="level_first">1. stupeň (6–11)</option>
-							<option value="druhy" data-i18n="level_second">2. stupeň (11–15)</option>
-						</select>
-					</div>
-
-					<div class="filter-group">
-						<label class="filter-label" data-i18n="competence">Skill</label>
-						<select id="filter-kompetence" class="form-select">
-							<option value="" data-i18n="any_option_f">Akákoľvek</option>
-							<option value="k-uceni" data-i18n="comp_learning">K učeniu</option>
-							<option value="k-reseni-problemu" data-i18n="comp_problem">Problem solving</option>
-							<option value="komunikativni" data-i18n="comp_comm">Komunikácia</option>
-							<option value="socialni-personalni" data-i18n="comp_social">Social &amp; personal</option>
-							<option value="obcanske" data-i18n="comp_civic">Občianska</option>
-							<option value="pracovni" data-i18n="comp_work">Pracovná</option>
-							<option value="digitalni" data-i18n="comp_digital">Digitálna</option>
-						</select>
-					</div>
-
-					<div class="filter-group">
-						<label class="filter-label" data-i18n="edu_area">Oblasť</label>
-						<select id="filter-oblast" class="form-select">
-							<option value="" data-i18n="any_option_f">Akákoľvek</option>
-							<option value="jazyk" data-i18n="edu_jazyk">Jazyk a komunikácia</option>
-							<option value="matematika" data-i18n="edu_matematika">Matika</option>
-							<option value="ict" data-i18n="edu_ict">Informatika</option>
-							<option value="clovek-svet" data-i18n="edu_clovek_svet">Človek a svet</option>
-							<option value="clovek-spolecnost" data-i18n="edu_clovek_spolecnost">Človek a spoločnosť</option>
-							<option value="clovek-priroda" data-i18n="edu_clovek_priroda">Človek a príroda</option>
-							<option value="umeni-kultura" data-i18n="edu_umeni_kultura">Umenie a kultúra</option>
-							<option value="clovek-zdravi" data-i18n="edu_clovek_zdravi">Človek a zdravie</option>
-							<option value="clovek-prace" data-i18n="edu_clovek_prace">Človek a svet práce</option>
-						</select>
-					</div>
-				</div>
+						<!-- ENERGY LEVEL (all modes) -->
+						<div class="filter-group">
+							<label class="filter-label" data-i18n="energy">Energia</label>
+							<select id="filter-energy" class="form-select">
+								<option value="" data-i18n="any_option_f">Akákoľvek</option>
+								<option value="low" data-i18n="energy_low">Chill</option>
+								<option value="medium" data-i18n="energy_medium">Normal</option>
+								<option value="high" data-i18n="energy_high">Tryhard</option>
+							</select>
 						</div>
-					</details>
+
+						<!-- ACTIVITY MODE (circus only) -->
+						<div class="filter-group filter-circus-only" id="filter-group-activity" style="display:none;">
+							<label class="filter-label" data-i18n="activity_mode">Typ aktivity</label>
+							<select id="filter-activity" class="form-select">
+								<option value="" data-i18n="any_option">Akýkoľvek</option>
+								<option value="solo" data-i18n="activity_solo">Solo</option>
+								<option value="pair" data-i18n="activity_pair">Duo</option>
+								<option value="group" data-i18n="activity_group">Squad</option>
+								<option value="mass" data-i18n="activity_mass">Full server</option>
+							</select>
+						</div>
+
+						<!-- EMOTIONAL DEPTH (reflection only) -->
+						<div class="filter-group filter-reflection-only" id="filter-group-depth" style="display:none;">
+							<label class="filter-label" data-i18n="emotional_depth">Deep level</label>
+							<select id="filter-depth" class="form-select">
+								<option value="" data-i18n="any_option_f">Akákoľvek</option>
+								<option value="light" data-i18n="depth_light">Easy</option>
+								<option value="medium" data-i18n="depth_medium">Medium</option>
+								<option value="deep" data-i18n="depth_deep">Deep dive</option>
+							</select>
+						</div>
+						<!-- CUISINE TYPE (cooking only) -->
+						<div class="filter-group filter-cooking-only" id="filter-group-cuisine" style="display:none;">
+							<label class="filter-label" data-i18n="cuisine_type">Typ kuchyne</label>
+							<select id="filter-cuisine" class="form-select">
+								<option value="" data-i18n="any_option_f">Akákoľvek</option>
+								<option value="sweet" data-i18n="cuisine_sweet">Sladký vibe</option>
+								<option value="savory" data-i18n="cuisine_savory">Slaný flex</option>
+								<option value="healthy" data-i18n="cuisine_healthy">Zdravý grind</option>
+								<option value="international" data-i18n="cuisine_international">World tour</option>
+							</select>
+						</div>
+
+						<!-- FOCUS TYPE (meditation only) -->
+						<div class="filter-group filter-meditation-only" id="filter-group-focus" style="display:none;">
+							<label class="filter-label" data-i18n="focus_type">Zameranie</label>
+							<select id="filter-focus" class="form-select">
+								<option value="" data-i18n="any_option_f">Akákoľvek</option>
+								<option value="breath" data-i18n="focus_breath">Dych</option>
+								<option value="body" data-i18n="focus_body">Body scan</option>
+								<option value="visualization" data-i18n="focus_visualization">Vizualizácia</option>
+								<option value="movement" data-i18n="focus_movement">Pohyb (jóga)</option>
+							</select>
+						</div>
+
+						<!-- RVP FILTERS (classroom mode primarily, but available always) -->
+						<fieldset class="advanced-options__group" id="rvp-filters-section">
+							<legend class="advanced-options__group-title"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-school"></use></svg> <span data-i18n="rvp_filters">EDU Setup</span></legend>
+							<span class="px-badge px-badge--warning rvp-classroom-badge" id="rvp-classroom-badge" data-i18n="rvp_classroom_badge">Najmä pre režim Trieda</span>
+
+							<div class="filter-group">
+								<label class="filter-label" data-i18n="school_level">Level</label>
+								<select id="filter-stupen" class="form-select">
+									<option value="" data-i18n="any_option">Akýkoľvek</option>
+									<option value="prvni" data-i18n="level_first">1. stupeň (6–11)</option>
+									<option value="druhy" data-i18n="level_second">2. stupeň (11–15)</option>
+								</select>
+							</div>
+
+							<div class="filter-group">
+								<label class="filter-label" data-i18n="competence">Skill</label>
+								<select id="filter-kompetence" class="form-select">
+									<option value="" data-i18n="any_option_f">Akákoľvek</option>
+									<option value="k-uceni" data-i18n="comp_learning">K učeniu</option>
+									<option value="k-reseni-problemu" data-i18n="comp_problem">Problem solving</option>
+									<option value="komunikativni" data-i18n="comp_comm">Komunikácia</option>
+									<option value="socialni-personalni" data-i18n="comp_social">Social &amp; personal</option>
+									<option value="obcanske" data-i18n="comp_civic">Občianska</option>
+									<option value="pracovni" data-i18n="comp_work">Pracovná</option>
+									<option value="digitalni" data-i18n="comp_digital">Digitálna</option>
+								</select>
+							</div>
+
+							<div class="filter-group">
+								<label class="filter-label" data-i18n="edu_area">Oblasť</label>
+								<select id="filter-oblast" class="form-select">
+									<option value="" data-i18n="any_option_f">Akákoľvek</option>
+									<option value="jazyk" data-i18n="edu_jazyk">Jazyk a komunikácia</option>
+									<option value="matematika" data-i18n="edu_matematika">Matika</option>
+									<option value="ict" data-i18n="edu_ict">Informatika</option>
+									<option value="clovek-svet" data-i18n="edu_clovek_svet">Človek a svet</option>
+									<option value="clovek-spolecnost" data-i18n="edu_clovek_spolecnost">Človek a spoločnosť</option>
+									<option value="clovek-priroda" data-i18n="edu_clovek_priroda">Človek a príroda</option>
+									<option value="umeni-kultura" data-i18n="edu_umeni_kultura">Umenie a kultúra</option>
+									<option value="clovek-zdravi" data-i18n="edu_clovek_zdravi">Človek a zdravie</option>
+									<option value="clovek-prace" data-i18n="edu_clovek_prace">Človek a svet práce</option>
+								</select>
+							</div>
+						</fieldset>
+					</div>
+				</details>
 
 				<!-- DESCRIPTION / POPIS -->
 				<div class="panel-section">
-					<label class="panel-label"><i class="bi bi-pencil-square"></i> <span data-i18n="description_label">Popis</span></label>
+					<label class="panel-label"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-chat"></use></svg> <span data-i18n="description_label">Popis</span></label>
 					<textarea id="filter-description" class="form-textarea" rows="2" maxlength="200" data-i18n-placeholder="description_placeholder" placeholder="Krátky popis alebo zadanie hry..."></textarea>
 				</div>
 
@@ -549,15 +563,15 @@
 			<aside id="game-tools-panel" class="right-panel game-tools" aria-label="Herné nástroje" data-i18n-aria-label="game_tools_title" aria-hidden="false">
 				<div class="game-tools-header">
 					<h2 class="game-tools-title" data-i18n="game_tools_title">Herné nástroje</h2>
-					<button type="button" class="game-tools-close" id="game-tools-close" onclick="App.UI.closeTools()" aria-label="Zavrieť herné nástroje" data-i18n-aria-label="game_tools_close">
-						<i class="bi bi-x-lg" aria-hidden="true"></i>
+					<button type="button" class="game-tools-close px-iconbtn" id="game-tools-close" onclick="App.UI.closeTools()" aria-label="Zavrieť herné nástroje" data-i18n-aria-label="game_tools_close">
+						<svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-close"></use></svg>
 					</button>
 				</div>
 				<div class="game-tools-tabs" role="tablist" aria-label="Herné nástroje" data-i18n-aria-label="game_tools_title">
-					<button type="button" id="tool-tab-smarta" class="game-tools-tab" role="tab" data-tool="smarta" aria-controls="tool-panel-smarta" aria-selected="true" onclick="App.UI.openTool('smarta', this)">SMARTA</button>
-					<button type="button" id="tool-tab-history" class="game-tools-tab" role="tab" data-tool="history" aria-controls="tool-panel-history" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('history', this)" data-i18n="tool_tab_history">Questy a história</button>
-					<button type="button" id="tool-tab-tamagochi" class="game-tools-tab" role="tab" data-tool="tamagochi" aria-controls="tool-panel-tamagochi" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('tamagochi', this)">gIVEMEGOCHI</button>
-					<button type="button" id="tool-tab-stats" class="game-tools-tab" role="tab" data-tool="stats" aria-controls="tool-panel-stats" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('stats', this)" data-i18n="tool_tab_stats">Štatistiky</button>
+					<button type="button" id="tool-tab-smarta" class="game-tools-tab px-tab" role="tab" data-tool="smarta" aria-controls="tool-panel-smarta" aria-selected="true" onclick="App.UI.openTool('smarta', this)">SMARTA</button>
+					<button type="button" id="tool-tab-history" class="game-tools-tab px-tab" role="tab" data-tool="history" aria-controls="tool-panel-history" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('history', this)" data-i18n="tool_tab_history">Questy a história</button>
+					<button type="button" id="tool-tab-tamagochi" class="game-tools-tab px-tab" role="tab" data-tool="tamagochi" aria-controls="tool-panel-tamagochi" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('tamagochi', this)">gIVEMEGOCHI</button>
+					<button type="button" id="tool-tab-stats" class="game-tools-tab px-tab" role="tab" data-tool="stats" aria-controls="tool-panel-stats" aria-selected="false" tabindex="-1" onclick="App.UI.openTool('stats', this)" data-i18n="tool_tab_stats">Štatistiky</button>
 				</div>
 
 				<div id="tool-panel-smarta" class="game-tools-panel" role="tabpanel" data-tool-panel="smarta" aria-labelledby="tool-tab-smarta">
@@ -683,12 +697,12 @@
 				</div>
 
 				<!-- ─── RPG postup ─── -->
-				<div id="competency-panel" class="rpg-sidebar-hud" style="display:none">
-				  <div class="panel-heading" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;opacity:0.7">
-				    <i class="bi bi-bar-chart-fill"></i>
-				    <span data-i18n="rpg_hud_title">⚔️ RPG postup</span>
-				  </div>
-				  <div id="competency-bars"></div>
+				<div id="competency-panel" class="rpg-sidebar-hud px-card" style="display:none">
+					<div class="panel-heading rpg-hud-heading">
+						<i class="bi bi-bar-chart-fill" aria-hidden="true"></i>
+						<span data-i18n="rpg_hud_title">⚔️ RPG postup</span>
+					</div>
+					<div id="competency-bars"></div>
 				</div>
 			</aside>
 
@@ -714,8 +728,8 @@
 	<div id="profile-modal" class="modal-overlay">
 		<div class="modal-box profile-modal profile-modal-wide">
 			<div class="profile-modal-header">
-				<div class="modal-title">📱 gIVEME</div>
-				<button class="profile-modal-close" onclick="App.UI.closeModal('profile-modal')" aria-label="Zavrieť" data-i18n-aria-label="close">✕</button>
+				<h2 class="modal-title">📱 gIVEME</h2>
+				<button type="button" class="profile-modal-close px-iconbtn px-modal__close" onclick="App.UI.closeModal('profile-modal')" aria-label="Zavrieť" data-i18n-aria-label="close"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-close"></use></svg></button>
 			</div>
 			<div class="profile-tabs">
 				<button class="profile-tab active" data-tab="profil" onclick="App.Profile.switchTab('profil')" data-i18n="profile_tab">Profil</button>
@@ -789,7 +803,7 @@
 	     Opened via ⚔️ RPG Profil button in profile modal.
 	     Gated: eligible users only (school membership + role).
 	     ═══════════════════════════════════════════════════════════════ -->
-	<div id="rpg-screen" class="rpg-screen-overlay rpg-theme--neutral" style="display:none;" role="dialog" aria-label="RPG Profil" tabindex="-1">
+	<div id="rpg-screen" class="rpg-screen-overlay rpg-theme--neutral" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="rpg-screen-logo" tabindex="-1">
 		<div class="rpg-screen-inner">
 
 			<!-- Top bar -->
@@ -798,7 +812,7 @@
 					<span class="rpg-screen-logo" id="rpg-screen-logo">⚔️ RPG PROFIL</span>
 					<p class="rpg-screen-flavor" id="rpg-screen-flavor" hidden></p>
 				</div>
-				<button class="rpg-screen-close" id="rpg-screen-close" aria-label="Zavrieť" data-i18n-aria-label="close">✕</button>
+				<button type="button" class="rpg-screen-close px-iconbtn px-modal__close" id="rpg-screen-close" aria-label="Zavrieť" data-i18n-aria-label="close"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-close"></use></svg></button>
 			</header>
 
 			<div class="rpg-screen-body">
@@ -842,7 +856,7 @@
 	<!-- Help Modal -->
 	<div id="help-modal" class="modal-overlay">
 		<div class="modal-box help-modal">
-			<div class="modal-title" data-i18n="help_title">HELP</div>
+			<h2 class="modal-title" data-i18n="help_title">HELP</h2>
 			<div class="help-content">
 				<div class="help-section">
 					<div class="help-title" data-i18n="help_what">Čo je gIVEMEGAME.IO?</div>
@@ -856,6 +870,7 @@
 					<p><strong>🎪</strong> <span data-i18n="help_mode_circus">Cirkus — kreatívne pohybovky a performance</span></p>
 					<p><strong>🍳</strong> <span data-i18n="help_mode_cooking">Varenie — kulinársky grind a kreatívne recepty</span></p>
 					<p><strong>🧘</strong> <span data-i18n="help_mode_meditation">Meditácia — mindfulness cvičenia pre kľud a zdravie</span></p>
+					<p><strong>🌐</strong> <span data-i18n="help_mode_online">Online — hra cez internet, každý hrá zo svojho mobilu alebo počítača</span></p>
 				</div>
 				<div class="help-section">
 					<div class="help-title" data-i18n="help_how">Ako to funguje?</div>
@@ -874,7 +889,7 @@
 				</div>
 			</div>
 			<div class="d-flex gap-2 mt-2">
-				<button class="btn btn-retro" onclick="App.UI.closeModal('help-modal')" style="background:#888;width:100%;"><span data-i18n="close">Zavrieť</span></button>
+				<button type="button" class="px-btn px-btn--block" onclick="App.UI.closeModal('help-modal')"><span data-i18n="close">Zavrieť</span></button>
 			</div>
 		</div>
 	</div>
@@ -882,7 +897,7 @@
 	<!-- Export Modal -->
 	<div id="export-modal" class="modal-overlay">
 		<div class="modal-box">
-			<div class="modal-title" data-i18n="export_title">Export</div>
+			<h2 class="modal-title" data-i18n="export_title">Export</h2>
 			<p style="margin: 10px 0;" data-i18n="export_choose">Vyber formát:</p>
 			<div class="export-options">
 				<button class="btn btn-retro" onclick="App.exportAs('json')"><i class="bi bi-filetype-json"></i> JSON</button>
@@ -890,7 +905,7 @@
 				<button class="btn btn-retro" onclick="App.exportAs('markdown')"><i class="bi bi-markdown"></i> Markdown</button>
 			</div>
 			<div class="d-flex gap-2 mt-2">
-				<button class="btn btn-retro" onclick="App.UI.closeModal('export-modal')" style="background:#888;width:100%;"><span data-i18n="cancel">Zrušiť</span></button>
+				<button type="button" class="px-btn px-btn--block" onclick="App.UI.closeModal('export-modal')"><span data-i18n="cancel">Zrušiť</span></button>
 			</div>
 		</div>
 	</div>
@@ -969,7 +984,7 @@
 		<div class="library-modal">
 			<div class="library-modal-header">
 				<span class="library-modal-title"><i class="bi bi-collection"></i> <span data-i18n="library_title">Knižnica hier</span></span>
-				<button class="library-modal-close" onclick="App.Library.close()" aria-label="Zavrieť" data-i18n-aria-label="close"><i class="bi bi-x-lg"></i></button>
+				<button type="button" class="library-modal-close px-iconbtn px-modal__close" onclick="App.Library.close()" aria-label="Zavrieť" data-i18n-aria-label="close"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-close"></use></svg></button>
 			</div>
 			<div class="library-controls" id="library-controls">
 				<input type="text" id="lib-search" class="lib-search" placeholder="🔍 Hľadaj..." data-i18n-placeholder="lib_search_placeholder" oninput="App.Library._renderFiltered()">
@@ -1005,18 +1020,21 @@
 	<script src="js/timer.js?v=3"></script>
 	<script src="js/game-data.js?v=1"></script>
 	<script src="js/sfx.js?v=2"></script>
-	<script src="js/game-ui.js?v=16"></script>
+	<script src="js/px-modal.js?v=1"></script>
+	<script src="js/mode-decor.js?v=1" defer></script>
+	<script src="js/game-ui.js?v=17"></script>
 	<script src="js/reflection.js?v=5"></script>
 	<script src="js/session.js?v=14"></script>
 	<script src="js/game-api.js?v=2"></script>
 	<script src="js/library.js?v=4"></script>
 	<script src="js/game-edit.js?v=1"></script>
-	<script src="js/rpg-avatar.js?v=5"></script>
-	<script src="js/rpg-talents.js?v=5"></script>
-	<script src="js/rpg-screen.js?v=5"></script>
+	<script src="js/rpg-net.js?v=1"></script>
+	<script src="js/rpg-avatar.js?v=7"></script>
+	<script src="js/rpg-talents.js?v=7"></script>
+	<script src="js/rpg-screen.js?v=7"></script>
 	<script src="js/rpg-xp-fx.js?v=1"></script>
-	<script src="script.js?v=37"></script>
-	<script src="cursor-effect.js?v=2"></script>
+	<script src="script.js?v=38"></script>
+	<script src="cursor-effect.js?v=3"></script>
 
 
 	<!-- ─── Game Inline Edit Modal ─── -->
@@ -1024,7 +1042,7 @@
 		<div class="modal-box game-edit-box">
 			<div class="game-edit-header">
 				<span class="modal-title" data-i18n="edit_title">✏️ EDITOVAŤ HRU</span>
-				<button class="modal-close" onclick="App.GameEdit.cancel()" aria-label="Zavrieť" data-i18n-aria-label="close">✕</button>
+				<button type="button" class="modal-close px-iconbtn px-modal__close" onclick="App.GameEdit.cancel()" aria-label="Zavrieť" data-i18n-aria-label="close"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-close"></use></svg></button>
 			</div>
 			<div class="game-edit-body">
 				<label class="gedit-label" for="gedit-title" data-i18n="edit_name">Názov</label>
@@ -1062,7 +1080,7 @@
   <div class="modal-box" style="max-width:540px">
     <div class="modal-header">
       <h3 data-i18n="refl_modal_title">🧠 Reflexia aktivity</h3>
-      <button class="modal-close" onclick="Reflection.close()" aria-label="Zavrieť" data-i18n-aria-label="close">✕</button>
+      <button type="button" class="modal-close px-iconbtn px-modal__close" onclick="Reflection.close()" aria-label="Zavrieť" data-i18n-aria-label="close"><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-close"></use></svg></button>
     </div>
     <p style="opacity:0.7;font-size:13px;margin-bottom:16px" data-i18n="refl_modal_hint">Zhodnoť, ako prebehla aktivita — toto je posledný krok pred získaním bodov.</p>
     <form id="reflection-form" onsubmit="return false"></form>

@@ -158,6 +158,14 @@ const Reflection = (() => {
 			form.appendChild(div);
 		});
 
+		// Phase 5: solo reflections that pass the server's quality gate earn +25 % XP.
+		if (!sessionCode) {
+			const hint = document.createElement('p');
+			hint.className = 'reflection-bonus-hint';
+			hint.textContent = _t('play_refl_hint', '💡 Bonus +25 % XP: ohodnoť všetky otázky a napíš do každej odpovede aspoň 20 znakov vlastnými slovami.');
+			form.appendChild(hint);
+		}
+
 		const submitBtn = modal.querySelector('#btn-reflection-submit');
 		if (submitBtn) {
 			submitBtn.disabled = false;
@@ -221,23 +229,17 @@ const Reflection = (() => {
 
 		let res;
 		try {
-			if (sessionCode && supabaseClient) {
-				const { data: { session: authSession } } = await Promise.race([
-					supabaseClient.auth.getSession(),
-					new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))
-				]);
-				const token = authSession?.access_token;
-				if (!token) throw new Error(_t('refl_no_auth', 'Prihlás sa pre odoslanie reflexie'));
+			if (sessionCode) {
+				// Signed-in player (Bearer) or guest without an account (X-Guest-Token).
+				const authH = window.Session?.authHeaders ? await window.Session.authHeaders() : null;
+				if (!authH) throw new Error(_t('refl_no_auth', 'Prihlás sa pre odoslanie reflexie'));
 
 				const ctrl = new AbortController();
 				const fetchTimeout = setTimeout(() => ctrl.abort(), 12000);
 				try {
 					res = await fetch(`/api/sessions/${sessionCode}/reflect`, {
 						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${token}`
-						},
+						headers: { 'Content-Type': 'application/json', ...authH },
 						signal: ctrl.signal,
 						body: JSON.stringify({ reflection_data: _reflectionPayloadForApi(data) })
 					});

@@ -1,0 +1,94 @@
+/* ═══════════════════════════════════════════════════════════════════
+   gIVEMEGAME.IO — per-mode pixel decoration (Phase 3)
+
+   Three small sprites in the corners of the game area change with the
+   mode (body[data-mode]). Each sprite is a two-frame SVG strip
+   (public/ui/decor/*.svg, drawn in scripts/build-px-sprites.js),
+   animated only by moving background-position with steps(2):
+     sprite a: 2 frames / 1 s   = 2 fps
+     sprite b: 2 frames / 1.5 s ≈ 1.3 fps
+     sprite c: 2 frames / 2 s   = 1 fps
+   That is at most 4 fps by design, no canvas, no JavaScript timers.
+   Paused in hidden tabs (.px-decor--paused, set by mode-decor.js) and
+   frozen under prefers-reduced-motion. Purely decorative: aria-hidden,
+   pointer-events: none.
+   ═══════════════════════════════════════════════════════════════════ */
+
+body.px-v2 #game-viewport { position: relative; }
+body.px-v2 #game-viewport > :not(.px-decor) { position: relative; z-index: 1; }
+
+.px-decor {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.px-decor__sprite {
+	--px-decor-size: 64px;
+	position: absolute;
+	width: var(--px-decor-size);
+	height: var(--px-decor-size);
+	background-repeat: no-repeat;
+	background-size: calc(var(--px-decor-size) * 2) var(--px-decor-size);
+	background-position: 0 0;
+	image-rendering: pixelated;
+	opacity: 0.9;
+	animation: px-decor-frames 1s steps(2, end) infinite;
+}
+.px-decor__sprite--a { left: 16px; bottom: 16px; }
+.px-decor__sprite--b { right: 16px; bottom: 16px; animation-duration: 1.5s; }
+.px-decor__sprite--c {
+	--px-decor-size: 48px;
+	right: 24px;
+	top: 16px;
+	transform: scaleX(-1);
+	animation-duration: 2s;
+}
+
+@keyframes px-decor-frames {
+	from { background-position: 0 0; }
+	to { background-position: calc(var(--px-decor-size) * -2) 0; }
+}
+
+.px-decor--paused .px-decor__sprite { animation-play-state: paused; }
+
+/* Per-mode sprites: a + b are the mode's two sprites, c repeats a. */
+body[data-mode="party"] .px-decor__sprite--a,
+body[data-mode="party"] .px-decor__sprite--c { background-image: url("/ui/decor/party-balloon.svg"); }
+body[data-mode="party"] .px-decor__sprite--b { background-image: url("/ui/decor/party-star.svg"); }
+
+body[data-mode="classroom"] .px-decor__sprite--a,
+body[data-mode="classroom"] .px-decor__sprite--c { background-image: url("/ui/decor/classroom-book.svg"); }
+body[data-mode="classroom"] .px-decor__sprite--b { background-image: url("/ui/decor/classroom-board.svg"); }
+
+body[data-mode="reflection"] .px-decor__sprite--a,
+body[data-mode="reflection"] .px-decor__sprite--c { background-image: url("/ui/decor/reflection-cloud.svg"); }
+body[data-mode="reflection"] .px-decor__sprite--b { background-image: url("/ui/decor/reflection-candle.svg"); }
+
+body[data-mode="circus"] .px-decor__sprite--a,
+body[data-mode="circus"] .px-decor__sprite--c { background-image: url("/ui/decor/circus-balls.svg"); }
+body[data-mode="circus"] .px-decor__sprite--b { background-image: url("/ui/decor/circus-tent.svg"); }
+
+body[data-mode="cooking"] .px-decor__sprite--a,
+body[data-mode="cooking"] .px-decor__sprite--c { background-image: url("/ui/decor/cooking-pan.svg"); }
+body[data-mode="cooking"] .px-decor__sprite--b { background-image: url("/ui/decor/cooking-pot.svg"); }
+
+body[data-mode="meditation"] .px-decor__sprite--a,
+body[data-mode="meditation"] .px-decor__sprite--c { background-image: url("/ui/decor/meditation-leaf.svg"); }
+body[data-mode="meditation"] .px-decor__sprite--b { background-image: url("/ui/decor/meditation-lotus.svg"); }
+
+/* Small screens: fewer, smaller sprites so they never cover content. */
+@media (max-width: 900px) {
+	.px-decor__sprite { --px-decor-size: 40px; opacity: 0.75; }
+	.px-decor__sprite--c { display: none; }
+}
+
+/* Focused session view and print: no decoration. */
+body.session-focused .px-decor { display: none; }
+@media print { .px-decor { display: none !important; } }
+
+@media (prefers-reduced-motion: reduce) {
+	.px-decor__sprite { animation: none !important; }
+}

@@ -260,3 +260,55 @@ body.session-focused #workspace {
 
   .session-share__copy { width: 100%; }
 }
+
+/* ─── Phase 6: lobby settings, guest nickname, presence ─── */
+.session-settings {
+  display: grid;
+  gap: .375rem;
+  margin: .75rem 0;
+}
+
+.session-field {
+  display: block;
+  font-family: var(--font-body);
+  font-size: .9375rem;
+  text-align: left;
+}
+
+.session-field--check {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 44px;
+}
+
+.session-field--check input {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.session-select,
+.session-nick-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: .5rem .75rem;
+  border: 2px solid var(--accent, var(--shell-violet));
+  border-radius: .5rem;
+  color: var(--text, var(--shell-text));
+  background: var(--bg, var(--shell-bg));
+  font-family: var(--font-body);
+  font-size: 1rem;
+}
+
+.session-nick-input {
+  margin: .25rem 0 .5rem;
+}
+
+.session-dialog__hint--small {
+  font-size: .8125rem;
+}
+
+.session-participant--left {
+  opacity: .55;
+}

@@ -13,8 +13,9 @@ const OpenAI = require('openai');
 const path = require('path');
 const fs = require('fs');
 const { Pool } = require('pg');
-const { validateDurationGate, validateParticipantGate, validateHostCooldownGate } = require('./lib/reward-validation');
 const { createEduRouter } = require('./lib/edu-routes');
+const { createSessionsRouter } = require('./lib/routes/sessions');
+const { validateDurationGate } = require('./lib/reward-validation');
 const { createAssessmentRouter } = require('./lib/assessment-routes');
 const { createInstitutionRouter } = require('./lib/institution-routes');
 const { buildSupabasePublicConfig, renderSupabaseConfigScript, extraCspOrigin } = require('./lib/supabase-public-config');
@@ -26,6 +27,7 @@ const {
 	getAvatarById,
 	RPG_AVATAR_SWITCH_COST,
 } = require('./lib/rpg-avatars');
+const { rpgMembershipFields, rpgDisplayClassId } = require('./lib/rpg-membership');
 const { getTalentManifest, getTalentById, talentIdsToTalents, validatePrerequisite } = require('./lib/rpg-talents');
 const { computeRpgLevel, getEffectiveStats, awardXpInTransaction, computeSoloXpFromDurationMax } = require('./lib/rpg-progression');
 const {
@@ -34,8 +36,6 @@ const {
 	XP_BOOST_USES,
 	PHOTO_VERIFY_DAILY_ATTEMPTS,
 	PHOTO_VERIFY_DAILY_REWARDS,
-	buildCompletionValidation,
-	startSessionAndCharge,
 	resolveSoloXpMultiplier,
 	countRemainingBoostUses,
 	photoVerifyAttemptAllowed,
@@ -52,6 +52,7 @@ const {
 	billingEventUserId,
 	getStripe,
 	FREE_LIMITS,
+	applyLevelCap,
 	hasIntegrationOwnershipEvidence,
 	ensureCustomer,
 	normalizeConsentIp,
@@ -82,6 +83,9 @@ const {
 } = require('./lib/ai-guard');
 const { validateCoinLog, validateDonation, STARTER_GRANT_COINS } = require('./lib/coin-log-policy');
 const { applyCoinLogEntry, grantStarterCoins, applyRobotChallenge, applyDonation } = require('./lib/coin-ledger');
+const PlayTickets = require('./lib/play-tickets');
+const { GAME_COMPETENCY_TO_STAT, getAttributeManifest } = require('./lib/attribute-map');
+const FilterPresets = require('./lib/filter-presets');
 const {
 	enforceConstraints,
 	applyMethodologyFallback,
@@ -93,15 +97,8 @@ const {
 } = require('./lib/game-prompt');
 const { selectMethodologies } = require('./lib/methodologies');
 
-// Free-tier soft cap: level grows from XP, but is displayed/enforced at FREE_LIMITS.maxLevel.
-// Talents/perks gated by level will therefore remain locked past the cap until user upgrades.
-function applyLevelCap(progression, tier) {
-	if (!progression) return progression;
-	if (tier && tier !== 'free') return progression;
-	const cap = FREE_LIMITS.maxLevel;
-	if ((progression.level || 0) <= cap) return progression;
-	return { ...progression, level: cap, capped: true, capReason: 'free_tier' };
-}
+// Free-tier soft cap (M7): applyLevelCap from lib/billing.js. Talents/perks gated by level
+// stay locked past the cap until the user upgrades.
 
 const SESSION_JOIN_COST = 100;
 const COMPLETION_BONUS  = 100;
@@ -120,19 +117,9 @@ const SESSION_XP_AWARD = 75;  // per multiplayer session completion (reflection_
 const ROBOT_XP_AWARD   = 30;  // per robot challenge completion (completions per 24h capped by plan, M5)
 
 // ─── Reward validation constants ───
-const VALID_COMPETENCY_KEYS = [
-	'k-uceni', 'k-reseni-problemu', 'komunikativni',
-	'socialni-personalni', 'obcanske', 'pracovni', 'digitalni'
-];
-const GAME_KOMP_TO_STAT = {
-	'k-uceni':            'focus',
-	'k-reseni-problemu':  'insight',
-	'komunikativni':      'communication',
-	'socialni-personalni':'communication',
-	'obcanske':           'resilience',
-	'pracovni':           'strategy',
-	'digitalni':          'insight',
-};
+const VALID_COMPETENCY_KEYS = PlayTickets.VALID_GAME_COMPETENCIES;
+// One competency → stat map for the whole app (lib/attribute-map.js).
+const GAME_KOMP_TO_STAT = GAME_COMPETENCY_TO_STAT;
 const MIN_SESSION_DURATION_FLOOR = 3;    // minutes — absolute minimum even if game.duration.min is lower
 const MIN_SESSION_DURATION_FALLBACK = 5; // minutes — used when game has no duration.min
 const HOST_COOLDOWN_MAX  = 5;            // max completed sessions per host per rolling hour
@@ -974,6 +961,13 @@ NEPREHÁŇAJ personalizáciu — jemne uprednostni aktivity ladené s najvyšš�
 			} catch (e) {
 				console.warn('[GenerateGame] plan_usage_daily increment:', e.message);
 			}
+		}
+
+		// Phase 5: the server keeps its own copy of the game as a play ticket.
+		// Completion later sends only this id, so a forged game_json earns nothing.
+		if (genUser && coinsDbPool && PlayTickets.playTicketsEnabled()) {
+			const ticketId = await PlayTickets.issueGenerationTicket(coinsDbPool, genUser.id, game, f.mode);
+			if (ticketId) game._play_ticket = ticketId;
 		}
 
 		res.json(game);
@@ -2031,19 +2025,32 @@ Respond with ONLY a JSON object: {"verified": true/false, "confidence": 0-100, "
 	}
 });
 
-// ─── Solo game completion — awards competency points to authenticated user ───
+// ─── Solo game completion ───────────────────────────────────────────────────
+// Phase 5: with PLAY_TICKETS_ENABLED (default on) the client sends ticket_id
+// and the server reads duration, mode and competencies from its own ticket.
+// Without a ticket the old game_json path keeps working until
+// PLAY_TICKETS_LEGACY_UNTIL (two-week deprecation, see docs/ENV_SETUP.md).
 app.post('/api/profile/complete-solo', async (req, res) => {
 	if (!coinApiReady()) return respondCoinApiDisabled(res);
 	const user = await requireSupabaseUser(req, res);
 	if (!user) return;
-
-	const { game_json } = req.body || {};
-	const kompetence = game_json?.rvp?.kompetence;
-	if (!Array.isArray(kompetence) || kompetence.length === 0) {
-		return res.status(400).json({ error: 'game_json.rvp.kompetence je povinné', code: 'MISSING_COMPETENCIES' });
+	const body = req.body || {};
+	if (PlayTickets.playTicketsEnabled()) {
+		if (body.ticket_id != null) return completeSoloWithTicket(req, res, user, body.ticket_id);
+		if (!PlayTickets.legacyCompleteSoloAllowed()) {
+			return res.status(400).json({
+				error: 'Spusti hru znova, aby sa dala odmena overiť.',
+				code: 'TICKET_REQUIRED',
+			});
+		}
+		res.set('Deprecation', 'true');
+		res.set('Sunset', PlayTickets.legacyUntil().toUTCString());
 	}
+	return completeSoloLegacy(req, res, user);
+});
 
-	// ─── Solo cooldown: max per 24h (Free vs Pro) ──────────────
+/** Solo completions per rolling 24 h (Free vs Pro). Sends the error and returns false when over. */
+async function checkSoloDailyLimit(user, res) {
 	let soloLimit = entitlementsForPlan(false).soloCompletionsPer24h;
 	try {
 		const bill = await getUserBillingState(coinsDbPool, user.id);
@@ -2055,17 +2062,159 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			[user.id]
 		);
 		if ((soloRows[0]?.cnt || 0) >= soloLimit) {
-			return res.status(429).json({
+			res.status(429).json({
 				error: `Denný limit solo hier dosiahnutý (${soloRows[0].cnt}/${soloLimit}). Obnoví sa za 24 h od poslednej hry alebo predplaťte Pro učiteľ.`,
 				code: 'SOLO_DAILY_LIMIT',
 				limit: soloLimit,
 				used: soloRows[0].cnt
 			});
+			return false;
 		}
 	} catch (e) {
 		console.error('[Completion] solo cooldown check failed:', e.message);
-		return res.status(500).json({ error: 'Kontrola limitu zlyhala', code: 'COOLDOWN_CHECK_ERROR' });
+		res.status(500).json({ error: 'Kontrola limitu zlyhala', code: 'COOLDOWN_CHECK_ERROR' });
+		return false;
 	}
+	return true;
+}
+
+/** Effective stats after an award (cosmetic; runs in a savepoint so it cannot abort the award). */
+async function readSoloStatsAfter(client, userId) {
+	let statsAfter = {};
+	await client.query('SAVEPOINT solo_stats');
+	try {
+		const { rows: profileAfter } = await client.query(
+			'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1', [userId]
+		);
+		const classId = profileAfter[0]?.rpg_avatar_id || null;
+		if (classId) {
+			const { rows: tRows } = await client.query(
+				'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [userId]
+			);
+			// M4: map ids to talent objects; the card reads flat stat values.
+			statsAfter = getEffectiveStats(classId, talentIdsToTalents(tRows.map(r => r.talent_id))).effective;
+		}
+		await client.query('RELEASE SAVEPOINT solo_stats');
+	} catch (_) {
+		await client.query('ROLLBACK TO SAVEPOINT solo_stats');
+	}
+	return statsAfter;
+}
+
+async function completeSoloWithTicket(req, res, user, ticketId) {
+	if (!PlayTickets.isTicketId(ticketId)) {
+		return res.status(400).json({ error: 'Neplatný lístok hry', code: 'INVALID_TICKET' });
+	}
+	if (!(await checkSoloDailyLimit(user, res))) return;
+
+	let client;
+	let done = false;
+	const fail = async (status, payload) => {
+		done = true;
+		try { await client.query('ROLLBACK'); } catch (_) {}
+		return res.status(status).json(payload);
+	};
+	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		// Profile lock first (same order as the legacy path) serialises a user's completions.
+		const { rows: preRows } = await client.query(
+			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1 FOR UPDATE',
+			[user.id]
+		);
+		if (!preRows.length) return await fail(404, { error: 'Profil nenájdený', code: 'NO_PROFILE' });
+		const levelBefore = computeRpgLevel(preRows[0].rpg_xp).level;
+
+		const ticket = await PlayTickets.lockTicket(client, user.id, ticketId);
+		if (!ticket) return await fail(404, { error: 'Lístok hry sa nenašiel', code: 'TICKET_NOT_FOUND' });
+		if (ticket.completed_at) return await fail(409, { error: 'Za túto hru už si odmenu dostal/a', code: 'TICKET_USED' });
+		if (!ticket.started_at) return await fail(409, { error: 'Hra ešte nebola spustená', code: 'TICKET_NOT_STARTED' });
+
+		const gate = validateDurationGate(ticket.started_at, { duration: { min: ticket.duration_min } });
+		if (!gate.pass) {
+			return await fail(400, {
+				error: 'Hra trvala príliš krátko na odmenu',
+				code: 'DURATION_TOO_SHORT',
+				duration_actual_min: gate.validation.duration_actual_min,
+				duration_required_min: gate.validation.duration_required_min,
+			});
+		}
+		if (await PlayTickets.overlapsCompletedTicket(client, user.id, ticket)) {
+			return await fail(409, { error: 'Naraz sa dá hrať len jedna hra', code: 'TICKET_OVERLAP' });
+		}
+
+		// H3: the boost comes from server-sold xp_boost_2x uses in the ledger, never from the client.
+		const xpMul = resolveSoloXpMultiplier(XP_BOOST_MULTIPLIER, await countRemainingBoostUses(client, user.id));
+		const reward = PlayTickets.computeTicketReward({
+			durationMax: ticket.duration_max,
+			elapsedMin: gate.validation.duration_actual_min,
+			reflected: Boolean(ticket.reflection_id),
+			multiplier: xpMul,
+			mode: ticket.mode,
+			kompetence: ticket.kompetence,
+		});
+		if (!(await PlayTickets.markTicketCompleted(client, user.id, ticket.id, reward))) {
+			return await fail(409, { error: 'Za túto hru už si odmenu dostal/a', code: 'TICKET_USED' });
+		}
+
+		await client.query(
+			'UPDATE public.profiles SET coins = COALESCE(coins, 0) + $1 WHERE id = $2',
+			[COMPLETION_BONUS, user.id]
+		);
+		await client.query(
+			'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
+			[user.id, COMPLETION_BONUS, 'solo_complete', JSON.stringify({
+				ticket_id: ticket.id,
+				mode: ticket.mode,
+				kompetence_keys: ticket.kompetence,
+				duration_max: ticket.duration_max,
+				xp_multiplier: reward.xp_multiplier,
+				reflection: Boolean(ticket.reflection_id),
+			})]
+		);
+		const { rpg_xp, level: rpg_level } = await awardXpInTransaction(
+			client, user.id, reward.total_xp, reward.xp_multiplier > 1 ? 'solo_ticket_boosted' : 'solo_ticket'
+		);
+		await PlayTickets.addStatXp(client, user.id, reward.stat_xp);
+		const statsAfter = await readSoloStatsAfter(client, user.id);
+		await client.query('COMMIT');
+		done = true;
+
+		res.json({
+			ok: true,
+			ticket_id: ticket.id,
+			mode: ticket.mode,
+			rpg_xp_gained: reward.total_xp,
+			participation_xp: reward.participation_xp,
+			reflection_bonus_xp: reward.reflection_bonus_xp,
+			reflection_counted: Boolean(ticket.reflection_id),
+			xp_multiplier_applied: reward.xp_multiplier,
+			coins_awarded: COMPLETION_BONUS,
+			rpg_xp,
+			rpg_level,
+			rpg_level_up: rpg_level > levelBefore,
+			trained_stats: reward.trained_stats,
+			stat_xp_gained: reward.stat_xp,
+			stats_after: statsAfter,
+		});
+	} catch (err) {
+		if (client && !done) { try { await client.query('ROLLBACK'); } catch (_) {} }
+		console.error('[Completion] ticket complete failed:', err.message);
+		if (!res.headersSent) res.status(500).json({ error: 'Nepodarilo sa udeliť body', code: 'AWARD_ERROR' });
+	} finally {
+		if (client) client.release();
+	}
+}
+
+/** Pre-ticket path: trusts game_json (H3 clamp only). Removed after PLAY_TICKETS_LEGACY_UNTIL. */
+async function completeSoloLegacy(req, res, user) {
+	const { game_json } = req.body || {};
+	const kompetence = game_json?.rvp?.kompetence;
+	if (!Array.isArray(kompetence) || kompetence.length === 0) {
+		return res.status(400).json({ error: 'game_json.rvp.kompetence je povinné', code: 'MISSING_COMPETENCIES' });
+	}
+
+	if (!(await checkSoloDailyLimit(user, res))) return;
 
 	// Atomically: award coins + RPG XP (kompetencie z hry ostávajú len v game_json / RVP — bez samostatných „kompetenčných bodov“)
 	const validKomps = kompetence.filter(k => VALID_COMPETENCY_KEYS.includes(k));
@@ -2116,26 +2265,7 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 
 		// Compute which stats this game trains and the user's effective stats after XP
 		const trainedStats = [...new Set(validKomps.map(k => GAME_KOMP_TO_STAT[k]).filter(Boolean))];
-		let statsAfter = {};
-		// Cosmetic reads run in a savepoint so a failure cannot abort the award.
-		await soloClient.query('SAVEPOINT solo_stats');
-		try {
-			const { rows: profileAfter } = await soloClient.query(
-				'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1', [user.id]
-			);
-			const classId = profileAfter[0]?.rpg_avatar_id || null;
-			if (classId) {
-				const { rows: tRows } = await soloClient.query(
-					'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [user.id]
-				);
-				// M4: map ids to talent objects; the card reads flat stat values.
-				statsAfter = getEffectiveStats(classId, talentIdsToTalents(tRows.map(r => r.talent_id))).effective;
-			}
-			await soloClient.query('RELEASE SAVEPOINT solo_stats');
-		} catch (_) {
-			/* non-critical — stats are cosmetic */
-			await soloClient.query('ROLLBACK TO SAVEPOINT solo_stats');
-		}
+		const statsAfter = await readSoloStatsAfter(soloClient, user.id);
 
 		await soloClient.query('COMMIT');
 
@@ -2148,6 +2278,7 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 			rpg_level_up,
 			trained_stats: trainedStats,
 			stats_after: statsAfter,
+			legacy: true,
 		});
 	} catch (err) {
 		if (soloClient) { try { await soloClient.query('ROLLBACK'); } catch (_) {} }
@@ -2155,6 +2286,134 @@ app.post('/api/profile/complete-solo', async (req, res) => {
 		res.status(500).json({ error: 'Nepodarilo sa udeliť body', code: 'AWARD_ERROR' });
 	} finally {
 		if (soloClient) soloClient.release();
+	}
+}
+
+// ─── Play tickets (Phase 5) ─────────────────────────────────────────────────
+// POST /api/play/start           { ticket_id } | { game_id } | { public_id }
+// POST /api/play/:ticket/reflect { ratings, texts } — quality gate → +25 % bonus
+// GET  /api/play/attributes      stat XP, per-competency counts, mode rationale
+
+function playTicketsGuard(res) {
+	if (!PlayTickets.playTicketsEnabled()) {
+		res.status(404).json({ error: 'Funkcia nie je zapnutá', code: 'PLAY_TICKETS_DISABLED' });
+		return false;
+	}
+	if (!coinApiReady()) { respondCoinApiDisabled(res); return false; }
+	return true;
+}
+
+app.post('/api/play/start', async (req, res) => {
+	if (!playTicketsGuard(res)) return;
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const { ticket_id, game_id, public_id, local } = req.body || {};
+	try {
+		if (ticket_id != null) {
+			if (!PlayTickets.isTicketId(ticket_id)) {
+				return res.status(400).json({ error: 'Neplatný lístok hry', code: 'INVALID_TICKET' });
+			}
+			const r = await PlayTickets.startTicket(coinsDbPool, user.id, ticket_id);
+			if (r.status === 'not_found') return res.status(404).json({ error: 'Lístok hry sa nenašiel', code: 'TICKET_NOT_FOUND' });
+			if (r.status === 'completed') return res.status(409).json({ error: 'Za túto hru už si odmenu dostal/a', code: 'TICKET_USED' });
+			return res.json({ ok: true, ticket_id: r.id, started_at: r.started_at });
+		}
+
+		// Library game (own saved game or a shared public link): the server
+		// copies its stored game_json into a new ticket and starts it now.
+		// Local game (fallback or made while logged out): the server has no copy,
+		// so the ticket gets fixed bounds and no mode / competency bonus.
+		const isLocal = local === true && game_id == null && public_id == null;
+		const byPublic = game_id == null && public_id != null;
+		const ref = byPublic ? public_id : game_id;
+		if (!isLocal && !PlayTickets.isTicketId(ref)) {
+			return res.status(400).json({ error: 'Chýba hra na spustenie', code: 'MISSING_GAME' });
+		}
+		if ((await PlayTickets.libraryTicketsToday(coinsDbPool, user.id)) >= PlayTickets.MAX_LIBRARY_TICKETS_PER_DAY) {
+			return res.status(429).json({ error: 'Dnes si spustil/a už veľa hier. Skús to zajtra.', code: 'TICKET_DAILY_LIMIT' });
+		}
+		if (isLocal) {
+			const title = typeof req.body.title === 'string' ? req.body.title : '';
+			const row = await PlayTickets.issueLocalTicket(coinsDbPool, user.id, title);
+			return res.json({ ok: true, ticket_id: row.id, started_at: row.started_at, verified: false });
+		}
+		const { rows } = await queryCoinsDb(
+			byPublic
+				? 'SELECT mode, game_json FROM public.saved_games WHERE public_token = $1 LIMIT 1'
+				: 'SELECT mode, game_json FROM public.saved_games WHERE id = $1 AND user_id = $2 LIMIT 1',
+			byPublic ? [ref] : [ref, user.id]
+		);
+		if (!rows.length || !rows[0].game_json) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
+		// saved_games.game_json is whatever the browser saved: only a copy whose
+		// content matches a server-generated game keeps that game's durations,
+		// mode and competencies; anything else gets clamped bounds, no bonus.
+		const row = await PlayTickets.issueLibraryTicket(coinsDbPool, user.id, rows[0].game_json);
+		res.json({ ok: true, ticket_id: row.id, started_at: row.started_at, verified: row.verified });
+	} catch (err) {
+		console.error('[Play] start failed:', err.message);
+		res.status(500).json({ error: 'Hru sa nepodarilo spustiť', code: 'TICKET_ERROR' });
+	}
+});
+
+app.post('/api/play/:ticket/reflect', async (req, res) => {
+	if (!playTicketsGuard(res)) return;
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	const ticketId = req.params.ticket;
+	if (!PlayTickets.isTicketId(ticketId)) {
+		return res.status(400).json({ error: 'Neplatný lístok hry', code: 'INVALID_TICKET' });
+	}
+	let client;
+	let open = false;
+	try {
+		client = await coinsDbPool.connect();
+		await client.query('BEGIN');
+		open = true;
+		const finish = async (status, payload) => {
+			open = false;
+			await client.query(status === 200 ? 'COMMIT' : 'ROLLBACK');
+			return res.status(status).json(payload);
+		};
+		const ticket = await PlayTickets.lockTicket(client, user.id, ticketId);
+		if (!ticket) return await finish(404, { error: 'Lístok hry sa nenašiel', code: 'TICKET_NOT_FOUND' });
+		if (!ticket.started_at) return await finish(409, { error: 'Hra ešte nebola spustená', code: 'TICKET_NOT_STARTED' });
+		if (ticket.completed_at) return await finish(409, { error: 'Reflexiu napíš pred ukončením hry', code: 'TICKET_USED' });
+		if (ticket.reflection_id) return await finish(409, { error: 'Reflexiu k tejto hre už máš', code: 'REFLECTION_EXISTS' });
+
+		const previous = await PlayTickets.recentReflectionTexts(client, user.id);
+		const check = PlayTickets.validateReflection(req.body || {}, ticket.kompetence, previous);
+		if (!check.ok) {
+			return await finish(422, {
+				error: 'Reflexia nespĺňa podmienky bonusu',
+				code: check.code,
+				field: check.field || null,
+				min_chars: PlayTickets.REFLECTION_MIN_CHARS,
+			});
+		}
+		const reflectionId = await PlayTickets.insertReflection(client, user.id, ticket.id, check);
+		return await finish(200, { ok: true, reflection_id: reflectionId, bonus_rate: PlayTickets.REFLECTION_BONUS_RATE });
+	} catch (err) {
+		if (client && open) { try { await client.query('ROLLBACK'); } catch (_) {} }
+		console.error('[Play] reflect failed:', err.message);
+		if (!res.headersSent) res.status(500).json({ error: 'Reflexiu sa nepodarilo uložiť', code: 'REFLECTION_ERROR' });
+	} finally {
+		if (client) client.release();
+	}
+});
+
+app.get('/api/play/attributes', async (req, res) => {
+	const manifest = getAttributeManifest();
+	if (!PlayTickets.playTicketsEnabled() || !coinApiReady()) {
+		return res.json({ enabled: false, manifest, stat_xp: {}, competencies: [], games: 0, reflected: 0 });
+	}
+	const user = await requireSupabaseUser(req, res);
+	if (!user) return;
+	try {
+		const data = await PlayTickets.readPlayAttributes(coinsDbPool, user.id);
+		res.json({ enabled: true, manifest, ...data });
+	} catch (err) {
+		console.error('[Play] attributes failed:', err.message);
+		res.status(500).json({ error: 'Nepodarilo sa načítať atribúty', code: 'ATTRIBUTES_ERROR' });
 	}
 });
 
@@ -2243,457 +2502,56 @@ app.get('/api/profile/analytics', async (req, res) => {
 });
 
 // ─── Sessions API ─────────────────────────────────────────────────
+// Routes live in lib/routes/sessions.js (Phase 6 extraction).
+const sessionsRouter = createSessionsRouter({
+	coinApiReady,
+	respondCoinApiDisabled,
+	requireSupabaseUser,
+	queryCoinsDb,
+	getPool: () => coinsDbPool,
+	generateJoinCode,
+	constants: {
+		SESSION_JOIN_COST,
+		COMPLETION_BONUS,
+		SESSION_XP_AWARD,
+		HOST_COOLDOWN_MAX,
+		VALID_COMPETENCY_KEYS,
+		GAME_KOMP_TO_STAT,
+	},
+	// Serverless has no interval timer: any session request runs the sweep at
+	// most once a minute per instance; the daily cron below is the backstop.
+	sweepOnRequestMs: process.env.VERCEL ? 60 * 1000 : 0,
+});
+app.use('/api/sessions', sessionsRouter);
+// Phase 6: expire abandoned sessions and refund coins_paid.
+app.locals.sweepExpiredSessions = sessionsRouter.sweepExpired;
+app.locals.resetSessionSweepClock = sessionsRouter.resetSweepClock;
 
-app.post('/api/sessions', async (req, res) => {
-	if (!coinApiReady()) return respondCoinApiDisabled(res);
-	const user = await requireSupabaseUser(req, res);
-	if (!user) return;
-
-	const { game_json } = req.body || {};
-	if (!game_json?.title) {
-		return res.status(400).json({ error: 'game_json je povinné', code: 'MISSING_GAME' });
-	}
-
-	// M9: the join-code lookup hits the DB too, so it must sit inside the try —
-	// Express 4 does not catch a rejected async handler and the request hangs.
+// Cron backstop (vercel.json "crons"): Vercel calls this with
+// "Authorization: Bearer <CRON_SECRET>". Without CRON_SECRET it stays closed.
+function cronAuthorized(req) {
+	const secret = process.env.CRON_SECRET || '';
+	if (!secret) return false;
+	const given = Buffer.from(String(req.headers.authorization || ''));
+	const expected = Buffer.from(`Bearer ${secret}`);
+	return given.length === expected.length && require('node:crypto').timingSafeEqual(given, expected);
+}
+app.get('/api/cron/session-sweep', async (req, res) => {
+	if (!cronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
 	try {
-		// Generate unique join code (retry on collision)
-		let join_code;
-		for (let attempt = 0; attempt < 10; attempt++) {
-			const candidate = generateJoinCode();
-			const { rows } = await queryCoinsDb(
-				'SELECT id FROM public.sessions WHERE join_code = $1', [candidate]
-			);
-			if (rows.length === 0) { join_code = candidate; break; }
-		}
-		if (!join_code) {
-			return res.status(500).json({ error: 'Nepodarilo sa vygenerovať unikátny kód', code: 'CODE_GEN_ERROR' });
-		}
-
-		const { rows } = await queryCoinsDb(
-			`INSERT INTO public.sessions (host_id, game_json, join_code)
-			 VALUES ($1, $2, $3)
-			 RETURNING id, join_code, status, created_at`,
-			[user.id, JSON.stringify(game_json), join_code]
-		);
-		res.json(rows[0]);
+		const expired = await sessionsRouter.sweepExpired();
+		res.json({ ok: true, expired });
 	} catch (err) {
-		console.error('[Sessions] create failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa vytvoriť session', code: 'CREATE_ERROR' });
+		console.error('[Sessions] cron sweep failed:', err.message);
+		res.status(500).json({ error: 'Sweep failed', code: 'SWEEP_ERROR' });
 	}
 });
-
-app.get('/api/sessions/:code', async (req, res) => {
-	if (!coinApiReady()) return respondCoinApiDisabled(res);
-	const user = await requireSupabaseUser(req, res);
-	if (!user) return;
-
-	const code = (req.params.code || '').toUpperCase().trim();
-	if (!code) return res.status(400).json({ error: 'Kód je povinný', code: 'MISSING_CODE' });
-
-	try {
-		const { rows: sRows } = await queryCoinsDb(
-			`SELECT id, host_id, game_json, join_code, status, timer_ends_at, created_at
-			 FROM public.sessions WHERE join_code = $1`,
-			[code]
-		);
-		if (!sRows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
-		const session = sRows[0];
-
-		const { rows: pRows } = await queryCoinsDb(
-			`SELECT sp.user_id, sp.coins_paid, sp.reflection_done, sp.joined_at,
-			        p.display_name
-			 FROM public.session_participants sp
-			 LEFT JOIN public.profiles p ON p.id = sp.user_id
-			 WHERE sp.session_id = $1
-			 ORDER BY sp.joined_at ASC`,
-			[session.id]
-		);
-
-		res.json({ ...session, participants: pRows });
-	} catch (err) {
-		console.error('[Sessions] get failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa načítať session', code: 'FETCH_ERROR' });
-	}
-});
-
-app.post('/api/sessions/:code/join', async (req, res) => {
-	if (!coinApiReady()) return respondCoinApiDisabled(res);
-	const user = await requireSupabaseUser(req, res);
-	if (!user) return;
-
-	const code = (req.params.code || '').toUpperCase().trim();
-	try {
-		const { rows } = await queryCoinsDb(
-			'SELECT id, status FROM public.sessions WHERE join_code = $1', [code]
-		);
-		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
-		const sess = rows[0];
-		if (sess.status !== 'waiting') {
-			return res.status(409).json({ error: 'Session už beží alebo skončila', code: 'ALREADY_STARTED' });
-		}
-
-		// Check coin balance
-		const { rows: pRows } = await queryCoinsDb(
-			'SELECT coins FROM public.profiles WHERE id = $1', [user.id]
-		);
-		const coins = parseInt(pRows[0]?.coins, 10) || 0;
-		if (coins < SESSION_JOIN_COST) {
-			return res.status(402).json({
-				error: `Potrebuješ aspoň ${SESSION_JOIN_COST} coinov pre vstup`,
-				code: 'INSUFFICIENT_COINS'
-			});
-		}
-
-		await queryCoinsDb(
-			`INSERT INTO public.session_participants (session_id, user_id)
-			 VALUES ($1, $2) ON CONFLICT (session_id, user_id) DO NOTHING`,
-			[sess.id, user.id]
-		);
-		res.json({ ok: true, session_id: sess.id });
-	} catch (err) {
-		console.error('[Sessions] join failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa pripojiť', code: 'JOIN_ERROR' });
-	}
-});
-
-app.post('/api/sessions/:code/start', async (req, res) => {
-	if (!coinApiReady()) return respondCoinApiDisabled(res);
-	const user = await requireSupabaseUser(req, res);
-	if (!user) return;
-
-	const code = (req.params.code || '').toUpperCase().trim();
-	let client;
-	try {
-		const { rows } = await queryCoinsDb(
-			'SELECT id, host_id, game_json, status FROM public.sessions WHERE join_code = $1', [code]
-		);
-		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
-		const sess = rows[0];
-		if (sess.host_id !== user.id) {
-			return res.status(403).json({ error: 'Len host môže štartovať session', code: 'NOT_HOST' });
-		}
-		if (sess.status !== 'waiting') {
-			return res.status(409).json({ error: 'Session už beží', code: 'ALREADY_STARTED' });
-		}
-
-		const durationMin = sess.game_json?.duration?.max || 15;
-		const timerEndsAt = new Date(Date.now() + durationMin * 60 * 1000).toISOString();
-
-		// M1 + H1: status compare-and-swap and conditional charges in one
-		// transaction. A second /start charges nobody; a participant without
-		// enough coins is skipped and stays unpaid (never rewarded).
-		client = await coinsDbPool.connect();
-		await client.query('BEGIN');
-		const result = await startSessionAndCharge(client, {
-			sessionId: sess.id,
-			hostId: user.id,
-			code,
-			cost: SESSION_JOIN_COST,
-			timerEndsAt,
-		});
-		if (!result.started) {
-			await client.query('ROLLBACK');
-			return res.status(409).json({ error: 'Session už beží', code: 'ALREADY_STARTED' });
-		}
-		await client.query('COMMIT');
-
-		res.json({
-			ok: true,
-			timer_ends_at: timerEndsAt,
-			participants_charged: result.charged.length,
-			participants_unpaid: result.unpaid.length,
-		});
-	} catch (err) {
-		if (client) { try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ } }
-		console.error('[Sessions] start failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa štartovať session', code: 'START_ERROR' });
-	} finally {
-		if (client) client.release();
-	}
-});
-
-app.post('/api/sessions/:code/reflect', async (req, res) => {
-	if (!coinApiReady()) return respondCoinApiDisabled(res);
-	const user = await requireSupabaseUser(req, res);
-	if (!user) return;
-
-	const code = (req.params.code || '').toUpperCase().trim();
-	const { reflection_data } = req.body || {};
-	if (!reflection_data || typeof reflection_data !== 'object' || Array.isArray(reflection_data)) {
-		return res.status(400).json({ error: 'reflection_data (object) je povinné', code: 'MISSING_DATA' });
-	}
-
-	try {
-		const { rows } = await queryCoinsDb(
-			'SELECT id, status FROM public.sessions WHERE join_code = $1', [code]
-		);
-		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
-		const sess = rows[0];
-		if (!['active', 'reflection'].includes(sess.status)) {
-			return res.status(409).json({ error: 'Session nie je aktívna', code: 'WRONG_STATUS' });
-		}
-
-		const { rowCount } = await queryCoinsDb(
-			`UPDATE public.session_participants
-			 SET reflection_data = $1, reflection_done = true
-			 WHERE session_id = $2 AND user_id = $3`,
-			[JSON.stringify(reflection_data), sess.id, user.id]
-		);
-		// rowCount === 0 means host (not in session_participants) — silently ok so onSubmitted fires
-		if (rowCount === 0) {
-			console.warn(`[Sessions] reflect: user ${user.id} is not a participant in session ${sess.id} (likely host)`);
-			// Return 200 so Reflection.js calls onSubmitted and host can complete the session
-		}
-		res.json({ ok: true });
-	} catch (err) {
-		console.error('[Sessions] reflect failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa uložiť reflexiu', code: 'REFLECT_ERROR' });
-	}
-});
-
-app.post('/api/sessions/:code/complete', async (req, res) => {
-	if (!coinApiReady()) return respondCoinApiDisabled(res);
-	const user = await requireSupabaseUser(req, res);
-	if (!user) return;
-
-	const code = (req.params.code || '').toUpperCase().trim();
-	try {
-		const { rows } = await queryCoinsDb(
-			'SELECT id, host_id, game_json, status, started_at FROM public.sessions WHERE join_code = $1', [code]
-		);
-		if (!rows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
-		const sess = rows[0];
-		if (sess.host_id !== user.id) {
-			return res.status(403).json({ error: 'Len host môže ukončiť session', code: 'NOT_HOST' });
-		}
-		if (sess.status === 'completed') {
-			return res.status(409).json({ error: 'Session je už dokončená', code: 'ALREADY_COMPLETED' });
-		}
-		// Explicit status guard — only active or reflection sessions can complete
-		if (!['active', 'reflection'].includes(sess.status)) {
-			return res.status(409).json({ error: 'Session nie je aktívna', code: 'WRONG_STATUS' });
-		}
-
-		// ─── VALIDATION GATE 1: Duration ───────────────────────────────
-		const durResult = validateDurationGate(sess.started_at, sess.game_json);
-		if (!durResult.pass) {
-			await queryCoinsDb(
-				'UPDATE public.sessions SET reward_validation = $1 WHERE id = $2',
-				[JSON.stringify(durResult.validation), sess.id]
-			);
-			return res.status(422).json({
-				error: `Session trvala príliš krátko (${Math.round(durResult.validation.duration_actual_min)}/${durResult.validation.duration_required_min} min)`,
-				code: 'DURATION_TOO_SHORT',
-				validation: durResult.validation
-			});
-		}
-
-		// ─── VALIDATION GATE 2: Participant count ──────────────────────
-		const { rows: paidParts } = await queryCoinsDb(
-			'SELECT COUNT(*)::int AS cnt FROM public.session_participants WHERE session_id = $1 AND coins_paid > 0',
-			[sess.id]
-		);
-		const actualPlayers = paidParts[0]?.cnt || 0;
-		const partResult = validateParticipantGate(actualPlayers, sess.game_json);
-		if (!partResult.pass) {
-			await queryCoinsDb(
-				'UPDATE public.sessions SET reward_validation = $1 WHERE id = $2',
-				[JSON.stringify(partResult.validation), sess.id]
-			);
-			return res.status(422).json({
-				error: `Nedostatok hráčov (${actualPlayers}/${partResult.validation.participants_required})`,
-				code: 'NOT_ENOUGH_PLAYERS',
-				validation: partResult.validation
-			});
-		}
-
-		// ─── VALIDATION GATE 3: Host cooldown ──────────────────────────
-		const { rows: cooldownRows } = await queryCoinsDb(
-			`SELECT COUNT(*)::int AS cnt FROM public.sessions
-			 WHERE host_id = $1 AND status = 'completed'
-			   AND completed_at > NOW() - INTERVAL '1 hour'`,
-			[user.id]
-		);
-		const hostSessionsLastHour = cooldownRows[0]?.cnt || 0;
-		const coolResult = validateHostCooldownGate(hostSessionsLastHour);
-		if (!coolResult.pass) {
-			await queryCoinsDb(
-				'UPDATE public.sessions SET reward_validation = $1 WHERE id = $2',
-				[JSON.stringify(coolResult.validation), sess.id]
-			);
-			return res.status(429).json({
-				error: `Príliš veľa sessions za hodinu (${hostSessionsLastHour}/${HOST_COOLDOWN_MAX}). Skús neskôr.`,
-				code: 'HOST_COOLDOWN',
-				validation: coolResult.validation
-			});
-		}
-
-		// ─── Atomic status lock: prevent concurrent /complete race ─────
-		// Compare-and-swap: only one request can transition away from active/reflection
-		const { rowCount: lockCount } = await queryCoinsDb(
-			`UPDATE public.sessions SET status = 'completing' WHERE id = $1 AND status IN ('active', 'reflection')`,
-			[sess.id]
-		);
-		if (lockCount === 0) {
-			return res.status(409).json({ error: 'Session je už dokončená', code: 'ALREADY_COMPLETED' });
-		}
-
-		// ─── Filter and whitelist competency keys ──────────────────────
-		const rawKompetence = sess.game_json?.rvp?.kompetence || [];
-		const kompetence = rawKompetence.filter(k => VALID_COMPETENCY_KEYS.includes(k));
-		const awardedMarker = { rpg: true, kompetence_keys: kompetence };
-
-		// ─── Transactional reward loop ─────────────────────────────────
-		// All awards are wrapped in a single DB transaction to prevent
-		// partial awarding on crash/error (atomicity guarantee).
-		const client = await coinsDbPool.connect();
-		let participantsRewarded = 0;
-		let myRpgLevelUp = false;
-		let myXpGained = 0;
-		try {
-			await client.query('BEGIN');
-
-			// M2: only participants who actually paid at /start are rewarded; a
-			// join that raced the start (or a skipped, unpaid player) is not.
-			const { rows: parts } = await client.query(
-				`SELECT user_id FROM public.session_participants
-				 WHERE session_id = $1 AND reflection_done = true AND awarded_competencies IS NULL
-				   AND coins_paid > 0`,
-				[sess.id]
-			);
-
-			for (const p of parts) {
-				const { rows: preXpRows } = await client.query(
-					'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1 FOR UPDATE',
-					[p.user_id]
-				);
-				const levelBefore = computeRpgLevel(preXpRows[0]?.rpg_xp || 0).level;
-
-				await client.query(
-					`UPDATE public.session_participants
-					 SET awarded_competencies = $1 WHERE session_id = $2 AND user_id = $3`,
-					[JSON.stringify(awardedMarker), sess.id, p.user_id]
-				);
-
-				const { rowCount: coinRows } = await client.query(
-					'UPDATE public.profiles SET coins = COALESCE(coins,0) + $1 WHERE id = $2',
-					[COMPLETION_BONUS, p.user_id]
-				);
-				if (coinRows === 0) {
-					await client.query(
-						'INSERT INTO public.profiles (id, coins) VALUES ($1, $2)',
-						[p.user_id, COMPLETION_BONUS]
-					);
-				}
-				await client.query(
-					'INSERT INTO public.coin_transactions (user_id, amount, action, metadata) VALUES ($1, $2, $3, $4)',
-					[p.user_id, COMPLETION_BONUS, 'session_complete', JSON.stringify({ session_code: code, kompetence_keys: kompetence })]
-				);
-
-				const { level: rpgLvlAfter } = await awardXpInTransaction(client, p.user_id, SESSION_XP_AWARD, 'session_complete');
-				if (p.user_id === user.id) {
-					myXpGained = SESSION_XP_AWARD;
-					myRpgLevelUp = rpgLvlAfter > levelBefore;
-				}
-			}
-			participantsRewarded = parts.length;
-
-			// Write audit trail + mark completed (inside transaction)
-			// C1: required values come from the gate results (requiredMin /
-			// requiredPlayers only exist inside lib/reward-validation.js).
-			const validation = buildCompletionValidation({
-				durationValidation: durResult.validation,
-				participantValidation: partResult.validation,
-				hostSessionsLastHour,
-				competencies: kompetence,
-				participantsRewarded: parts.length,
-			});
-			await client.query(
-				`UPDATE public.sessions SET status = 'completed', completed_at = NOW(), reward_validation = $1 WHERE id = $2`,
-				[JSON.stringify(validation), sess.id]
-			);
-
-			await client.query('COMMIT');
-
-			// Compute trained stats and effective stats for the host (cosmetic)
-			const sessionTrainedStats = [...new Set(kompetence.map(k => GAME_KOMP_TO_STAT[k]).filter(Boolean))];
-			let sessionStatsAfter = {};
-			try {
-				const { rows: hostProfile } = await queryCoinsDb(
-					'SELECT rpg_avatar_id FROM public.profiles WHERE id = $1', [user.id]
-				);
-				const hClassId = hostProfile[0]?.rpg_avatar_id || null;
-				if (hClassId) {
-					const { rows: hTalRows } = await queryCoinsDb(
-						'SELECT talent_id FROM public.rpg_user_talents WHERE user_id = $1', [user.id]
-					);
-					// M4: getEffectiveStats needs talent objects, not ids; the card
-					// reads flat stat values.
-					sessionStatsAfter = getEffectiveStats(hClassId, talentIdsToTalents(hTalRows.map(r => r.talent_id))).effective;
-				}
-			} catch (_) { /* non-critical */ }
-
-			res.json({
-				ok: true,
-				awarded: awardedMarker,
-				participants_rewarded: participantsRewarded,
-				validation,
-				my_level_changes: {},
-				my_rpg_level_up: myRpgLevelUp,
-				rpg_xp_gained: myXpGained,
-				trained_stats: sessionTrainedStats,
-				stats_after: sessionStatsAfter,
-			});
-		} catch (txErr) {
-			await client.query('ROLLBACK');
-			// Revert status lock so host can retry
-			await queryCoinsDb(
-				`UPDATE public.sessions SET status = 'active' WHERE id = $1 AND status = 'completing'`,
-				[sess.id]
-			);
-			throw txErr;
-		} finally {
-			client.release();
-		}
-	} catch (err) {
-		console.error('[Sessions] complete failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa ukončiť session', code: 'COMPLETE_ERROR' });
-	}
-});
-
-// ─── Session reward: participant fetches their own RPG reward status ───
-// Only returns data for the authenticated requesting user — never exposes others.
-app.get('/api/sessions/:code/my-reward', async (req, res) => {
-	if (!coinApiReady()) return respondCoinApiDisabled(res);
-	const user = await requireSupabaseUser(req, res);
-	if (!user) return;
-
-	const code = (req.params.code || '').toUpperCase().trim();
-	try {
-		const { rows: sessRows } = await queryCoinsDb(
-			'SELECT id, status FROM public.sessions WHERE join_code = $1', [code]
-		);
-		if (!sessRows.length) return res.status(404).json({ error: 'Session nenájdená', code: 'NOT_FOUND' });
-		const sess = sessRows[0];
-		if (sess.status !== 'completed') {
-			return res.status(400).json({ error: 'Session ešte nie je dokončená', code: 'NOT_COMPLETED' });
-		}
-
-		const { rows: partRows } = await queryCoinsDb(
-			`SELECT awarded_competencies FROM public.session_participants
-			 WHERE session_id = $1 AND user_id = $2`,
-			[sess.id, user.id]
-		);
-		if (!partRows.length) return res.status(404).json({ error: 'Nie si účastníkom tejto session', code: 'NOT_PARTICIPANT' });
-
-		const awarded = partRows[0].awarded_competencies || {};
-		res.json({ awarded, rpg: true });
-	} catch (err) {
-		console.error('[Sessions] my-reward failed:', err.message);
-		res.status(500).json({ error: 'Nepodarilo sa načítať odmenu', code: 'REWARD_ERROR' });
-	}
-});
+if (!process.env.VERCEL) {
+	const sessionSweepTimer = setInterval(() => {
+		sessionsRouter.sweepExpired().catch((err) => console.error('[Sessions] sweep failed:', err.message));
+	}, 60 * 1000);
+	sessionSweepTimer.unref();
+}
 
 // ─── Public game viewer — no auth, read-only ───
 app.get('/api/games/public/:id', async (req, res) => {
@@ -2732,7 +2590,8 @@ app.post('/api/games/save', async (req, res) => {
 			`INSERT INTO public.saved_games (user_id, title, mode, game_json)
 			 VALUES ($1, $2, $3, $4)
 			 RETURNING id, title, mode, created_at`,
-			[user.id, title, mode, JSON.stringify(game)]
+			// A play ticket id belongs to one play, never to the saved copy.
+			[user.id, title, mode, JSON.stringify(PlayTickets.stripClientGameFields(game))]
 		);
 		res.json({ ok: true, game: rows[0] });
 	} catch (err) {
@@ -2782,7 +2641,8 @@ app.get('/api/games/:id', async (req, res) => {
 		);
 		if (rows.length === 0) return res.status(404).json({ error: 'Hra nenájdená', code: 'NOT_FOUND' });
 		const row = rows[0];
-		res.json({ ...row.game_json, _savedId: row.id, _savedAt: row.created_at, _favorite: row.is_favorite, _currentRating: row.rating || 0 });
+		// Older saves may still hold a used play ticket id; it never leaves the server.
+		res.json({ ...PlayTickets.stripClientGameFields(row.game_json), _savedId: row.id, _savedAt: row.created_at, _favorite: row.is_favorite, _currentRating: row.rating || 0 });
 	} catch (err) {
 		console.error('[Games] fetch game failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa načítať hru', code: 'FETCH_ERROR' });
@@ -3044,8 +2904,7 @@ app.get('/api/rpg/avatar', async (req, res) => {
     const coins = profileRows[0]?.coins ?? 0;
     res.json({
       eligible: true,
-      role: membership ? membership.role : 'player',
-      school_name: membership ? membership.school_name : null,
+      ...rpgMembershipFields(membership),
       current_avatar_id: currentAvatarId,
       coins,
       avatar_switch_cost: RPG_AVATAR_SWITCH_COST,
@@ -3169,14 +3028,15 @@ app.get('/api/rpg/talents', async (req, res) => {
   if (!user) return;
   try {
     const membership = await _rpgGetMembership(user.id);
-    // Return manifest even for non-members so CTA renders; class_id = null signals no avatar
+    // Return manifest for everyone; class_id = null only when no avatar is owned.
+    // Non-members still see their avatar class (M13); unlocks stay member-only (POST gate).
     const { rows: profileRows } = await queryCoinsDb(
       `SELECT COALESCE(coins, 0) AS coins, rpg_avatar_id, COALESCE(rpg_xp, 0) AS rpg_xp
          FROM public.profiles WHERE id = $1`,
       [user.id]
     );
     const profile = profileRows[0] || {};
-    const class_id = membership ? (profile.rpg_avatar_id || null) : null;
+    const class_id = rpgDisplayClassId(profile);
     const avatarEntry = class_id ? getAvatarById(class_id) : null;
     const avatar_meta = avatarEntry
       ? {
@@ -3205,8 +3065,7 @@ app.get('/api/rpg/talents', async (req, res) => {
     res.json({
       eligible:    true,
       class_id,
-      role:        membership?.role        || 'player',
-      school_name: membership?.school_name || null,
+      ...rpgMembershipFields(membership),
       coins:       profile.coins || 0,
       avatar_meta,
       avatar_switch_cost: RPG_AVATAR_SWITCH_COST,

@@ -1,0 +1,314 @@
+/* ═══════════════════════════════════════════════════════════════════
+   gIVEMEGAME.IO — Pixel design system: COMPONENTS (Phase 2)
+
+   Reusable classes. Everything uses the tokens from px-tokens.css:
+   square corners (--px-radius), one hard shadow (--px-shadow), one
+   border width (--px-bw). Display font only at >= 12px, body >= 14px.
+   Docs: docs/design-system.md
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Icon (SVG sprite) ─────────────────────────────────────────────
+   <svg class="px-icon" aria-hidden="true"><use href="/ui/icons/px-icons.svg#i-help"></use></svg> */
+.px-icon {
+	display: inline-block;
+	flex: none;
+	width: 16px;
+	height: 16px;
+	fill: currentColor;
+	shape-rendering: crispEdges;
+	vertical-align: middle;
+}
+.px-icon--lg { width: 24px; height: 24px; }
+.px-icon--xl { width: 32px; height: 32px; }
+
+/* ─── Shared interactive base ──────────────────────────────────────── */
+.px-btn,
+.px-iconbtn,
+.px-pill,
+.px-tab {
+	font: inherit;
+	color: inherit;
+	border-radius: var(--px-radius);
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+.px-btn:focus-visible,
+.px-iconbtn:focus-visible,
+.px-pill:focus-visible,
+.px-tab:focus-visible,
+.px-modal__close:focus-visible {
+	outline: 3px solid var(--px-focus);
+	outline-offset: 2px;
+}
+
+/* ─── Button ───────────────────────────────────────────────────────── */
+.px-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--px-space-2);
+	min-height: var(--px-hit);
+	padding: var(--px-space-2) var(--px-space-4);
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body);
+	font-weight: 700;
+	line-height: 1.2;
+	text-transform: none;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw) solid var(--line);
+	box-shadow: var(--px-shadow-sm);
+	transition: transform 80ms steps(1), box-shadow 80ms steps(1);
+}
+.px-btn:hover { background: var(--surface-sunken); }
+.px-btn:active,
+.px-btn[aria-pressed="true"] {
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
+.px-btn--primary {
+	color: var(--on-accent);
+	background: var(--mode-accent-strong);
+}
+.px-btn--primary:hover { background: var(--mode-accent-strong); filter: brightness(1.08); }
+.px-btn--block { width: 100%; }
+.px-btn[disabled],
+.px-btn[aria-disabled="true"] {
+	cursor: not-allowed;
+	box-shadow: none;
+	background: var(--surface-sunken);
+	color: var(--on-surface-muted);
+}
+
+/* ─── Icon button (square, 40×40, 44×44 on touch) ──────────────────── */
+.px-iconbtn {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	width: var(--px-hit);
+	height: var(--px-hit);
+	min-width: var(--px-hit);
+	padding: 0;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	box-shadow: var(--px-shadow-sm);
+	text-decoration: none;
+	line-height: 1;
+}
+.px-iconbtn .px-icon { width: 20px; height: 20px; }
+.px-iconbtn:hover { background: var(--surface-sunken); }
+.px-iconbtn:active,
+.px-iconbtn[aria-expanded="true"],
+.px-iconbtn[aria-pressed="true"] {
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
+@media (pointer: coarse) {
+	.px-iconbtn {
+		width: var(--px-hit-touch);
+		height: var(--px-hit-touch);
+		min-width: var(--px-hit-touch);
+	}
+}
+
+/* ─── Pill (compact status / action chip in the header) ────────────── */
+.px-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: var(--px-hit);
+	padding: 0 var(--px-space-3);
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	font-weight: 700;
+	line-height: 1;
+	white-space: nowrap;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	box-shadow: var(--px-shadow-sm);
+	text-transform: none;
+}
+.px-pill--gold {
+	color: var(--px-on-gold);
+	background: var(--px-gold);
+}
+.px-pill--accent {
+	color: var(--on-accent);
+	background: var(--mode-accent-strong);
+}
+@media (pointer: coarse) { .px-pill { min-height: var(--px-hit-touch); } }
+
+/* ─── Panel / card ─────────────────────────────────────────────────── */
+.px-panel {
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow);
+	padding: var(--px-space-3);
+}
+.px-panel__title {
+	display: flex;
+	align-items: center;
+	gap: var(--px-space-2);
+	margin: 0 0 var(--px-space-3);
+	padding-bottom: var(--px-space-2);
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm);
+	line-height: 1.4;
+	text-transform: uppercase;
+	border-bottom: var(--px-bw-thin) dashed currentColor;
+}
+.px-card {
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	padding: var(--px-space-3);
+}
+
+/* ─── Tabs (square, selected tab follows the mode accent) ──────────── */
+.px-tabs {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+	gap: var(--px-space-2);
+}
+.px-tab {
+	min-height: var(--px-hit);
+	padding: var(--px-space-2) var(--px-space-3);
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	font-weight: 700;
+	line-height: 1.25;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	box-shadow: var(--px-shadow-sm);
+}
+.px-tab[aria-selected="true"],
+.px-tab.is-active {
+	color: var(--on-accent);
+	background: var(--mode-accent-strong);
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
+
+/* ─── Badge ────────────────────────────────────────────────────────── */
+.px-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px var(--px-space-2);
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	font-weight: 700;
+	line-height: 1.3;
+	color: var(--on-surface);
+	background: var(--surface-sunken);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+}
+.px-badge--warning { color: var(--px-on-warning); background: var(--px-warning); }
+.px-badge--accent { color: var(--on-accent); background: var(--mode-accent-strong); }
+
+/* ─── Modal shell ────────────────────────────────────────────────────
+   <div class="px-modal-overlay"><div class="px-modal" role="dialog">
+     <div class="px-modal__header"><h2 class="px-modal__title">…</h2>
+       <button class="px-modal__close px-iconbtn">✕ icon</button></div>
+     <div class="px-modal__body">…</div>
+     <div class="px-modal__footer">…</div></div></div>
+   Behaviour (focus trap, Escape, focus restore): public/js/px-modal.js */
+.px-modal-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 2000;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	padding: var(--px-space-4);
+	background: rgba(0, 0, 0, 0.7);
+}
+.px-modal-overlay.is-open { display: flex; }
+.px-modal {
+	display: flex;
+	flex-direction: column;
+	width: min(36rem, 100%);
+	max-height: calc(100dvh - 2 * var(--px-space-4));
+	overflow: hidden;
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: 8px 8px 0 var(--px-ink);
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body);
+}
+.px-modal__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--px-space-3);
+	padding: var(--px-space-3) var(--px-space-4);
+	background: var(--surface-raised);
+	border-bottom: var(--px-bw) solid var(--line);
+}
+.px-modal__title {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display);
+	line-height: 1.4;
+}
+.px-modal__body {
+	padding: var(--px-space-4);
+	overflow-y: auto;
+}
+.px-modal__footer {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--px-space-2);
+	padding: var(--px-space-3) var(--px-space-4);
+	border-top: var(--px-bw-thin) solid var(--line);
+}
+
+/* ─── Toast ────────────────────────────────────────────────────────── */
+.px-toast {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body);
+	font-weight: 700;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow);
+	padding: var(--px-space-3) var(--px-space-4);
+}
+
+/* ─── State message (loading / error / empty, e.g. RPG panels) ─────── */
+.px-state {
+	display: grid;
+	justify-items: center;
+	gap: var(--px-space-3);
+	padding: var(--px-space-5) var(--px-space-4);
+	text-align: center;
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body);
+	color: var(--on-surface);
+}
+.px-state .px-icon { width: 32px; height: 32px; }
+.px-state__title { margin: 0; font-weight: 700; font-size: var(--px-fs-body-lg); }
+.px-state__text { margin: 0; color: var(--on-surface-muted); max-width: 32rem; }
+.px-state--error .px-icon { color: var(--px-warning); }
+.px-state .px-btn .px-icon { width: 16px; height: 16px; }
+.rpg-state--offline .px-state__icon { color: var(--px-warning); }
+
+.px-visually-hidden {
+	position: absolute !important;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}

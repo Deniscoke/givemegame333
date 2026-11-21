@@ -13,7 +13,7 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 const Library = (() => {
-	const MODE_ICONS = { party: '🎉', classroom: '📚', reflection: '🪞', circus: '🎪', cooking: '🍳', meditation: '🧘', default: '🎮' };
+	const MODE_ICONS = { party: '🎉', classroom: '📚', reflection: '🪞', circus: '🎪', cooking: '🍳', meditation: '🧘', online: '🌐', default: '🎮' };
 	let _allGames = []; // full fetched list; kept in sync for client-side filter/sort
 
 	async function getAuthHeader() {

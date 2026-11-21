@@ -1,0 +1,69 @@
+/* ═══════════════════════════════════════════════════════════════════
+   gIVEMEGAME.IO — Pixel design system: MOTION (Phase 2)
+
+   Rules:
+   1. Endless animations are rare, small and run at <= 4 fps (steps()).
+   2. The coin spin and the generate glow only play on hover/focus.
+   3. prefers-reduced-motion: reduce stops every animation and
+      transition in the app (global guard at the bottom).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Coin spin + generate glow: hover/focus only, even with motion allowed. */
+body.px-v2 .coin-icon,
+body.px-v2 .btn-generate {
+	animation: none;
+}
+body.px-v2 .btn-generate:hover,
+body.px-v2 .btn-generate:focus-visible {
+	animation: glow-pulse 3s infinite;
+}
+body.px-v2 .coin-display:hover .coin-icon,
+body.px-v2 .coin-display:focus-visible .coin-icon {
+	animation: px-coin-flip 1s steps(4) infinite;
+}
+@keyframes px-coin-flip {
+	0% { transform: scaleX(1); }
+	25% { transform: scaleX(0.5); }
+	50% { transform: scaleX(-1); }
+	75% { transform: scaleX(-0.5); }
+	100% { transform: scaleX(1); }
+}
+
+/* Footer status dot: a 1 fps blink instead of a smooth pulse. */
+body.px-v2 .status-indicator {
+	animation: px-blink 2s steps(2) infinite;
+}
+@keyframes px-blink {
+	0% { opacity: 1; }
+	100% { opacity: 0.35; }
+}
+
+/* ─── Global reduced-motion guard ─────────────────────────────────────
+   Covers style.css (music pulse/bounce, generate glow, loading dice,
+   status dot, coin spin, timer pulse, robot bounce, RPG idle float),
+   the generator shell transitions and the mode decorations. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		animation-delay: 0s !important;
+		transition-duration: 0.01ms !important;
+		transition-delay: 0s !important;
+		scroll-behavior: auto !important;
+	}
+	.btn-music.playing,
+	.btn-music.playing i,
+	.btn-generate,
+	.loading-dice,
+	.status-indicator,
+	.coin-icon,
+	.timer-display.timer-critical,
+	.robot-result-emoji.success,
+	.rpg-avatar-idle,
+	.px-decor__sprite {
+		animation: none !important;
+	}
+	.cursor-canvas { display: none !important; }
+}

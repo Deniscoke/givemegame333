@@ -360,22 +360,40 @@ const GameUI = (() => {
 	}
 
 	// ─── Vzhled ───
-	function toggleTheme() {
-		document.body.classList.toggle('light-mode');
-		const icon = document.getElementById('theme-icon');
-		if (document.body.classList.contains('light-mode')) {
-			icon.className = 'bi bi-sun-fill';
-		} else {
-			icon.className = 'bi bi-moon-fill';
+	const THEME_STORAGE_KEY = 'givemegame_theme';
+
+	// Theme = body.light-mode + html[data-theme]; the choice is saved (Phase 2).
+	function applyTheme(theme, persist = true) {
+		const light = theme === 'light';
+		document.body.classList.toggle('light-mode', light);
+		document.documentElement?.setAttribute?.('data-theme', light ? 'light' : 'dark');
+		const use = document.querySelector?.('#theme-icon use');
+		if (use) use.setAttribute('href', `/ui/icons/px-icons.svg#i-${light ? 'sun' : 'moon'}`);
+		if (persist) {
+			try { localStorage.setItem(THEME_STORAGE_KEY, light ? 'light' : 'dark'); } catch (_) {}
 		}
 	}
 
-	// ─── Modaly ───
+	function toggleTheme() {
+		applyTheme(document.body.classList.contains('light-mode') ? 'dark' : 'light');
+	}
+
+	function restoreTheme() {
+		let saved = null;
+		try { saved = localStorage.getItem(THEME_STORAGE_KEY); } catch (_) {}
+		if (saved === 'light' || saved === 'dark') applyTheme(saved, false);
+	}
+
+	// ─── Modaly ─── (PxModal: focus trap, Escape, focus restore — M19)
 	function openModal(id) {
-		document.getElementById(id).style.display = 'flex';
+		if (window.PxModal) { window.PxModal.open(id); return; }
+		const el = document.getElementById(id);
+		if (el) el.style.display = 'flex';
 	}
 	function closeModal(id) {
-		document.getElementById(id).style.display = 'none';
+		if (window.PxModal) { window.PxModal.close(id); return; }
+		const el = document.getElementById(id);
+		if (el) el.style.display = 'none';
 	}
 	function openHelp() { openModal('help-modal'); }
 
@@ -509,6 +527,13 @@ const GameUI = (() => {
 		strategy:      { labelKey: 'rpg_stat_strategy',      labelFb: 'Strategy',      icon: '♟️', color: '#c4b5fd' },
 	};
 
+	// Phase 5 sub-tags (lib/attribute-map.js SUBTAG_PARENT): shown under their parent stat.
+	const SUBTAG_META = {
+		motorika:  { labelKey: 'attr_subtag_motorika',  labelFb: 'Motorika',  icon: '✋' },
+		vyziva:    { labelKey: 'attr_subtag_vyziva',    labelFb: 'Výživa',    icon: '🥕' },
+		digitalna: { labelKey: 'attr_subtag_digitalna', labelFb: 'Digitálne zručnosti', icon: '💻' },
+	};
+
 	// Maps game's rvp.kompetence keys → RPG stat keys
 	const GAME_KOMP_TO_STAT = {
 		'k-uceni':            'focus',
@@ -577,8 +602,35 @@ const GameUI = (() => {
 		if (data.rpg_xp_gained > 0) {
 			const xpNote = document.createElement('div');
 			xpNote.className = 'game-rpg-xp-note';
-			xpNote.textContent = `⚡ +${data.rpg_xp_gained} XP`;
+			// Phase 5 (play ticket): show what the XP was for.
+			if (data.participation_xp != null) {
+				let line = _t('play_xp_participation', '+{xp} XP za účasť').replace('{xp}', String(data.participation_xp));
+				if (data.reflection_bonus_xp > 0) {
+					line += ' · ' + _t('play_xp_reflection', '+{xp} XP za reflexiu').replace('{xp}', String(data.reflection_bonus_xp));
+				}
+				if (data.xp_multiplier_applied > 1) line += ` · ×${data.xp_multiplier_applied}`;
+				xpNote.textContent = `⚡ ${line}`;
+			} else {
+				xpNote.textContent = `⚡ +${data.rpg_xp_gained} XP`;
+			}
 			kompEl.appendChild(xpNote);
+		}
+
+		const statXp = data.stat_xp_gained;
+		if (statXp && typeof statXp === 'object') {
+			const parts = Object.keys(RPG_STAT_META).filter(k => statXp[k] > 0).map(k => {
+				const meta = RPG_STAT_META[k];
+				return `${meta.icon} ${_t(meta.labelKey, meta.labelFb)} +${statXp[k]}`;
+			});
+			Object.keys(SUBTAG_META).filter(k => statXp[k] > 0).forEach(k => {
+				parts.push(`${SUBTAG_META[k].icon} ${_t(SUBTAG_META[k].labelKey, SUBTAG_META[k].labelFb)} +${statXp[k]}`);
+			});
+			if (parts.length) {
+				const statNote = document.createElement('div');
+				statNote.className = 'game-rpg-statxp-note';
+				statNote.textContent = `${_t('play_stat_xp_title', 'Tréning atribútov')}: ${parts.join(' · ')}`;
+				kompEl.appendChild(statNote);
+			}
 		}
 	}
 
@@ -707,7 +759,7 @@ const GameUI = (() => {
 
 	return {
 		showScreen, renderGame, renderQuickView, addToHistory, clearHistory, loadHistory,
-		toggleSection, toggleTheme, openModal, closeModal,
+		toggleSection, toggleTheme, applyTheme, restoreTheme, openModal, closeModal,
 		openHelp, toggleFullscreen, toggleHistory, initTools, openTool, closeTools,
 		toggleMobileFilters, toggleMobileSmarta, closeMobileOverlays,
 		toast, setStatus, updateStats, renderCompetencies, renderProfileCompetencies,

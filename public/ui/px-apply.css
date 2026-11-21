@@ -1,0 +1,703 @@
+/* ═══════════════════════════════════════════════════════════════════
+   gIVEMEGAME.IO — Pixel design system: SCREEN LAYER (Phase 3)
+
+   Moves the generator screen (index.html) onto the design system.
+   Everything is scoped to body.px-v2 so it can be switched off by
+   removing one class, and the legacy rules in style.css /
+   generator-shell.css can be deleted screen by screen later.
+   Order in index.html: px-tokens → px-components → px-motion →
+   px-type-floor → px-apply → px-mode-decor.
+   ═══════════════════════════════════════════════════════════════════ */
+
+body.px-v2 {
+	--header-h: 60px;
+	--footer-h: 36px;
+	font-family: var(--font-body);
+	background-color: var(--page-bg);
+	color: var(--on-surface);
+}
+body.px-v2 [hidden] { display: none !important; }
+body.px-v2 :focus-visible { outline: 3px solid var(--px-focus); outline-offset: 2px; }
+
+/* ─── Header: one height, square icon buttons, pills on the right ──── */
+body.px-v2 header {
+	gap: var(--px-space-3);
+	padding: 0 var(--px-space-4);
+	background: var(--surface);
+	border-bottom: var(--px-bw) solid var(--line);
+	box-shadow: none;
+	overflow: visible;
+}
+body.px-v2 .brand-title {
+	margin-right: auto;
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display);
+	text-shadow: 2px 2px 0 var(--px-ink);
+}
+body.px-v2 .brand-me { color: var(--on-surface); }
+body.px-v2 .brand-io { font-size: var(--px-fs-display-sm); color: var(--mode-accent); }
+body.px-v2.light-mode .brand-title { text-shadow: none; }
+body.px-v2.light-mode .brand-give { color: #b3262e; }
+body.px-v2.light-mode .brand-game { color: #8a5a00; }
+
+body.px-v2 .header-status,
+body.px-v2 .header-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--px-space-2);
+	flex-shrink: 0;
+}
+
+/* Pills: legacy gradients / round corners / glows removed. */
+body.px-v2 .coin-display.px-pill,
+body.px-v2 .btn-robot-challenge.px-pill,
+body.px-v2 .btn-share-link.px-pill {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	padding: 0 var(--px-space-3);
+	border-radius: var(--px-radius);
+	border: var(--px-bw-thin) solid var(--line);
+	box-shadow: var(--px-shadow-sm);
+	image-rendering: auto;
+	text-shadow: none;
+	letter-spacing: 0;
+}
+body.px-v2 .coin-display.px-pill { background: var(--px-gold); color: var(--px-on-gold); }
+body.px-v2 .coin-display .coin-count { font-family: var(--font-data); font-size: var(--px-fs-body); font-weight: 600; color: inherit; }
+body.px-v2 .coin-display .coin-icon { width: 18px; height: 18px; font-size: inherit; }
+body.px-v2 .btn-robot-challenge.px-pill { background: var(--mode-accent-strong); color: var(--on-accent); }
+body.px-v2 .btn-share-link.px-pill { background: var(--px-success); color: #fff; }
+body.px-v2 .coin-display.px-pill:hover,
+body.px-v2 .btn-robot-challenge.px-pill:hover,
+body.px-v2 .btn-share-link.px-pill:hover { transform: none; filter: brightness(1.06); }
+body.px-v2 .share-link-url { font-size: var(--px-fs-body-sm); }
+
+/* Icon buttons in the header and the settings summary. */
+body.px-v2.generator-shell .preferences-menu summary.px-iconbtn {
+	display: inline-grid;
+	width: var(--px-hit);
+	min-width: var(--px-hit);
+	min-height: 0;
+	height: var(--px-hit);
+	padding: 0;
+	gap: 0;
+	font-size: 0;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow-sm);
+}
+body.px-v2.generator-shell .preferences-menu[open] summary.px-iconbtn { transform: translate(2px, 2px); box-shadow: none; }
+@media (pointer: coarse) {
+	body.px-v2.generator-shell .preferences-menu summary.px-iconbtn {
+		width: var(--px-hit-touch);
+		min-width: var(--px-hit-touch);
+		height: var(--px-hit-touch);
+	}
+}
+
+/* NÁSTROJE: fits its label, no caps, and hidden where the tools panel is always visible. */
+body.px-v2.generator-shell .btn-game-tools {
+	width: auto;
+	min-height: var(--px-hit);
+	padding: 0 var(--px-space-3);
+	white-space: nowrap;
+	text-transform: none;
+	font-size: var(--px-fs-body-sm);
+}
+@media (min-width: 1200px) {
+	body.px-v2.generator-shell .btn-game-tools { display: none; }
+}
+
+/* Settings dropdown: square panel with a hard shadow. */
+body.px-v2.generator-shell .preferences-menu__content {
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow);
+}
+body.px-v2.generator-shell .preferences-menu__label { color: var(--on-surface-muted); font-size: var(--px-fs-body-sm); }
+body.px-v2 .preferences-menu .px-btn { justify-content: flex-start; }
+body.px-v2 .btn-music.playing { background: var(--mode-accent-strong); color: var(--on-accent); }
+body.px-v2 .btn-lang {
+	min-width: var(--px-hit);
+	min-height: var(--px-hit);
+	padding: 0 var(--px-space-2);
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	font-weight: 700;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+}
+body.px-v2 .btn-lang:hover { transform: none; background: var(--surface-sunken); }
+body.px-v2 .btn-lang.active { color: var(--on-accent); background: var(--mode-accent-strong); text-shadow: none; box-shadow: none; }
+
+@media (max-width: 600px) {
+	body.px-v2 header { padding: 0 var(--px-space-2); gap: var(--px-space-2); }
+	body.px-v2 .brand-title { font-size: var(--px-fs-display-sm); }
+	body.px-v2 .btn-robot-challenge.px-pill span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+	body.px-v2 .btn-robot-challenge.px-pill { padding: 0 var(--px-space-2); }
+}
+@media (max-width: 420px) {
+	body.px-v2 .brand-title .brand-io { display: none; }
+}
+
+/* ─── Type scale: readable body font for UI text, pixel font for headings ─ */
+body.px-v2 .panel-label,
+body.px-v2 .section-title,
+body.px-v2 .help-title,
+body.px-v2 .modal-title {
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm);
+	line-height: 1.5;
+	color: var(--on-surface);
+}
+body.px-v2 .panel-label { border-bottom-color: var(--on-surface-muted); opacity: 1; }
+body.px-v2 .panel-label .px-icon { margin-right: 4px; }
+body.px-v2 .mode-name,
+body.px-v2 .filter-label,
+body.px-v2 .btn-toggle,
+body.px-v2 .btn-action,
+body.px-v2 .btn-retro,
+body.px-v2 .badge,
+body.px-v2 .meta-value,
+body.px-v2 .meta-label,
+body.px-v2 .game-mode-badge,
+body.px-v2 .rvp-sub-label,
+body.px-v2 .narrator-style-item,
+body.px-v2 .narrator-hint,
+body.px-v2 .narrator-fact,
+body.px-v2 .narrator-area-select,
+body.px-v2 .engine-indicator,
+body.px-v2 .quick-view,
+body.px-v2 .history-item-title,
+body.px-v2 .history-mode-tag,
+body.px-v2 .profile-tab,
+body.px-v2 .profile-coins-label,
+body.px-v2 .profile-billing-label,
+body.px-v2 .footer-status,
+body.px-v2 .footer-credit,
+body.px-v2 .coin-tab,
+body.px-v2 .coin-history-header,
+body.px-v2 .coin-history-earn-title,
+body.px-v2 .shop-section-title,
+body.px-v2 .shop-item-buy,
+body.px-v2 .gedit-label,
+body.px-v2 .loading-text,
+body.px-v2 .toast {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	letter-spacing: 0;
+	text-transform: none;
+	opacity: 1;
+}
+body.px-v2 .mode-name { font-weight: 700; }
+body.px-v2 .filter-label { font-weight: 700; color: var(--on-surface); }
+body.px-v2 .narrator-fact { font-size: var(--px-fs-body); }
+body.px-v2 .welcome-title { font-family: var(--font-display); font-size: var(--px-fs-display-lg); line-height: 1.5; }
+body.px-v2 .welcome-text { font-size: var(--px-fs-body-lg); }
+body.px-v2 .welcome-hint,
+body.px-v2 .welcome-icon,
+body.px-v2 .platform-intro-more { opacity: 1; color: var(--on-surface-muted); }
+body.px-v2 .platform-intro {
+	border-radius: var(--px-radius);
+	border: var(--px-bw-thin) solid var(--line);
+	background: var(--surface-raised);
+}
+/* Welcome + loading cards sit on the mode surface (legacy was a white card; light text on it was unreadable). */
+body.px-v2 .welcome-screen,
+body.px-v2 .loading-screen {
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw) solid var(--line);
+	box-shadow: var(--px-shadow);
+}
+body.px-v2 .welcome-icon { opacity: 0.6; color: var(--mode-accent); }
+body.px-v2 .welcome-hint { color: var(--on-surface-muted); }
+body.px-v2 .welcome-screen .welcome-card,
+body.px-v2 .welcome-screen > .welcome-box { border-radius: var(--px-radius); }
+@media (max-width: 800px) {
+	body.px-v2 .mode-name { font-size: var(--px-fs-body-sm); }
+}
+
+/* Footer: taller line for readable text, one hard border. */
+body.px-v2 footer {
+	min-height: var(--footer-h);
+	background: var(--surface);
+	border-top: var(--px-bw) solid var(--line);
+	color: var(--on-surface);
+}
+body.px-v2 .footer-credit { opacity: 1; color: var(--on-surface-muted); }
+
+/* ─── Shared legacy controls → pixel buttons ──────────────────────── */
+body.px-v2 .btn-retro {
+	font-weight: 700;
+	color: var(--on-surface);
+	background-color: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow-sm);
+}
+body.px-v2 .btn-retro:hover { filter: none; transform: none; background-color: var(--surface-sunken); box-shadow: var(--px-shadow-sm); }
+body.px-v2 .btn-retro:active,
+body.px-v2 .btn-retro.active {
+	color: var(--on-accent);
+	background-color: var(--mode-accent-strong);
+	border-style: solid;
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
+body.px-v2.light-mode .btn-retro { border-color: var(--line); box-shadow: var(--px-shadow-sm); }
+body.px-v2 .btn-generate {
+	background: var(--px-success) !important;
+	color: #fff !important;
+	font-size: var(--px-fs-body) !important;
+}
+body.px-v2 .btn-generate:hover { background: #18692f !important; }
+body.px-v2 .btn-surprise {
+	background: var(--px-gold) !important;
+	color: var(--px-on-gold) !important;
+	font-size: var(--px-fs-body) !important;
+}
+body.px-v2 .form-select,
+body.px-v2 .form-textarea,
+body.px-v2 .narrator-area-select {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body);
+	min-height: var(--px-hit);
+	color: var(--on-surface);
+	background-color: var(--surface-sunken);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+}
+body.px-v2 .form-select option { color: #111; background: #fff; }
+
+/* ─── Left panel ──────────────────────────────────────────────────── */
+body.px-v2 .panel-section {
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow);
+}
+body.px-v2.light-mode .panel-section { box-shadow: var(--px-shadow); }
+body.px-v2 .btn-mode {
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow-sm);
+}
+body.px-v2 .btn-mode.active {
+	color: var(--on-accent);
+	background: var(--mode-accent-strong);
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
+
+/* "Rozšírené možnosti": the same square panel as every other section. */
+body.px-v2.generator-shell #advanced-options.px-panel {
+	margin: 0;
+	padding: var(--px-space-3);
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow);
+}
+body.px-v2.generator-shell #advanced-options > summary.panel-label {
+	display: flex;
+	align-items: center;
+	gap: var(--px-space-2);
+	min-height: var(--px-hit);
+	margin: 0;
+	padding-bottom: 0;
+	border-bottom: 0;
+	cursor: pointer;
+	list-style: none;
+	white-space: normal;
+}
+body.px-v2.generator-shell #advanced-options > summary::-webkit-details-marker { display: none; }
+body.px-v2.generator-shell #advanced-options > summary::after {
+	content: '+';
+	margin-left: auto;
+	display: inline-grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm);
+	color: var(--on-accent);
+	background: var(--mode-accent-strong);
+	border: var(--px-bw-thin) solid var(--line);
+}
+body.px-v2.generator-shell #advanced-options[open] > summary::after { content: '−'; }
+body.px-v2.generator-shell #advanced-options[open] > summary.panel-label {
+	margin-bottom: var(--px-space-3);
+	padding-bottom: var(--px-space-2);
+	border-bottom: var(--px-bw-thin) dashed var(--on-surface-muted);
+}
+body.px-v2 .advanced-options__group {
+	margin: 0;
+	padding: var(--px-space-3);
+	min-width: 0;
+	display: grid;
+	gap: var(--px-space-3);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	background: var(--surface-raised);
+}
+body.px-v2 .advanced-options__group-title {
+	display: flex;
+	align-items: center;
+	gap: var(--px-space-2);
+	padding: 0 var(--px-space-2);
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm);
+	line-height: 1.5;
+	text-transform: uppercase;
+	color: var(--on-surface);
+}
+body.px-v2 .rvp-classroom-badge { justify-self: start; }
+
+/* ─── Right panel: tool shell and inner cards share one style ─────── */
+body.px-v2.generator-shell aside.game-tools {
+	color: var(--on-surface);
+	background: var(--surface);
+	border-left: var(--px-bw) solid var(--line);
+}
+body.px-v2.generator-shell .game-tools-title { font-size: var(--px-fs-display-sm); }
+body.px-v2.generator-shell .game-tools-close {
+	width: var(--px-hit-touch);
+	min-width: var(--px-hit-touch);
+	height: var(--px-hit-touch);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	background: var(--surface-raised);
+}
+body.px-v2.generator-shell .game-tools-tab {
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow-sm);
+}
+body.px-v2.generator-shell .game-tools-tab[aria-selected="true"] {
+	color: var(--on-accent);
+	background: var(--mode-accent-strong);
+	border-color: var(--line);
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
+body.px-v2.generator-shell .game-tools-panel .panel-section,
+body.px-v2.generator-shell .game-tools-profile,
+body.px-v2 .rpg-sidebar-hud.px-card {
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: none;
+}
+body.px-v2.generator-shell .game-tools-profile .btn { font-size: var(--px-fs-body-sm); }
+body.px-v2 .rpg-hud-heading {
+	display: flex;
+	align-items: center;
+	gap: var(--px-space-2);
+	margin-bottom: var(--px-space-3);
+	font-size: var(--px-fs-body-sm);
+	font-weight: 700;
+	color: var(--on-surface-muted);
+}
+body.px-v2 .narrator-bot,
+body.px-v2 .narrator-fact,
+body.px-v2 .quick-view,
+body.px-v2 .stat-item {
+	border-radius: var(--px-radius);
+}
+
+/* ─── Game card ───────────────────────────────────────────────────── */
+body.px-v2 .game-card { border-radius: var(--px-radius); box-shadow: 8px 8px 0 var(--px-ink); }
+body.px-v2 .badge { border-radius: var(--px-radius); }
+body.px-v2 .session-notes-block textarea { border-radius: var(--px-radius) !important; font-size: var(--px-fs-body-sm) !important; }
+
+/* ─── Modals: one shell (header, square ✕ icon button, body, footer) ─ */
+body.px-v2 .modal-overlay,
+body.px-v2 .library-modal-overlay {
+	background: rgba(0, 0, 0, 0.7);
+	backdrop-filter: none;
+}
+body.px-v2 .modal-box,
+body.px-v2 .library-modal,
+body.px-v2 .coin-history-dropdown {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body);
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: 8px 8px 0 var(--px-ink);
+}
+body.px-v2 .modal-header,
+body.px-v2 .profile-modal-header,
+body.px-v2 .game-edit-header,
+body.px-v2 .library-modal-header,
+body.px-v2 .coin-history-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--px-space-3);
+	border-radius: 0;
+}
+body.px-v2 .library-modal-header { background: var(--surface-raised); border-bottom: var(--px-bw) solid var(--line); }
+body.px-v2 .library-modal-title,
+body.px-v2 .coin-history-title,
+body.px-v2 .modal-header h3 {
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm);
+	line-height: 1.5;
+	color: var(--on-surface);
+}
+body.px-v2 .modal-title { margin: 0 0 var(--px-space-3); }
+body.px-v2 .profile-modal-header .modal-title,
+body.px-v2 .game-edit-header .modal-title { margin: 0; font-size: var(--px-fs-display-sm); }
+body.px-v2 .px-modal__close,
+body.px-v2 .modal-close,
+body.px-v2 .profile-modal-close,
+body.px-v2 .library-modal-close,
+body.px-v2 .rpg-screen-close {
+	display: inline-grid;
+	place-items: center;
+	width: var(--px-hit);
+	height: var(--px-hit);
+	min-width: var(--px-hit);
+	padding: 0;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow-sm);
+	font-size: 0;
+	cursor: pointer;
+}
+body.px-v2 .px-modal__close:hover,
+body.px-v2 .modal-close:hover,
+body.px-v2 .rpg-screen-close:hover { color: var(--on-surface); background: var(--surface-sunken); border-color: var(--line); }
+body.px-v2 .profile-tab {
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	min-height: var(--px-hit);
+}
+body.px-v2 .profile-tab.active { color: var(--on-accent); background: var(--mode-accent-strong); }
+body.px-v2 .profile-avatar,
+body.px-v2 .profile-avatar img,
+body.px-v2 .rpg-avatar-display,
+body.px-v2 .rpg-avatar-display img {
+	border-radius: var(--px-radius) !important;
+	image-rendering: pixelated;
+}
+body.px-v2 .profile-login-cta {
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	background: var(--surface-raised);
+}
+body.px-v2 .profile-coins-section,
+body.px-v2 .profile-billing-section,
+body.px-v2 .profile-rpg-section,
+body.px-v2 .rpg-avatar-section {
+	border-radius: var(--px-radius);
+	border: var(--px-bw-thin) solid var(--line);
+	background: var(--surface-raised);
+	color: var(--on-surface);
+}
+body.px-v2 .help-key {
+	font-family: var(--font-data);
+	font-size: var(--px-fs-body-sm);
+	border-radius: var(--px-radius);
+}
+body.px-v2 .coin-history-dropdown { padding: var(--px-space-3); }
+body.px-v2 .coin-tab {
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	background: var(--surface-raised);
+	color: var(--on-surface);
+	min-height: var(--px-hit);
+}
+body.px-v2 .coin-tab.active { color: var(--on-accent); background: var(--mode-accent-strong); }
+body.px-v2 .lib-search,
+body.px-v2 .lib-filter-select {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body);
+	min-height: var(--px-hit);
+	color: var(--on-surface);
+	background: var(--surface-sunken);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+}
+body.px-v2 .library-item,
+body.px-v2 .library-action-btn {
+	border-radius: var(--px-radius);
+}
+
+/* ─── RPG overlay: same tokens as the app, follows mode and theme ─── */
+body.px-v2 #rpg-screen {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body);
+	color: var(--on-surface);
+	background: var(--page-bg);
+}
+body.px-v2 #rpg-screen::before,
+body.px-v2 #rpg-screen::after,
+body.px-v2 #rpg-screen .rpg-screen-main::before { display: none; }
+body.px-v2 #rpg-screen .rpg-screen-header {
+	height: var(--header-h);
+	padding: 0 var(--px-space-4);
+	background: var(--surface);
+	border-bottom: var(--px-bw) solid var(--line);
+	box-shadow: none;
+	display: flex;
+	align-items: center;
+}
+body.px-v2 #rpg-screen .rpg-screen-logo {
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm);
+	color: var(--on-surface);
+	text-shadow: none;
+}
+body.px-v2 #rpg-screen .rpg-screen-flavor,
+body.px-v2 #rpg-screen .rpg-sidebar-flavor { color: var(--on-surface-muted); font-size: var(--px-fs-body-sm); }
+body.px-v2 #rpg-screen .rpg-screen-sidebar {
+	color: var(--on-surface);
+	background: var(--surface);
+	border-right: var(--px-bw) solid var(--line);
+	box-shadow: none;
+}
+body.px-v2 #rpg-screen .rpg-sidebar-avatar-wrap {
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	background: var(--surface-sunken);
+	box-shadow: var(--px-shadow-sm);
+}
+body.px-v2 #rpg-screen .rpg-sidebar-class-label {
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm);
+	color: var(--on-surface);
+	text-shadow: none;
+}
+body.px-v2 #rpg-screen .rpg-sidebar-coins,
+body.px-v2 #rpg-screen .rpg-sidebar-level,
+body.px-v2 #rpg-screen .rpg-sidebar-school,
+body.px-v2 #rpg-screen .rpg-sidebar-no-school,
+body.px-v2 #rpg-screen .rpg-avatar-role-badge {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	border-radius: var(--px-radius);
+}
+body.px-v2 #rpg-screen .rpg-sidebar-coins { color: var(--px-on-gold); background: var(--px-gold); border: var(--px-bw-thin) solid var(--line); }
+body.px-v2 #rpg-screen .rpg-sidebar-coins:empty { display: none; }
+body.px-v2 #rpg-screen .rpg-nav-btn {
+	min-height: var(--px-hit);
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	font-weight: 700;
+	color: var(--on-surface);
+	background: var(--surface-raised);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow-sm);
+}
+body.px-v2 #rpg-screen .rpg-nav-btn.active {
+	color: var(--on-accent);
+	background: var(--mode-accent-strong);
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
+body.px-v2 #rpg-screen .rpg-nav-btn[disabled] { opacity: 1; color: var(--on-surface-muted); background: var(--surface-sunken); box-shadow: none; }
+body.px-v2 #rpg-screen .rpg-nav-btn-soon { font-size: var(--px-fs-body-sm); border-radius: var(--px-radius); }
+body.px-v2 #rpg-screen .rpg-screen-main { background: transparent; }
+body.px-v2 #rpg-screen .rpg-stats-section,
+body.px-v2 #rpg-screen .rpg-perk-card,
+body.px-v2 #rpg-screen .rpg-talent-node,
+body.px-v2 #rpg-screen .rpg-talent-branch,
+body.px-v2 #rpg-screen .talent-empty,
+body.px-v2 #rpg-screen .rpg-coming-soon {
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: var(--px-shadow-sm);
+}
+body.px-v2 #rpg-screen .rpg-stats-heading,
+body.px-v2 #rpg-screen .rpg-talent-branch-label,
+body.px-v2 #rpg-screen .talent-empty-title {
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm);
+	color: var(--on-surface);
+	text-shadow: none;
+}
+body.px-v2 #rpg-screen .rpg-talent-name,
+body.px-v2 #rpg-screen .rpg-talent-desc,
+body.px-v2 #rpg-screen .rpg-talent-comp,
+body.px-v2 #rpg-screen .rpg-talent-cost,
+body.px-v2 #rpg-screen .rpg-talent-hint,
+body.px-v2 #rpg-screen .rpg-perk-title,
+body.px-v2 #rpg-screen .rpg-perk-desc,
+body.px-v2 #rpg-screen .rpg-perk-level,
+body.px-v2 #rpg-screen .rpg-perk-badge,
+body.px-v2 #rpg-screen .rpg-perk-note,
+body.px-v2 #rpg-screen .rpg-perks-intro,
+body.px-v2 #rpg-screen .rpg-stat-label,
+body.px-v2 #rpg-screen .rpg-stat-value,
+body.px-v2 #rpg-screen .rpg-level-badge,
+body.px-v2 #rpg-screen .rpg-level-xp,
+body.px-v2 #rpg-screen .rpg-xp-hint,
+body.px-v2 #rpg-screen .rpg-attr-map-row,
+body.px-v2 #rpg-screen .rpg-attr-map-src,
+body.px-v2 #rpg-screen .talent-empty-hint,
+body.px-v2 #rpg-screen .rpg-coming-soon small {
+	font-family: var(--font-body);
+	font-size: var(--px-fs-body-sm);
+	letter-spacing: 0;
+}
+body.px-v2 #rpg-screen .rpg-talent-desc,
+body.px-v2 #rpg-screen .rpg-perk-desc,
+body.px-v2 #rpg-screen .rpg-attr-map-src,
+body.px-v2 #rpg-screen .rpg-xp-hint { color: var(--on-surface-muted); }
+body.px-v2 #rpg-screen .rpg-xp-bar-wrap,
+body.px-v2 #rpg-screen .rpg-stat-bar-wrap {
+	border: var(--px-bw-thin) solid var(--line);
+	border-radius: var(--px-radius);
+	background: var(--surface-sunken);
+}
+body.px-v2 #rpg-screen .rpg-xp-bar,
+body.px-v2 #rpg-screen .rpg-stat-bar { border-radius: 0; }
+body.px-v2 #rpg-screen .rpg-xp-bar { background: var(--mode-accent); }
+body.px-v2 .rpg-talent-confirm-box,
+body.px-v2 .rpg-picker-box {
+	color: var(--on-surface);
+	background: var(--surface);
+	border: var(--px-bw) solid var(--line);
+	border-radius: var(--px-radius);
+	box-shadow: 8px 8px 0 var(--px-ink);
+}
+body.px-v2 .rpg-avatar-option { border-radius: var(--px-radius); }
+body.px-v2 .rpg-avatar-label,
+body.px-v2 .rpg-avatar-price,
+body.px-v2 .rpg-picker-hint,
+body.px-v2 .rpg-picker-cost-line,
+body.px-v2 .rpg-picker-free-note,
+body.px-v2 .rpg-avatar-school,
+body.px-v2 .rpg-avatar-change-btn { font-family: var(--font-body); font-size: var(--px-fs-body-sm); }
+
+/* Narrow phones: the tools button keeps its label for screen readers but shows only the icon, so the logo fits. */
+@media (max-width: 480px) {
+	body.px-v2 .btn-game-tools { min-width: var(--px-hit); padding: 0 var(--px-space-2); }
+	body.px-v2 .btn-game-tools > span {
+		position: absolute; width: 1px; height: 1px; overflow: hidden;
+		clip: rect(0 0 0 0); white-space: nowrap;
+	}
+}

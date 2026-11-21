@@ -1,0 +1,177 @@
+/* ═══════════════════════════════════════════════════════════════════
+   gIVEMEGAME.IO — Pixel design system: TOKENS (Phase 2)
+
+   One token set for colour, corners, shadows and fonts. Mode-aware
+   (body.mode-*) and theme-aware (body.light-mode / [data-theme=light]).
+   Scoped to body.px-v2 so pages that have not migrated keep their look.
+
+   Contrast: every on-* text and surface pair below is checked by
+   scripts/check-contrast.js (>= 4.5:1 for text, >= 3:1 for UI accents).
+   Docs: docs/design-system.md
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+	/* Fonts — Press Start 2P only for display text (min 12px). */
+	--font-display: "Press Start 2P", monospace;
+	--font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+	--font-data: "IBM Plex Mono", ui-monospace, monospace;
+	--font-pixel: "Press Start 2P", monospace;
+
+	/* Type scale (rem = 16px). Display text never below 12px, body never below 14px. */
+	--px-fs-display-sm: 0.75rem;   /* 12px — Press Start minimum */
+	--px-fs-display: 0.875rem;     /* 14px */
+	--px-fs-display-lg: 1rem;      /* 16px */
+	--px-fs-body-sm: 0.875rem;     /* 14px — body minimum */
+	--px-fs-body: 1rem;            /* 16px */
+	--px-fs-body-lg: 1.125rem;     /* 18px */
+
+	/* Shape — one corner style, one shadow style, one border width. */
+	--px-radius: 0px;
+	--px-bw: 3px;
+	--px-bw-thin: 2px;
+	--px-shadow: 4px 4px 0 #000;
+	--px-shadow-sm: 2px 2px 0 #000;
+	--px-shadow-pressed: inset 2px 2px 0 rgba(0, 0, 0, 0.35);
+	--px-ink: #000;
+
+	/* Spacing (4px grid). */
+	--px-space-1: 4px;
+	--px-space-2: 8px;
+	--px-space-3: 12px;
+	--px-space-4: 16px;
+	--px-space-5: 24px;
+
+	/* Hit areas. */
+	--px-hit: 40px;
+	--px-hit-touch: 44px;
+
+	/* Focus ring (yellow on any surface, 3px). */
+	--px-focus: #ffe66d;
+
+	/* Status colours (used on dark surfaces with white or dark text, see docs). */
+	--px-success: #1f7a3a;
+	--px-danger: #b3261e;
+	--px-warning: #ffd93d;
+	--px-on-warning: #1a1300;
+	--px-gold: #ffd93d;
+	--px-on-gold: #1a1300;
+
+	/* Default (= Party, dark). */
+	--mode-accent: #ff6b6b;
+	--mode-accent-strong: #b3262e;
+	--on-accent: #ffffff;
+	--mode-accent2: #ffd93d;
+	--page-bg: #352879;
+	--surface: #184d53;
+	--surface-raised: #1f5f66;
+	--surface-sunken: #123a3f;
+	--on-surface: #ffffff;
+	--on-surface-muted: #d6f1f3;
+	--line: #000000;
+}
+
+/* ─── Per-mode tokens (dark = default) ───────────────────────────── */
+body.px-v2.mode-party {
+	--mode-accent: #ff6b6b;
+	--mode-accent-strong: #b3262e;
+	--mode-accent2: #ffd93d;
+	--page-bg: #352879;
+	--surface: #184d53;
+	--surface-raised: #1f5f66;
+	--surface-sunken: #123a3f;
+	--on-surface-muted: #d6f1f3;
+}
+body.px-v2.mode-classroom {
+	--mode-accent: #5aa0ff;
+	--mode-accent-strong: #1d5fd1;
+	--mode-accent2: #06d6a0;
+	--page-bg: #1a2744;
+	--surface: #22487a;
+	--surface-raised: #2b5a96;
+	--surface-sunken: #193760;
+	--on-surface-muted: #d7e6ff;
+}
+body.px-v2.mode-reflection {
+	--mode-accent: #c084fc;
+	--mode-accent-strong: #7e22ce;
+	--mode-accent2: #f472b6;
+	--page-bg: #2d1b4e;
+	--surface: #4b2f7a;
+	--surface-raised: #5c3b94;
+	--surface-sunken: #3a2360;
+	--on-surface-muted: #eadcff;
+}
+body.px-v2.mode-circus {
+	--mode-accent: #fbbf24;
+	--mode-accent-strong: #b91c1c;
+	--mode-accent2: #f59e0b;
+	--page-bg: #4a1515;
+	--surface: #8a3a1c;
+	--surface-raised: #9c4421;
+	--surface-sunken: #6e2d15;
+	--on-surface-muted: #ffe3d6;
+}
+body.px-v2.mode-cooking {
+	--mode-accent: #fb923c;
+	--mode-accent-strong: #a8480b;
+	--mode-accent2: #eab308;
+	--page-bg: #3a1a00;
+	--surface: #7a3d0c;
+	--surface-raised: #8a4510;
+	--surface-sunken: #5f2f08;
+	--on-surface-muted: #ffe6cc;
+}
+body.px-v2.mode-meditation {
+	--mode-accent: #a5b4fc;
+	--mode-accent-strong: #4338ca;
+	--mode-accent2: #8b5cf6;
+	--page-bg: #1e1b4b;
+	--surface: #3730a3;
+	--surface-raised: #4338ca;
+	--surface-sunken: #2a2580;
+	--on-surface-muted: #e0e4ff;
+}
+
+/* ─── Light theme ────────────────────────────────────────────────── */
+body.px-v2.light-mode,
+html[data-theme="light"] body.px-v2 {
+	--page-bg: #ece8f4;
+	--surface: #ffffff;
+	--surface-raised: #f4f1fa;
+	--surface-sunken: #e4dff0;
+	--on-surface: #16131f;
+	--on-surface-muted: #4a4458;
+	--line: #16131f;
+	--px-ink: #16131f;
+	--px-shadow: 4px 4px 0 #16131f;
+	--px-shadow-sm: 2px 2px 0 #16131f;
+}
+body.px-v2.light-mode.mode-party { --mode-accent: #b3262e; --page-bg: #fff0f0; --surface-raised: #fff5f5; }
+body.px-v2.light-mode.mode-classroom { --mode-accent: #1d5fd1; --page-bg: #edf4ff; --surface-raised: #f0f6ff; }
+body.px-v2.light-mode.mode-reflection { --mode-accent: #7e22ce; --page-bg: #f5f0ff; --surface-raised: #f8f4ff; }
+body.px-v2.light-mode.mode-circus { --mode-accent: #b91c1c; --page-bg: #fff5f0; --surface-raised: #fff8f4; }
+body.px-v2.light-mode.mode-cooking { --mode-accent: #a8480b; --page-bg: #fff7ed; --surface-raised: #fff4e6; }
+body.px-v2.light-mode.mode-meditation { --mode-accent: #4338ca; --page-bg: #eef2ff; --surface-raised: #f2f4ff; }
+
+/* ─── Bridge: legacy token names follow the new tokens ───────────────
+   style.css (--panel, --text …) and ui/tokens.css (--shell-*) still
+   drive most rules. Mapping them here fixes contrast (white on #6abfc6
+   was 2.1:1) and makes the right panel/menus follow mode + theme. */
+:root body.px-v2 {
+	--bg: var(--page-bg);
+	--panel: var(--surface);
+	--text: var(--on-surface);
+	--text-dim: var(--on-surface-muted);
+	--border: var(--line);
+	--btn-face: var(--surface-raised);
+	--btn-active: var(--surface-raised);
+	--mode-color: var(--mode-accent-strong);
+	--accent: var(--mode-accent-strong);
+	--shell-bg: var(--page-bg);
+	--shell-surface: var(--surface);
+	--shell-raised: var(--surface-raised);
+	--shell-text: var(--on-surface);
+	--shell-muted: var(--on-surface-muted);
+	--shell-focus: var(--px-focus);
+	--shell-radius: var(--px-radius);
+}

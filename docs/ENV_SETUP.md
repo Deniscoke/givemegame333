@@ -25,6 +25,11 @@ Všetky reálne tajomstvá patria mimo repozitára. Šablóna
    mapovanie pre contact-led provisioning, nie self-service Checkout.
 4. Po zmene environment variables spusti redeploy a over bezpečný Checkout aj
    podpis webhooku.
+5. Nastav `CRON_SECRET` (dlhý náhodný reťazec). Vercel ním raz denne volá
+   `/api/cron/session-sweep` (pozri `crons` vo `vercel.json`), ktorý ukončí
+   opustené sessions a vráti hráčom mince. Bez tejto premennej je endpoint
+   zatvorený; sessions sa potom upratujú len pri bežných požiadavkách na
+   `/api/sessions` (najviac raz za minútu na inštanciu).
 
 ## Databázové migrácie (staging ako prvý)
 
@@ -61,11 +66,11 @@ projektovo špecifická owner-operated zmena DB; dokumentácia zámerne neposkyt
 univerzálny SQL alebo executable shortcut.
 
 Pre existujúcu databázu overenú presne na legacy schéme migrácie `016` je
-k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `038`, pričom
+k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `040`, pričom
 `026` zachová staré `billing_events` riadky a doplní novú schému:
 
 ```powershell
-npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-038
+npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-040
 ```
 
 `023_rpg_talents.sql` dopĺňa tabuľku talentov, ktorá bola v produkcii vytvorená
@@ -105,6 +110,39 @@ zostatok ručne a zapíš riadok `balance_reconcile` s pôvodnou hodnotou v `met
 používateľom oznám, že zostatok coinov sa odteraz počíta na serveri a coiny
 nazbierané len v prehliadači (alebo ako hosť) sa môžu líšiť od zobrazeného
 čísla.
+
+### Overiteľná hra a reflexia (039, Fáza 5) — prepínač a prechodné obdobie
+
+`039_play_tickets_and_stat_xp.sql` pridáva tabuľky `play_tickets`, `reflections`
+a `user_stat_xp`. Zapisuje do nich len server; prehliadač nemá žiadne granty.
+
+- `PLAY_TICKETS_ENABLED` — predvolene **zapnuté**. Hodnota `0`, `false`, `off`
+  alebo `no` funkciu vypne: `/api/play/*` vráti 404 `PLAY_TICKETS_DISABLED`,
+  generovanie nevydáva lístky a `/api/profile/complete-solo` beží len po starom
+  (podľa `game_json` z prehliadača, s obmedzením násobiča XP z H3).
+- Keď je zapnuté, prihlásený používateľ dostane pri generovaní lístok hry
+  (`_play_ticket`), tlačidlo READY ho spustí (`POST /api/play/start`; hra
+  z knižnice dostane nový lístok) a `complete-solo` prijme `ticket_id`. Dĺžku,
+  režim a kompetencie berie server zo svojho lístka; lístok platí raz.
+  XP: 30–120 za účasť podľa overených minút, +25 % za reflexiu, ktorá prešla
+  kontrolou (`POST /api/play/:ticket/reflect`: všetky hodnotenia, odpovede aspoň
+  20 znakov, nie opakovanie posledných 5 reflexií).
+  Hra z knižnice je obsah z prehliadača: dĺžku, režim a kompetencie prevezme
+  len vtedy, keď sa jej obsah (bez kľúčov začínajúcich `_`) zhoduje s hrou,
+  ktorú server sám vygeneroval. Inak dostane lístok 5–45 min bez režimu a
+  kompetencií (bez stat XP). Hra bez kópie na serveri (lokálna záložná hra,
+  hra vytvorená bez prihlásenia) sa spustí cez `{ local: true }` a dostane
+  lístok 5–15 min bez bonusov; ráta sa do denného limitu lístkov z knižnice.
+- `PLAY_TICKETS_LEGACY_UNTIL` — koniec dvojtýždňového prechodného obdobia pre
+  starších klientov, ktorí ešte neposielajú `ticket_id`. Predvolene
+  `2026-12-05T00:00:00Z`. Dovtedy `complete-solo` bez lístka beží po starom
+  a odpoveď nesie hlavičky `Deprecation: true` a `Sunset`. Potom vráti 400
+  `TICKET_REQUIRED`. Po uplynutí obdobia (a keď v logoch nie sú volania bez
+  lístka) sa dá stará cesta `completeSoloLegacy` v `server.js` odstrániť.
+
+Poradie nasadenia: najprv migrácia `039`, potom server. Ak migrácia ešte nie je
+aplikovaná, nastav `PLAY_TICKETS_ENABLED=false`, inak vydanie lístka pri
+generovaní iba zaloguje chybu a dokončenie bez lístka pôjde starou cestou.
 
 ## Kontrola pred deployom
 

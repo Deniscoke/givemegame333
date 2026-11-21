@@ -19,7 +19,8 @@ const RpgAvatar = (() => {
 
   // ─── State ──────────────────────────────────────────────────────
   let _data = null;       // cached GET /api/rpg/avatar response
-  let _loading = false;
+  let _inflight = null;     // shared promise while GET /api/rpg/avatar runs
+  let _lastResult = null;   // { kind, status } of the last load
   let _listeners = [];    // future: onSelect callbacks
 
   const DEFAULT_SWITCH_COST = 5000;
@@ -44,25 +45,31 @@ const RpgAvatar = (() => {
   }
 
   // ─── Load ───────────────────────────────────────────────────────
-  async function load() {
-    if (_loading) return _data;
-    _loading = true;
-    try {
-      const token = await _token();
-      if (!token) { _data = null; return null; }
-      const res = await _fetch('/api/rpg/avatar', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) { _data = null; return null; }
-      _data = await res.json();
-      return _data;
-    } catch {
-      _data = null;
-      return null;
-    } finally {
-      _loading = false;
-    }
+  /**
+   * @returns {Promise<{ kind: 'ok'|'login'|'offline'|'error', status: number, data: object|null }>}
+   *   parallel callers share one request
+   */
+  function loadResult() {
+    if (_inflight) return _inflight;
+    _inflight = (async () => {
+      const result = window.RpgNet
+        ? await window.RpgNet.request('/api/rpg/avatar')
+        : { kind: 'offline', status: 0, data: null };
+      _lastResult = { kind: result.kind, status: result.status };
+      _data = result.kind === 'ok' ? result.data : null;
+      return { ...result, data: _data };
+    })().finally(() => { _inflight = null; });
+    return _inflight;
   }
+
+  /** Backwards-compatible: resolves with the data or null. */
+  async function load() {
+    const result = await loadResult();
+    return result.data;
+  }
+
+  /** @returns {{ kind: string, status: number } | null} */
+  function getLastResult() { return _lastResult; }
 
   // ─── Select ─────────────────────────────────────────────────────
   /** @returns {Promise<{ ok: boolean, cost_paid?: number, coins_remaining?: number }>} */
@@ -127,27 +134,29 @@ const RpgAvatar = (() => {
     container.style.display = 'block';
 
     if (!_data || !_data.eligible) {
-      // Nie si prihlásený / sieť zlyhala — ticho nič nerobíme, aby nebol spam CTA.
+      // Say why: offline (retry) or login (401 / no session). Never "not a member" here.
+      const kind = _lastResult && _lastResult.kind !== 'ok' ? _lastResult.kind : 'loading';
       container.innerHTML = `
         <div class="rpg-avatar-section rpg-avatar-empty">
           <div class="rpg-avatar-display rpg-avatar-placeholder">
-            <span class="rpg-avatar-placeholder-icon">\u2694\ufe0f</span>
+            <svg class="px-icon rpg-avatar-placeholder-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-user"></use></svg>
           </div>
-          <div class="rpg-avatar-content-col">
-            <div class="rpg-avatar-info">
-              <span style="font-family:'Press Start 2P',cursive;font-size:9px;display:block;margin-bottom:4px">RPG Avatar</span>
-              <span style="font-size:11px;opacity:0.65">Prihl\u00e1s sa a vyber si svojho hrdinu.</span>
-            </div>
-          </div>
+          <div class="rpg-avatar-content-col" data-rpg-avatar-state></div>
         </div>`;
+      if (window.RpgNet) {
+        RpgNet.renderState(container.querySelector('[data-rpg-avatar-state]'), kind, {
+          onRetry: () => { loadResult().then(() => renderProfileAvatar(containerId)); },
+          onLogin: () => { window.App?.Profile?.open?.(); },
+        });
+      }
       return;
     }
 
     const currentId = _data.current_avatar_id;
-    const schoolName = _data.school_name || '';
-    const role = _data.role || '';
-    const roleLabels = { admin: 'Admin', teacher: 'Učiteľ', student: 'Žiak' };
-    const roleBadge = roleLabels[role] || role;
+    const isMember = _data.is_school_member === true;
+    const schoolName = isMember ? (_data.membership?.school_name || _data.school_name || '') : '';
+    const role = isMember ? (_data.membership?.role || _data.role || 'player') : 'player';
+    const roleBadge = window.RpgNet ? RpgNet.roleLabel(role) : role;
 
     if (currentId) {
       container.innerHTML = `
@@ -201,7 +210,6 @@ const RpgAvatar = (() => {
     } else {
       modal.classList.add('rpg-avatar-picker-overlay');
     }
-    modal.style.display = 'flex';
 
     const avatars = _data.available || [];
     const currentId = _data.current_avatar_id;
@@ -238,11 +246,13 @@ const RpgAvatar = (() => {
       </div>`;
 
     modal.querySelectorAll('[data-action="close-picker"]').forEach(btn => {
-      btn.addEventListener('click', () => { modal.style.display = 'none'; });
+      btn.addEventListener('click', () => _closePicker(modal));
     });
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
-    });
+    // Assigned (not added) so reopening the picker does not stack listeners.
+    // With PxModal the backdrop click is handled there; this is the fallback.
+    modal.onclick = (e) => {
+      if (e.target === modal) _closePicker(modal);
+    };
 
     modal.querySelectorAll('.rpg-avatar-option').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -265,15 +275,43 @@ const RpgAvatar = (() => {
       });
     });
 
+    _openPickerOverlay(modal);
+
     modal.querySelector('[data-action="deselect-avatar"]')?.addEventListener('click', async () => {
       const result = await select(null);
       if (result.ok) {
         renderProfileAvatar('rpg-avatar-container');
         _updateProfileHeaderAvatar(null);
-        modal.style.display = 'none';
+        _closePicker(modal);
         if (window.GameUI?.toast) GameUI.toast('Avatar zruseny');
       }
     });
+  }
+
+  /**
+   * Show the picker through PxModal so it sits on top of the modal stack:
+   * Tab stays inside the picker (not the RPG screen behind it), Escape
+   * closes the picker first and focus goes back to the button that opened it.
+   * Opened after the content is rendered so focus lands on a real control.
+   */
+  function _openPickerOverlay(modal) {
+    if (window.PxModal) {
+      // Reopening while open: keep the original opener for focus restore.
+      const prev = window.PxModal.isOpen(modal)
+        ? window.PxModal._stack.find((s) => s.el === modal)?.returnFocus
+        : null;
+      window.PxModal.open(modal, prev ? { display: 'flex', returnFocus: prev } : { display: 'flex' });
+    } else {
+      modal.style.display = 'flex';
+    }
+  }
+
+  function _closePicker(modal) {
+    if (window.PxModal?.isOpen(modal)) {
+      window.PxModal.close(modal);
+      return;
+    }
+    modal.style.display = 'none';
   }
 
   function _updateProfileHeaderAvatar(avatarId) {
@@ -302,6 +340,8 @@ const RpgAvatar = (() => {
 
   return {
     load,
+    loadResult,
+    getLastResult,
     select,
     isEligible,
     getCurrentId,

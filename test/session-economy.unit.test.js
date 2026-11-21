@@ -43,10 +43,11 @@ describe('buildCompletionValidation (C1)', () => {
 		assert.equal(v.participants_rewarded, 3);
 	});
 
-	it('server.js /complete only references variables that exist in its scope', () => {
-		const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-		const start = src.indexOf("app.post('/api/sessions/:code/complete'");
-		const end = src.indexOf("app.get('/api/sessions/:code/my-reward'");
+	it('the /complete route only references variables that exist in its scope', () => {
+		// Phase 6 moved the session routes from server.js to lib/routes/sessions.js.
+		const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'routes', 'sessions.js'), 'utf8');
+		const start = src.indexOf("router.post('/:code/complete'");
+		const end = src.indexOf("router.get('/:code/my-reward'");
 		assert.ok(start > 0 && end > start);
 		// Line comments may mention the old names; only code counts.
 		const route = src.slice(start, end).replace(/\/\/[^\n]*/g, '');
