@@ -302,7 +302,7 @@ test('generator mobile header leaves the preferences popover outside its clippin
 test('generator exposes one named, accessible tools surface without removing profile or RPG entry points', () => {
   const generator = read('public/index.html');
 
-  assert.match(generator, /id="btn-game-tools"[^>]*aria-controls="game-tools-panel"[^>]*>[^<]*<i[^>]*><\/i>\s*<span>Nástroje<\/span>/i);
+  assert.match(generator, /id="btn-game-tools"[^>]*aria-controls="game-tools-panel"[^>]*>[^<]*<i[^>]*><\/i>\s*<span(?: data-i18n="tools_button")?>Nástroje<\/span>/i);
   assert.match(generator, /<aside\b[^>]*id="game-tools-panel"[^>]*class="[^"]*right-panel[^"]*game-tools[^"]*"[^>]*aria-label="Herné nástroje"/i);
   assert.match(generator, /class="game-tools-title"[^>]*>Herné nástroje</i);
   assert.match(generator, /role="tablist"[^>]*aria-label="Herné nástroje"/i);

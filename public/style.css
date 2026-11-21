@@ -2020,6 +2020,7 @@ body.light-mode .rvp-badge {
 	padding: 2px 0;
 }
 .coin-earn-item span { color: #4ade80; font-size: 13px; }
+.coin-earn-item .coin-earn-label { color: inherit; }
 
 /* ─── Coin Panel Tabs ─── */
 .coin-tabs {
