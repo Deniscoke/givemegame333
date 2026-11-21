@@ -61,11 +61,11 @@ projektovo špecifická owner-operated zmena DB; dokumentácia zámerne neposkyt
 univerzálny SQL alebo executable shortcut.
 
 Pre existujúcu databázu overenú presne na legacy schéme migrácie `016` je
-k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `036`, pričom
+k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `038`, pričom
 `026` zachová staré `billing_events` riadky a doplní novú schému:
 
 ```powershell
-npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-036
+npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-038
 ```
 
 `023_rpg_talents.sql` dopĺňa tabuľku talentov, ktorá bola v produkcii vytvorená
@@ -91,6 +91,23 @@ zabezpečuje assessment tabuľky a nesmie sa meniť po vydaní; additive
 `032_assessment_scope_evidence.sql` pridáva nemenný, databázou potvrdený dôkaz
 scope assessment pokusu pre bezpečný reporting. Žiadna migrácia `029` pre
 institutions neexistuje.
+
+### Coiny: server je jediný zdroj zostatku (036–038) — poznámka k vydaniu
+
+Od `036` prehliadač nezapisuje `profiles.coins` a zostatok prihláseného
+používateľa sa číta len zo servera; hodnota v `localStorage` sa ignoruje.
+`037` zakazuje prehliadaču vkladať gIVEME dary (darca platí cez
+`POST /api/giveme/donate`). `038` jednorazovo dorovná zostatky, ktoré pred
+`036` existovali len v prehliadači (napr. databázy s `030` bez `033`, kde
+zápis coinov zlyhával): zostatok sa zvýši na súčet z `coin_transactions`
+(mínus odoslané a plus prijaté dary), nikdy nie nad 25 000 a nikdy sa nezníži.
+Každé dorovnanie zapíše riadok `balance_reconcile` s pôvodnou hodnotou
+v `metadata`. Pred produkčným nasadením porovnaj na staging kópii
+`profiles.coins` so `SUM(coin_transactions.amount)` na používateľa a skontroluj
+počet dorovnaní v `public.economy_migration_markers`. V poznámkach k vydaniu
+používateľom oznám, že zostatok coinov sa odteraz počíta na serveri a coiny
+nazbierané len v prehliadači (alebo ako hosť) sa môžu líšiť od zobrazeného
+čísla.
 
 ## Kontrola pred deployom
 
