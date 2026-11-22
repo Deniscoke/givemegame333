@@ -1,18 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════
    gIVEMEGAME.IO — roaming pets (Phase 9). Behaviour: public/js/pets.js
 
-   Layers: pets live in a fixed overlay at z-index 3. On desktop the side
-   panels are lifted to z-index 5, so a pet that walks to the edge of the
+   Layers: pets live in a fixed overlay at z-index 3. Wherever a side
+   panel is inline (left from 601px, right from 1101px) it is lifted to z-index 5, so a pet that walks to the edge of the
    game area slides half behind a panel ("peek"). The SMARTA dock is at 900.
-   Under 1100px the panels are drawers (z-index 1001) and need no change.
+   Below those widths a panel is a drawer (z-index 1001) and needs no change.
    The overlay never takes clicks; only the pets and the bubble do.
    Motion: movement is a CSS transform transition driven by a 200 ms
    timer (pets.js); sprite frames are swapped by JS, there is no CSS
    animation, and nothing moves under reduced motion.
    Sizes: bubble text >= 14px.
    ═══════════════════════════════════════════════════════════════════ */
+/* The left filter panel is inline from 601px, the right panel from 1101px. */
+@media (min-width: 601px) {
+	aside.left-panel {
+		position: relative;
+		z-index: 5;
+	}
+}
 @media (min-width: 1101px) {
-	aside.left-panel,
 	aside.right-panel {
 		position: relative;
 		z-index: 5;
@@ -96,6 +102,9 @@
 .px-pets__btn:hover { background: var(--btn-active, #fff); }
 .px-pets__btn:focus-visible,
 .px-pets__select:focus-visible { outline: 3px solid var(--focus, #ffd93d); outline-offset: 1px; }
+/* Always-available settings in the right panel (outside the pets overlay). */
+.px-pets__panel { margin-top: 12px; padding-top: 10px; border-top: 2px solid var(--border, #000); font-size: 14px; color: var(--text, inherit); }
+.px-pets__panel .px-pets__title { margin: 0 0 6px; font-weight: 700; }
 .px-pets__form { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .px-pets__opt { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .px-pets__select { font: inherit; padding: 4px; }

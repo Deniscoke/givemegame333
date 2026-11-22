@@ -31,6 +31,7 @@
 	const INACTIVITY_MS = 90 * 1000;
 	const AUTO_TIP_MS = 4 * 60 * 1000;
 	const BUBBLE_MS = 9000;
+	const BUBBLE_W = 240;
 	const MAX_VISIBLE = 3;
 	const MAX_LEVEL = 10;
 	const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -340,8 +341,13 @@
 		hideBubble();
 		bubble = el('div', { class: 'px-pets__bubble', role: 'status' });
 		const rect = p.el.getBoundingClientRect();
-		const vw = root.innerWidth || 1024;
-		bubble.style.left = `${Math.max(8, Math.min(vw - 260, rect.left - 100))}px`;
+		const e = panelEdges();
+		const room = Math.max(120, e.max - e.min - 16);
+		const w = Math.min(BUBBLE_W, room);
+		bubble.style.width = `${w}px`;
+		// between the side panels (they sit above the overlay), never under one
+		const left = Math.min(e.max - w - 8, Math.max(e.min + 8, rect.left - 100));
+		bubble.style.left = `${Math.max(0, left)}px`;
 		overlay.appendChild(bubble);
 		if (!keepOpen) bubbleTimer = root.setTimeout(hideBubble, BUBBLE_MS);
 		return bubble;
@@ -403,6 +409,8 @@
 		} catch (e) { return false; }
 	}
 
+	// The answers are public in pet-tips.*.json; the server-side daily cap (PET_REWARD.dailyLimit)
+	// is the real protection against farming, not secrecy.
 	async function answer(p, c, i) {
 		if (i !== c.correct) { showTip(p, t('pet_challenge_wrong')); return; }
 		if (!signedIn() || !root.RpgNet) { showTip(p, t(signedIn() ? 'pet_challenge_offline' : 'pet_challenge_login')); return; }
@@ -420,39 +428,60 @@
 		showTip(p, msg);
 	}
 
-	function showSettings(p) {
-		const b = openBubble(p, true);
-		b.appendChild(el('p', { class: 'px-pets__text px-pets__title' }, t('pet_settings_title')));
+	/** Settings form shared by the bubble and the always-available panel section. */
+	function buildSettingsForm(prefix, afterChange) {
 		const form = el('div', { class: 'px-pets__form' });
+		const apply = () => { save(); buildPets(); if (afterChange) afterChange(); };
 		MODES.forEach((m) => {
-			const id = `px-pets-mode-${m}`;
+			const id = `${prefix}-mode-${m}`;
 			const lab = el('label', { for: id, class: 'px-pets__opt' });
-			const inp = el('input', { type: 'radio', name: 'px-pets-mode', id, value: m });
+			const inp = el('input', { type: 'radio', name: `${prefix}-mode`, id, value: m });
 			if (settings.mode === m) inp.checked = true;
-			inp.addEventListener('change', () => { settings.mode = m; save(); buildPets(); });
+			inp.addEventListener('change', () => { settings.mode = m; apply(); });
 			lab.appendChild(inp); lab.appendChild(el('span', {}, t(`pet_mode_${m}`)));
 			form.appendChild(lab);
 		});
 		if (settings.mode === 'one' && data) {
+			const open = unlockedSpecies(data.species, level);
+			const shown = (visibleSpecies(data.species, level, settings)[0] || {}).id;
 			const sel = el('select', { class: 'px-pets__select', 'aria-label': t('pet_choose') });
-			unlockedSpecies(data.species, level).forEach((sp) => {
+			open.forEach((sp) => {
 				const o = el('option', { value: sp.id }, t(sp.nameKey));
-				if (pets[0] && pets[0].spec.id === sp.id) o.selected = true;
+				if (shown === sp.id) o.selected = true;
 				sel.appendChild(o);
 			});
-			sel.addEventListener('change', () => { settings.chosen = sel.value; save(); buildPets(); });
+			sel.addEventListener('change', () => { settings.chosen = sel.value; apply(); });
 			form.appendChild(sel);
 		}
-		const qLab = el('label', { for: 'px-pets-quiet', class: 'px-pets__opt' });
-		const q = el('input', { type: 'checkbox', id: 'px-pets-quiet' });
+		const qLab = el('label', { for: `${prefix}-quiet`, class: 'px-pets__opt' });
+		const q = el('input', { type: 'checkbox', id: `${prefix}-quiet` });
 		q.checked = settings.quiet;
-		q.addEventListener('change', () => { settings.quiet = q.checked; save(); buildPets(); });
+		q.addEventListener('change', () => { settings.quiet = q.checked; apply(); });
 		qLab.appendChild(q); qLab.appendChild(el('span', {}, t('pet_quiet')));
 		form.appendChild(qLab);
-		b.appendChild(form);
+		return form;
+	}
+
+	function showSettings(p) {
+		const b = openBubble(p, true);
+		b.appendChild(el('p', { class: 'px-pets__text px-pets__title' }, t('pet_settings_title')));
+		b.appendChild(buildSettingsForm('px-pets-b'));
 		const x = el('button', { type: 'button', class: 'px-pets__btn' }, t('pet_close'));
 		x.addEventListener('click', hideBubble);
 		b.appendChild(x);
+	}
+
+	/**
+	 * Settings that never disappear: a "Zvieratká" section in the gIVEMEGOCHI tab of
+	 * the right panel (#pets-panel-settings). With every pet turned off there is
+	 * still a way back on.
+	 */
+	function renderPanelSettings() {
+		const host = doc.getElementById('pets-panel-settings');
+		if (!host) return;
+		host.textContent = '';
+		host.appendChild(el('p', { class: 'px-pets__title' }, t('pet_settings_title')));
+		host.appendChild(buildSettingsForm('px-pets-p', renderPanelSettings));
 	}
 
 	// ─── Data + public API ───────────────────────────────────────────
@@ -480,6 +509,7 @@
 			settings.seenLevel = Math.max(settings.seenLevel, lv);
 			save();
 			buildPets();
+			renderPanelSettings();
 			if (fresh.length && settings.seenLevel > 0 && pets.length) {
 				const p = pets.find((q) => q.spec.id === fresh[fresh.length - 1].id) || pets[pets.length - 1];
 				showTip(p, t('pet_unlocked', { name: t(fresh[fresh.length - 1].nameKey) }));
@@ -495,6 +525,7 @@
 	}
 
 	function refresh() {
+		renderPanelSettings();
 		loadTips().then(() => { pets.forEach((p) => p.el.setAttribute('aria-label', t('pet_aria', { name: t(p.spec.nameKey) }))); });
 	}
 
@@ -512,6 +543,7 @@
 		// first run: remember the current level so existing unlocks are not announced
 		if (!settings.seenLevel) { settings.seenLevel = level; save(); }
 		buildPets();
+		renderPanelSettings();
 		for (const ev of ['pointerdown', 'keydown', 'wheel', 'pointermove']) root.addEventListener(ev, onActivity, { passive: true });
 		doc.addEventListener('visibilitychange', onVisibility);
 		root.addEventListener('resize', onResize, { passive: true });
