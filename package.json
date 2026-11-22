@@ -25,7 +25,8 @@
     "db:local:status": "npx --yes supabase@3.2.0 status --workdir .",
     "db:local:env": "node scripts/write-local-env.js",
     "db:local:migrate": "node -r ./scripts/load-local-env.js scripts/run-supabase-migrations.js",
-    "db:local:seed": "node scripts/seed-local.js"
+    "db:local:seed": "node scripts/seed-local.js",
+    "db:local:seed-test": "node scripts/seed-test-account.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

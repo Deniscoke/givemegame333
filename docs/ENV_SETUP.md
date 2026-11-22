@@ -13,6 +13,34 @@ Všetky reálne tajomstvá patria mimo repozitára. Šablóna
 3. Súbory `.env`, `.env.local` a ďalšie `.env.*` sú ignorované. Nepridávaj ich
    ručne do indexu; `.env.example` je jediná verzovaná šablóna.
 
+### Testovací účet s odomknutým všetkým
+
+Jeden účet, cez ktorý sa dá otvoriť každá obrazovka: Pro plán učiteľa
+(SMARTA Pro), level 10 (všetky pet-y aj perky), všetky talenty, avatar,
+50 000 coinov, členstvo v škole ako učiteľ aj ako žiak. Účet má v databáze
+`profiles.is_test_account = true`, takže sa nepočíta do rebríčkov, analytiky
+ani školských reportov.
+
+Lokálne (po `npm run db:local:start` a `npm run db:local:migrate`):
+
+```powershell
+npm run db:local:seed-test -- --dry-run   # len vypíše plán, nič nezapíše
+npm run db:local:seed-test                # vytvorí / obnoví účet
+```
+
+- Predvolený e-mail je `tester@givemegame.local`; zmeníš ho cez `TEST_ACCOUNT_EMAIL`.
+- Heslo je rovnaké ako pri ostatných lokálnych účtoch: `LOCAL_TEST_PASSWORD`
+  v súbore `.env.local` (vytvorí sa samo, nikdy sa nevypisuje ani necommituje).
+- Prihlásiš sa na `http://localhost:3100`.
+- Skript môžeš spustiť opakovane, nič sa nezdvojí.
+
+Mimo lokálneho počítača skript odmietne bežať, kým nenastavíš všetky tri veci:
+`ALLOW_TEST_SEED=1`, e-mail v zozname `TEST_ACCOUNT_EMAILS` (oddelené čiarkou)
+a heslo v `TEST_ACCOUNT_PASSWORD` (aspoň 12 znakov). Cieľ sa berie z
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` a `SUPABASE_DB_URL`. Heslo
+nikdy nedávaj do repozitára.
+
+
 ## Deploy prostredie
 
 1. V nastavení deployment projektu otvor **Environment Variables**.
