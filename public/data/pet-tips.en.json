@@ -1,0 +1,26 @@
+{
+  "tips": [
+    "Press the big button on the left to spawn a new game.",
+    "Short breaks help you remember more. Stand up and stretch!",
+    "Every game gives you coins. Spend them wisely.",
+    "Not sure what to play? Try a surprise game.",
+    "Drink some water. Your brain likes it.",
+    "Mistakes are how we learn. Try again!",
+    "Play together with friends in a session. It is more fun.",
+    "Level up to unlock new pets like me.",
+    "Look away from the screen for 20 seconds every now and then.",
+    "Ask SMARTA if you do not know how something works.",
+    "Teachers can pick a mode that fits the class.",
+    "Sleep well tonight. Rested brains learn faster."
+  ],
+  "challenges": [
+    { "id": "c1", "q": "How many legs does a spider have?", "options": ["6", "8", "10"], "correct": 1 },
+    { "id": "c2", "q": "Which planet is closest to the Sun?", "options": ["Venus", "Mars", "Mercury"], "correct": 2 },
+    { "id": "c3", "q": "What is 7 x 6?", "options": ["42", "36", "48"], "correct": 0 },
+    { "id": "c4", "q": "Which one is a mammal?", "options": ["Shark", "Dolphin", "Salmon"], "correct": 1 },
+    { "id": "c5", "q": "How many minutes are in one hour?", "options": ["30", "100", "60"], "correct": 2 },
+    { "id": "c6", "q": "What do plants need to make food from light?", "options": ["Sunlight", "Sugar", "Salt"], "correct": 0 },
+    { "id": "c7", "q": "Which is the largest ocean?", "options": ["Atlantic", "Pacific", "Indian"], "correct": 1 },
+    { "id": "c8", "q": "What is 100 - 37?", "options": ["73", "67", "63"], "correct": 2 }
+  ]
+}
