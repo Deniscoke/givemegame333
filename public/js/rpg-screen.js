@@ -293,7 +293,9 @@ const RpgScreen = (() => {
       const data = result.data;
 
       const userLevel = data.user_level || 1;
+      const myCoins = Number(data.coins) || 0;
       const rows = (data.perks || []).map(p => {
+        const cost = Number(p.coin_cost) || 0;
         const cooldownLeftH = Math.ceil(p.cooldown_left_ms / 3600000);
         let statusBadge = '';
         let actionBtn = '';
@@ -306,9 +308,13 @@ const RpgScreen = (() => {
         } else if (p.cooldown_left_ms > 0) {
           statusBadge = `<span class="rpg-perk-badge rpg-perk-cooldown">⏱ ${cooldownLeftH} h</span>`;
           actionBtn = `<button class="btn btn-retro rpg-perk-btn" disabled>Cooldown</button>`;
+        } else if (myCoins < cost) {
+          statusBadge = `<span class="rpg-perk-badge rpg-perk-locked">Chýba ${cost - myCoins} 🪙</span>`;
+          actionBtn = `<button class="btn btn-retro rpg-perk-btn" disabled>Málo mincí</button>`;
         } else {
-          actionBtn = `<button class="btn btn-retro rpg-perk-btn rpg-perk-btn--go" data-perk="${p.perk_key}">Použiť</button>`;
+          actionBtn = `<button class="btn btn-retro rpg-perk-btn rpg-perk-btn--go" data-perk="${p.perk_key}">Použiť za ${cost} 🪙</button>`;
         }
+        const costLine = cost ? `<p class="rpg-perk-cost">Cena: <b>${cost} 🪙</b></p>` : '';
         const durLabel = p.duration_minutes ? ` · ${p.duration_minutes} min` : '';
         const noteLine = p.teacher_note ? `<p class="rpg-perk-note">📝 ${_esc(p.teacher_note)}</p>` : '';
         return `
@@ -320,6 +326,7 @@ const RpgScreen = (() => {
                 <span class="rpg-perk-level">Lv ${p.level}${durLabel}</span>
               </div>
               <p class="rpg-perk-desc">${_esc(p.description)}</p>
+              ${costLine}
               ${noteLine}
               <div class="rpg-perk-footer">
                 ${statusBadge}
@@ -334,10 +341,10 @@ const RpgScreen = (() => {
           <section class="rpg-stats-section">
             <h3 class="rpg-stats-heading">🎁 Odmeny zo života</h3>
             <p class="rpg-perks-intro">
-              Každý level ti odomkne jeden reálny benefit v škole. Klikni <b>Použiť</b> — ak si v škole
-              registrovaný v gIVEMEGAMEEDU, žiadosť pôjde učiteľovi na schválenie. Mimo EDU sa uplatní hneď.
+              Každý level ti odomkne jeden reálny benefit v škole. Každá odmena stojí mince. Klikni <b>Použiť</b> — ak si v škole
+              registrovaný v gIVEMEGAMEEDU, žiadosť pôjde učiteľovi a mince sa strhnú, až keď ju schváli. Mimo EDU sa uplatní hneď.
               <span class="rpg-perks-deal">🤝 Odmeny platia, len ak s nimi súhlasí tvoj učiteľ. Dohodni sa s ním vopred, ktoré odmeny u vás platia.</span>
-              <br><span style="opacity:.7">Tvoj level: <b>Lv ${userLevel}</b></span>
+              <br><span style="opacity:.7">Tvoj level: <b>Lv ${userLevel}</b> · Mince: <b>${myCoins} 🪙</b></span>
             </p>
             <div class="rpg-perks-grid">${rows}</div>
           </section>
@@ -367,7 +374,8 @@ const RpgScreen = (() => {
       } else if (data.needs_approval) {
         (window.GameUI?.toast || alert)(`⏳ Žiadosť odoslaná učiteľovi: ${data.perk_title}`);
       } else {
-        (window.GameUI?.toast || alert)(`✅ Uplatnené: ${data.perk_title}`);
+        (window.GameUI?.toast || alert)(`✅ Uplatnené: ${data.perk_title}${data.coin_cost ? ` (−${data.coin_cost} 🪙)` : ''}`);
+        try { if (typeof data.balance === 'number') window.Coins?.syncServerBalance?.(data.balance); } catch (e) { /* wallet optional */ }
       }
     } catch (e) {
       (window.GameUI?.toast || alert)(`❌ ${e.message}`);
