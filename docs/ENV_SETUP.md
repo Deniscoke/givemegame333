@@ -89,11 +89,11 @@ projektovo špecifická owner-operated zmena DB; dokumentácia zámerne neposkyt
 univerzálny SQL alebo executable shortcut.
 
 Pre existujúcu databázu overenú presne na legacy schéme migrácie `016` je
-k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `040`, pričom
+k dispozícii samostatný reconcile flow. Ten aplikuje `026` až `041`, pričom
 `026` zachová staré `billing_events` riadky a doplní novú schému:
 
 ```powershell
-npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-040
+npm run db:migrate -- --upgrade-legacy-016 --from 026 --confirm-legacy-upgrade legacy-016-to-041
 ```
 
 `023_rpg_talents.sql` dopĺňa tabuľku talentov, ktorá bola v produkcii vytvorená
