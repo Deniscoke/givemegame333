@@ -15,6 +15,7 @@ const fs = require('fs');
 const { Pool } = require('pg');
 const { createEduRouter } = require('./lib/edu-routes');
 const { createSessionsRouter } = require('./lib/routes/sessions');
+const { synthesizeSpeech } = require('./lib/tts-providers');
 const { validateDurationGate } = require('./lib/reward-validation');
 const { createAssessmentRouter } = require('./lib/assessment-routes');
 const { createInstitutionRouter } = require('./lib/institution-routes');
@@ -3576,7 +3577,7 @@ app.get('/api/narrator-areas', (req, res) => {
 	res.json({ areas });
 });
 
-// ─── Random educational fact (AI vypraváč) — GPT-5.4 + RVP CZ + výber oblasti ───
+// ─── Random educational fact (AI vypraváč) — gpt-4o-mini + RVP CZ + výber oblasti ───
 app.get('/api/random-fact', async (req, res) => {
 	const lang = (req.query.lang || 'sk').slice(0, 2);
 	const areaId = (req.query.area || '').trim();
@@ -3613,7 +3614,7 @@ app.get('/api/random-fact', async (req, res) => {
 		});
 	}
 
-	// OpenAI API — GPT-5.4 (Chat) pre generovanie, TTS pre čítanie
+	// OpenAI API — gpt-4o-mini (Chat) pre generovanie, TTS cez lib/tts-providers.js
 	if (!openai) openai = createOpenAIClient(effectiveKey);
 	const langNames = { sk: 'Slovenčina', cs: 'Čeština', de: 'Deutsch', en: 'English', es: 'Español' };
 	const langName = langNames[lang] || 'Slovenčina';
@@ -3701,20 +3702,12 @@ app.get('/api/random-fact', async (req, res) => {
 	res.json({ fact, source: 'local', _debug: lastError });
 });
 
-// ─── TTS (Text-to-Speech) — intonácia podľa typu osobnosti ───
-const TTS_VOICES = ['marin', 'cedar', 'onyx', 'sage', 'coral', 'nova', 'alloy'];
-const TTS_STYLE_CONFIG = {
-	sangvinik: { voice: 'coral', speed: 1.15, instructions: 'Speak enthusiastically and energetically. Warm, upbeat tone. Slightly faster pace. Expressive intonation with excitement.' },
-	flegmatik: { voice: 'sage', speed: 0.9, instructions: 'Speak calmly and gently. Slow, relaxed pace. Soothing, patient tone. Peaceful delivery.' },
-	cholerik: { voice: 'onyx', speed: 1.2, instructions: 'Speak with confidence and assertiveness. Direct, punchy delivery. Clear and decisive. Strong, determined tone.' },
-	melancholik: { voice: 'cedar', speed: 0.92, instructions: 'Speak thoughtfully and reflectively. Gentle, nuanced tone. Slightly slower, contemplative pace. Introspective delivery.' },
-	genz: { voice: 'nova', speed: 1.05, instructions: 'Speak casually and conversationally. Relaxed, friendly tone. Natural, laid-back delivery.' }
-};
+// ─── TTS (Text-to-Speech) — lib/tts-providers.js: ElevenLabs → OpenAI → Web Speech v prehliadači ───
 app.post('/api/tts', async (req, res) => {
 	const ttsUser = await optionalSupabaseUser(req);
 	if (!ttsUser) {
 		return res.status(401).json({
-			error: 'OpenAI TTS vyžaduje prihlásenie. Prihlás sa cez Google alebo použi Web Speech.',
+			error: 'Prémiový hlas vyžaduje prihlásenie. Prihlás sa cez Google alebo použi Web Speech.',
 			code: 'AUTH_REQUIRED_TTS'
 		});
 	}
@@ -3723,7 +3716,7 @@ app.post('/api/tts', async (req, res) => {
 			const st = await getUserBillingState(coinsDbPool, ttsUser.id);
 			if (!hasPaidAccess(st)) {
 				return res.status(403).json({
-					error: 'OpenAI hlas (TTS) je len v pláne Pro učiteľ. Použi Web Speech v prehliadači.',
+					error: 'Prémiový hlas (TTS) je len v pláne Pro učiteľ. Použi Web Speech v prehliadači.',
 					code: 'PLAN_TTS_PRO_ONLY'
 				});
 			}
@@ -3733,62 +3726,20 @@ app.post('/api/tts', async (req, res) => {
 		}
 	}
 
-	const apiKey = process.env.OPENAI_API_KEY;
-	if (!apiKey || apiKey === 'sk-your-openai-api-key-here') {
-		return res.status(503).json({ error: 'TTS nie je nakonfigurovaný. Nastav OPENAI_API_KEY.' });
-	}
-	let body;
-	try {
-		body = typeof req.body === 'object' ? req.body : {};
-	} catch {
-		return res.status(400).json({ error: 'Neplatný JSON' });
-	}
-	const text = (body.text || '').trim();
+	const body = req.body && typeof req.body === 'object' ? req.body : {};
+	const text = typeof body.text === 'string' ? body.text.trim() : '';
 	if (!text) return res.status(400).json({ error: "Pole 'text' je povinné" });
-	const truncated = text.length > 4096 ? text.slice(0, 4096) : text;
-	const styles = Array.isArray(body.styles) ? body.styles : [];
-	let voice = TTS_VOICES.includes(body.voice) ? body.voice : 'marin';
-	let speed = 1;
-	let instructions = 'Speak in a calm, engaging narrative tone like a storyteller. Moderate pace, clear pronunciation.';
-	if (styles.length > 0) {
-		const cfg = TTS_STYLE_CONFIG[styles[0]];
-		if (cfg) {
-			voice = cfg.voice;
-			speed = cfg.speed;
-			instructions = cfg.instructions;
-			if (styles.length > 1) {
-				instructions += ' Also incorporate: ' + styles.slice(1).map(s => TTS_STYLE_CONFIG[s]?.instructions?.split('.')[0] || s).join('. ');
-			}
-		}
-	}
 	try {
-		const response = await fetch('https://api.openai.com/v1/audio/speech', {
-			method: 'POST',
-			signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
-			headers: {
-				Authorization: `Bearer ${apiKey}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				model: process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts',
-				voice,
-				input: truncated,
-				speed,
-				instructions,
-				response_format: 'mp3'
-			})
+		const out = await synthesizeSpeech({
+			text,
+			voice: body.voice,
+			styles: Array.isArray(body.styles) ? body.styles.filter((s) => typeof s === 'string').slice(0, 5) : []
 		});
-		if (!response.ok) {
-			const errBody = await response.text().catch(() => '');
-			console.error('[TTS] OpenAI:', response.status, errBody.slice(0, 200));
-			return res.status(response.status >= 500 ? 502 : response.status).json({ error: `TTS chyba: ${response.status}` });
-		}
-		const buf = await response.arrayBuffer();
-		res.set({ 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, max-age=3600' });
-		res.send(Buffer.from(buf));
+		res.set({ 'Content-Type': out.contentType, 'Cache-Control': 'private, max-age=3600' });
+		res.send(out.audio);
 	} catch (e) {
-		console.error('[TTS]', e.message);
-		res.status(502).json({ error: 'Nepodarilo sa vygenerovať audio.' });
+		const status = e?.status || 502;
+		res.status(status).json({ error: status === 503 ? 'TTS nie je nakonfigurované. Použi Web Speech.' : (e?.message || 'Nepodarilo sa vygenerovať audio.') });
 	}
 });
 
