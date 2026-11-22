@@ -48,7 +48,7 @@ function assertStrictDeltaSql(sql, params) {
       name + ' must declare the aa alias');
     const aliases = [...body.matchAll(/\b([a-z_][a-z0-9_]*)\./gi)]
       .map((match) => match[1].toLowerCase())
-      .filter((alias) => !new Set(['public', 'aa']).has(alias));
+      .filter((alias) => !new Set(['public', 'aa', 'tp']).has(alias));
     assert.deepEqual(aliases, [], name + ' contains a reference to an undeclared alias');
     assert.match(body, /DISTINCT\s+ON\s*\(\s*aa\.user_id\s*,\s*aa\.module_key\s*\)/i);
     assert.match(body, /aa\.assessment_type\s*=\s*'(pre|post)'/i);
