@@ -166,13 +166,20 @@ const Coins = (() => {
 		} catch (e) {}
 	}
 
+	// Automatic / passive sources never use a multiplier powerup: the server caps
+	// them per day, so a paid double_coins charge would be burned for nothing.
+	const NO_MULTIPLIER_SOURCES = ['tamagochi_coin', 'phone_buzz'];
+	function _noMultiplier(source) {
+		return NO_MULTIPLIER_SOURCES.includes(source) || String(source).startsWith('giveme_');
+	}
+
 	function award(source) {
 		let amount = rewards[source] || 1;
 		if (serverWallet && source === 'mode_click') {
 			// Bez double_coins: server pripíše presne 1 coin a stráži denný limit.
 			_awardModeClickOnServer();
 		} else {
-			const dc = getActivePowerup('double_coins');
+			const dc = _noMultiplier(source) ? null : getActivePowerup('double_coins');
 			if (dc) {
 				amount *= dc.value;
 				consumePowerup('double_coins');

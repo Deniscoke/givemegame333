@@ -247,3 +247,27 @@ describe('P0 review i18n keys', () => {
 		for (const k of KEYS) assert.match(src, new RegExp(`'${k}'`), k);
 	});
 });
+
+describe('passive sources and the double_coins powerup (Phase 9 review)', () => {
+	const withBoost = () => {
+		const t = loadCoins({ signedIn: false });
+		t.storage.setItem('givemegame_powerups', JSON.stringify({ double_coins: { value: 2, uses: 3 } }));
+		return t;
+	};
+	it('tamagochi_coin, phone_buzz and giveme_* keep the charge and award the base amount', () => {
+		for (const [source, base] of [['tamagochi_coin', 1], ['phone_buzz', 5], ['giveme_like', 1]]) {
+			const t = withBoost();
+			const before = t.Coins.getBalance();
+			t.Coins.award(source);
+			assert.equal(t.Coins.getBalance(), before + base, source);
+			assert.equal(t.Coins.getActivePowerup('double_coins').uses, 3, `${source} must not consume a charge`);
+		}
+	});
+	it('a normal source still doubles and consumes one charge', () => {
+		const t = withBoost();
+		const before = t.Coins.getBalance();
+		t.Coins.award('timer');
+		assert.equal(t.Coins.getBalance(), before + 1000);
+		assert.equal(t.Coins.getActivePowerup('double_coins').uses, 2);
+	});
+});
