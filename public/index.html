@@ -22,6 +22,7 @@
 	<link rel="stylesheet" href="/ui/px-mode-decor.css?v=1">
 	<link rel="stylesheet" href="/ui/px-tour.css?v=1">
 	<link rel="stylesheet" href="/ui/px-smarta.css?v=1">
+	<link rel="stylesheet" href="/ui/px-pets.css?v=1">
 	<script>try{if(localStorage.getItem("givemegame_readable_font")==="1")document.documentElement.classList.add("readable-font")}catch(e){}</script>
 </head>
 <body class="mode-party generator-shell px-v2" data-mode="party">
@@ -621,28 +622,10 @@
 				<div id="tool-panel-tamagochi" class="game-tools-panel" role="tabpanel" data-tool-panel="tamagochi" aria-labelledby="tool-tab-tamagochi" hidden>
 				<div class="panel-section tamagochi-section">
 					<label class="panel-label tamagochi-label"><i class="bi bi-heart-pulse"></i> gIVEMEGOCHI</label>
-					<a href="tamagochi/index.html" target="_blank" class="tamagochi-embed tamagochi-avatar-skin" title="Otvoriť hru" data-i18n-title="tamagochi_open">
-						<div class="tamagochi-device">
-							<div class="tamagochi-top-strip">
-								<div class="tamagochi-leds"><span class="led red"></span><span class="led green"></span></div>
-								<div class="tamagochi-brand">gIVEMEGOCHI<br>SCREEN MAX</div>
-								<div class="tamagochi-speaker"><span></span><span></span><span></span></div>
-							</div>
-							<div class="tamagochi-screen">
-								<div class="tamagochi-avatar-pixel" aria-hidden="true">
-									<span></span><span></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span><span></span>
-									<span></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span>
-									<span></span><span class="px-y"></span><span class="px-y"></span><span class="px-d"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span>
-									<span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span>
-									<span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span><span></span>
-									<span></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span class="px-y"></span><span></span><span></span><span></span>
-									<span></span><span></span><span class="px-o"></span><span class="px-o"></span><span></span><span class="px-o"></span><span class="px-o"></span><span></span>
-									<span></span><span class="px-o"></span><span class="px-o"></span><span class="px-o"></span><span class="px-o"></span><span class="px-o"></span><span></span><span></span><span></span>
-								</div>
-								<div class="tamagochi-avatar-hint" data-i18n="tamagochi_hint">Klikni pre hru</div>
-							</div>
-						</div>
-					</a>
+					<div class="tamagochi-frame-wrap">
+						<iframe id="tamagochi-iframe" class="tamagochi-iframe" src="tamagochi/index.html?embed=1" title="gIVEMEGOCHI" data-i18n-title="tamagochi_iframe_title" loading="lazy" referrerpolicy="no-referrer"></iframe>
+						<a class="tamagochi-fullscreen" href="tamagochi/index.html" target="_blank" rel="noopener" data-i18n="tamagochi_fullscreen">Na celú obrazovku</a>
+					</div>
 				</div>
 				</div>
 
@@ -1020,6 +1003,7 @@
 	<script src="js/px-modal.js?v=1"></script>
 	<script src="js/tour.js?v=1"></script>
 	<script src="js/smarta-dock.js?v=1"></script>
+	<script src="js/pets.js?v=1" defer></script>
 	<script src="js/mode-decor.js?v=1" defer></script>
 	<script src="js/game-ui.js?v=17"></script>
 	<script src="js/reflection.js?v=5"></script>
@@ -1032,7 +1016,8 @@
 	<script src="js/rpg-talents.js?v=7"></script>
 	<script src="js/rpg-screen.js?v=7"></script>
 	<script src="js/rpg-xp-fx.js?v=1"></script>
-	<script src="script.js?v=39"></script>
+	<script src="script.js?v=40"></script>
+	<script src="js/tamagochi-bridge.js?v=1"></script>
 	<script src="cursor-effect.js?v=3"></script>
 
 

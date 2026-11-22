@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>gIVEMEGOCHI</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -936,7 +935,28 @@
       };
     }
 
-    let pet = createPet();
+    const PET_KEY = 'givemegochi_pet_v1_';
+    let petUid = 'guest';
+
+    function savePet() {
+      try { localStorage.setItem(PET_KEY + petUid, JSON.stringify({ v: 1, pet })); } catch (e) {}
+    }
+
+    function loadPet(uid) {
+      try {
+        const o = JSON.parse(localStorage.getItem(PET_KEY + uid));
+        if (!o || o.v !== 1 || !o.pet || typeof o.pet !== 'object') return null;
+        const base = createPet();
+        for (const k of Object.keys(base)) {
+          if (typeof o.pet[k] === typeof base[k] && (typeof base[k] !== 'number' || Number.isFinite(o.pet[k]))) base[k] = o.pet[k];
+        }
+        return base;
+      } catch (e) { return null; }
+    }
+
+    let pet = loadPet('guest') || createPet();
+    window.addEventListener('pagehide', () => savePet());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) savePet(); });
 
     function clamp(v, min = 0, max = 100) {
       return Math.max(min, Math.min(max, v));
@@ -963,7 +983,9 @@
 
     function gainXP(amount) {
       pet.xp += amount;
+      let leveled = false;
       while (pet.xp >= pet.level * 30) {
+        leveled = true;
         pet.xp -= pet.level * 30;
         pet.level += 1;
         pet.coins += 4;
@@ -971,6 +993,7 @@
         if (pet.level >= 3) pet.accessory = 'hat';
         if (pet.level >= 5) pet.accessory = 'bow';
       }
+      if (leveled) { notifyParentMilestone('levelup'); savePet(); }
     }
 
     function mood() {
@@ -1212,6 +1235,8 @@
       pet.energy = clamp(pet.energy - 15);
       pet.coins += Math.floor(mgScore / 2);
       gainXP(Math.max(5, mgScore * 2));
+      if (mgScore > 0) notifyParentMilestone('minigame');
+      savePet();
       setMessage('Mini hra hotova. Skore ' + mgScore + '.');
       spawnParticles('P', 5);
       updateUI();
@@ -1230,6 +1255,7 @@
 
     function resetGame() {
       pet = createPet();
+      savePet();
       frame = 0;
       tick = 0;
       blinkTimer = 0;
@@ -1273,6 +1299,7 @@
         setMessage('Je chore. Daj liek.');
       }
 
+      if (tick % 5 === 0) savePet();
       if (tick % 20 === 0) pet.age += 1;
       if (tick % 12 === 0) pet.coins += 1;
 
@@ -1564,7 +1591,12 @@
       ctx.restore();
     }
 
+    // Skip drawing while the tab is hidden or the iframe is not on screen (low-end laptops).
+    let inView = true;
+    try { new IntersectionObserver((entries) => { inView = entries[entries.length - 1].isIntersecting; }).observe(canvas); } catch (e) {}
+
     function render() {
+      if (document.hidden || !inView) return;
       frame += 1;
       blinkTimer += 1;
       if (blinkTimer > 90 + Math.random() * 50) blinkOn = true;
@@ -1586,38 +1618,57 @@
       link.download = 'givemegochi.html';
     }
 
-    function notifyParentCoin(action) {
-      try { if (window.parent !== window) window.parent.postMessage({ type: 'tamagochi_coin', action: action || 'tap' }, '*'); } catch (e) {}
+    // Milestones only (level-up, finished minigame), never per tap. The parent
+    // (js/tamagochi-bridge.js) checks origin + source and the server caps coins per day.
+    function notifyParentMilestone(action) {
+      try { if (window.parent !== window) window.parent.postMessage({ type: 'tamagochi_coin', action }, location.origin); } catch (e) {}
     }
 
-    document.getElementById('btnFeed').addEventListener('click', () => { notifyParentCoin(); feedPet(); });
-    document.getElementById('btnPet').addEventListener('click', () => { notifyParentCoin(); petPet(); });
-    document.getElementById('btnGame').addEventListener('click', () => { notifyParentCoin(); startMinigame(); });
-    document.getElementById('btnClean').addEventListener('click', () => { notifyParentCoin(); cleanPet(); });
-    document.getElementById('btnHeal').addEventListener('click', () => { notifyParentCoin(); healPet(); });
-    document.getElementById('btnSleep').addEventListener('click', () => { notifyParentCoin(); toggleSleep(); });
-    document.getElementById('btnSnack').addEventListener('click', () => { notifyParentCoin(); buySnack(); });
-    document.getElementById('btnTrain').addEventListener('click', () => { notifyParentCoin(); trainPet(); });
-    document.getElementById('restartBtn').addEventListener('click', () => { notifyParentCoin(); resetGame(); });
+    // Parent -> child: only the same origin and only our own parent window.
+    window.addEventListener('message', (event) => {
+      if (event.origin !== location.origin || event.source !== window.parent) return;
+      const d = event.data;
+      if (!d || d.type !== 'pet_syncUser') return;
+      const uid = d.user && typeof d.user.uid === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(d.user.uid) ? d.user.uid : 'guest';
+      if (uid !== petUid) {
+        savePet();
+        petUid = uid;
+        pet = loadPet(uid) || createPet();
+        updateUI();
+      }
+      const name = d.user && typeof d.user.name === 'string' ? d.user.name.replace(/[^\p{L}\p{N} ._-]/gu, '').slice(0, 24).trim() : '';
+      if (name) setMessage('Ahoj ' + name + '!');
+    });
+    try { if (window.parent !== window) window.parent.postMessage({ type: 'pet_requestSync' }, location.origin); } catch (e) {}
 
-    document.getElementById('quickA').addEventListener('click', () => { notifyParentCoin(); flashButton('quickA'); feedPet(); });
-    document.getElementById('quickB').addEventListener('click', () => { notifyParentCoin(); flashButton('quickB'); startMinigame(); });
-    document.getElementById('quickX').addEventListener('click', () => { notifyParentCoin(); flashButton('quickX'); petPet(); });
-    document.getElementById('quickY').addEventListener('click', () => { notifyParentCoin(); flashButton('quickY'); toggleSleep(); });
+    document.getElementById('btnFeed').addEventListener('click', () => { feedPet(); });
+    document.getElementById('btnPet').addEventListener('click', () => { petPet(); });
+    document.getElementById('btnGame').addEventListener('click', () => { startMinigame(); });
+    document.getElementById('btnClean').addEventListener('click', () => { cleanPet(); });
+    document.getElementById('btnHeal').addEventListener('click', () => { healPet(); });
+    document.getElementById('btnSleep').addEventListener('click', () => { toggleSleep(); });
+    document.getElementById('btnSnack').addEventListener('click', () => { buySnack(); });
+    document.getElementById('btnTrain').addEventListener('click', () => { trainPet(); });
+    document.getElementById('restartBtn').addEventListener('click', () => { resetGame(); });
 
-    document.getElementById('moveUp').addEventListener('click', () => { notifyParentCoin(); flashButton('moveUp'); movePet(0, -1); });
-    document.getElementById('moveDown').addEventListener('click', () => { notifyParentCoin(); flashButton('moveDown'); movePet(0, 1); });
-    document.getElementById('moveLeft').addEventListener('click', () => { notifyParentCoin(); flashButton('moveLeft'); movePet(-1, 0); });
-    document.getElementById('moveRight').addEventListener('click', () => { notifyParentCoin(); flashButton('moveRight'); movePet(1, 0); });
-    document.getElementById('moveCenter').addEventListener('click', () => { notifyParentCoin(); centerPet(); });
+    document.getElementById('quickA').addEventListener('click', () => { flashButton('quickA'); feedPet(); });
+    document.getElementById('quickB').addEventListener('click', () => { flashButton('quickB'); startMinigame(); });
+    document.getElementById('quickX').addEventListener('click', () => { flashButton('quickX'); petPet(); });
+    document.getElementById('quickY').addEventListener('click', () => { flashButton('quickY'); toggleSleep(); });
 
-    ui.mgTarget.addEventListener('click', () => { notifyParentCoin(); minigameHit(); });
+    document.getElementById('moveUp').addEventListener('click', () => { flashButton('moveUp'); movePet(0, -1); });
+    document.getElementById('moveDown').addEventListener('click', () => { flashButton('moveDown'); movePet(0, 1); });
+    document.getElementById('moveLeft').addEventListener('click', () => { flashButton('moveLeft'); movePet(-1, 0); });
+    document.getElementById('moveRight').addEventListener('click', () => { flashButton('moveRight'); movePet(1, 0); });
+    document.getElementById('moveCenter').addEventListener('click', () => { centerPet(); });
+
+    ui.mgTarget.addEventListener('click', () => { minigameHit(); });
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowUp') { notifyParentCoin(); movePet(0, -1); }
-      if (e.key === 'ArrowDown') { notifyParentCoin(); movePet(0, 1); }
-      if (e.key === 'ArrowLeft') { notifyParentCoin(); movePet(-1, 0); }
-      if (e.key === 'ArrowRight') { notifyParentCoin(); movePet(1, 0); }
+      if (e.key === 'ArrowUp') { movePet(0, -1); }
+      if (e.key === 'ArrowDown') { movePet(0, 1); }
+      if (e.key === 'ArrowLeft') { movePet(-1, 0); }
+      if (e.key === 'ArrowRight') { movePet(1, 0); }
     });
 
     updateUI();

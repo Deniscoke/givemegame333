@@ -67,6 +67,7 @@ const RpgTalents = (() => {
       _lastResult = { kind: result.kind, status: result.status };
       _data = result.kind === 'ok' ? result.data : null;
       try { window.__lastRpgTalentsData = _data; } catch (_) {}
+      try { if (_data && _data.progression && window.Pets) window.Pets.setLevel(_data.progression.level); } catch (_) {}
       return { ...result, data: _data };
     })().finally(() => { _inflight = null; });
     return _inflight;
