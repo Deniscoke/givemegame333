@@ -1,0 +1,105 @@
+/* ═══════════════════════════════════════════════════════════════════
+   gIVEMEGAME.IO — roaming pets (Phase 9). Behaviour: public/js/pets.js
+
+   Layers: pets live in a fixed overlay at z-index 3. On desktop the side
+   panels are lifted to z-index 5, so a pet that walks to the edge of the
+   game area slides half behind a panel ("peek"). The SMARTA dock is at 900.
+   Under 1100px the panels are drawers (z-index 1001) and need no change.
+   The overlay never takes clicks; only the pets and the bubble do.
+   Motion: movement is a CSS transform transition driven by a 200 ms
+   timer (pets.js); sprite frames are swapped by JS, there is no CSS
+   animation, and nothing moves under reduced motion.
+   Sizes: bubble text >= 14px.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (min-width: 1101px) {
+	aside.left-panel,
+	aside.right-panel {
+		position: relative;
+		z-index: 5;
+	}
+}
+
+.px-pets {
+	--pet-px: 5px;
+	position: fixed;
+	inset: 0;
+	z-index: 3;
+	overflow: hidden;
+	pointer-events: none;
+	font-family: var(--font-body, system-ui, sans-serif);
+}
+.px-pets[hidden] { display: none; }
+
+.px-pet {
+	position: absolute;
+	left: 0;
+	bottom: 8px;
+	width: calc(var(--pet-px) * 10);
+	height: calc(var(--pet-px) * 10);
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+	pointer-events: auto;
+	-webkit-tap-highlight-color: transparent;
+	transition: transform 200ms linear;
+	will-change: transform;
+}
+.px-pet[data-state="peek"] { transition-duration: 800ms; transition-timing-function: ease-out; }
+.px-pet:focus-visible { outline: 3px solid var(--focus, #ffd93d); outline-offset: 2px; }
+.px-pet svg { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.px-pet[data-dir="l"] svg { transform: scaleX(-1); }
+.px-pet[data-state="sleep"] svg { opacity: 0.8; }
+.px-pet[data-state="sleep"]::after {
+	content: "z";
+	position: absolute;
+	top: -6px;
+	right: -2px;
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--text, #fff);
+	text-shadow: 1px 1px 0 #000;
+}
+
+/* Sprite frames: pets.js sets data-frame on the button. */
+.px-pet[data-frame="0"] .px-pet__f[data-f="1"],
+.px-pet[data-frame="1"] .px-pet__f[data-f="0"] { display: none; }
+
+/* ─── Bubble ───────────────────────────────────────────────────────── */
+.px-pets__bubble {
+	position: absolute;
+	bottom: calc(var(--pet-px) * 10 + 20px);
+	width: 240px;
+	max-width: calc(100vw - 16px);
+	padding: 10px 12px;
+	box-sizing: border-box;
+	color: var(--text, #111);
+	background: var(--card-bg, #fff);
+	border: var(--px-bw, 3px) solid var(--line, #000);
+	box-shadow: var(--px-shadow, 4px 4px 0 #000);
+	pointer-events: auto;
+	font-size: 14px;
+	line-height: 1.4;
+}
+.px-pets__text { margin: 0 0 8px; }
+.px-pets__title { font-weight: 700; }
+.px-pets__row { display: flex; flex-wrap: wrap; gap: 6px; }
+.px-pets__btn {
+	min-height: 32px;
+	padding: 4px 10px;
+	font: inherit;
+	color: inherit;
+	background: var(--btn-face, #ddd);
+	border: 2px solid var(--line, #000);
+	cursor: pointer;
+}
+.px-pets__btn:hover { background: var(--btn-active, #fff); }
+.px-pets__btn:focus-visible,
+.px-pets__select:focus-visible { outline: 3px solid var(--focus, #ffd93d); outline-offset: 1px; }
+.px-pets__form { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.px-pets__opt { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.px-pets__select { font: inherit; padding: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+	.px-pet { transition: none; }
+}
