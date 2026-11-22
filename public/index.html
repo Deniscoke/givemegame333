@@ -21,6 +21,7 @@
 	<link rel="stylesheet" href="/ui/px-apply.css?v=1">
 	<link rel="stylesheet" href="/ui/px-mode-decor.css?v=1">
 	<link rel="stylesheet" href="/ui/px-tour.css?v=1">
+	<link rel="stylesheet" href="/ui/px-smarta.css?v=1">
 	<script>try{if(localStorage.getItem("givemegame_readable_font")==="1")document.documentElement.classList.add("readable-font")}catch(e){}</script>
 </head>
 <body class="mode-party generator-shell px-v2" data-mode="party">
@@ -611,23 +612,9 @@
 							<span data-i18n="smarta_style_melancholik">Melancholik</span>
 						</label>
 					</div>
-					<button type="button" class="narrator-bot" id="narrator-bot" title="Klikni — SMARTA ti povie zaujímavosť nahlas. Vypočuj si ju a získaš 50 coinov!">
-						<div class="narrator-avatar-pixel smarta" aria-hidden="true">
-							<span></span><span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span></span><span></span>
-							<span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-hair"></span><span></span>
-							<span class="px-hair"></span><span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span class="px-hair"></span><span></span>
-							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-eye"></span><span class="px-eye"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
-							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
-							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-smile"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
-							<span class="px-hair"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-face"></span><span class="px-hair"></span><span></span>
-							<span></span><span class="px-hair"></span><span class="px-hair"></span><span class="px-body"></span><span class="px-body"></span><span class="px-hair"></span><span></span><span></span>
-						</div>
-						<span class="narrator-hint" data-i18n="narrator_click">Klikni a počúvaj</span>
-					</button>
-					<div id="narrator-fact" class="narrator-fact narrator-fact-placeholder" aria-hidden="true" data-speechify-ignore>
-						<i class="bi bi-mic"></i>
-						<span data-i18n="narrator_click">Klikni a počúvaj</span>
-					</div>
+					<p class="narrator-hint-text" data-i18n="smarta_tab_hint">Tu nastavíš, o čom SMARTA hovorí a ako. Chat nájdeš v rohu hry.</p>
+					<button type="button" class="px-btn px-btn--block" id="smarta-open-dock" data-smarta-open><svg class="px-icon" aria-hidden="true" focusable="false"><use href="/ui/icons/px-icons.svg#i-chat"></use></svg> <span data-i18n="smarta_tab_open">Otvoriť chat SMARTY</span></button>
+					<p class="narrator-usage"><span id="smarta-usage-hint"></span></p>
 				</div>
 				</div>
 
@@ -1025,13 +1012,14 @@
 	<!-- Phase 1+2+3 modules — must load before script.js -->
 	<script src="js/read-aloud.js?v=1"></script>
 	<script src="js/readable-font.js?v=1"></script>
-	<script src="js/narrator.js?v=2"></script>
+	<script src="js/narrator.js?v=3"></script>
 	<script src="js/coins.js?v=2"></script>
 	<script src="js/timer.js?v=3"></script>
 	<script src="js/game-data.js?v=1"></script>
 	<script src="js/sfx.js?v=2"></script>
 	<script src="js/px-modal.js?v=1"></script>
 	<script src="js/tour.js?v=1"></script>
+	<script src="js/smarta-dock.js?v=1"></script>
 	<script src="js/mode-decor.js?v=1" defer></script>
 	<script src="js/game-ui.js?v=17"></script>
 	<script src="js/reflection.js?v=5"></script>

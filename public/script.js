@@ -1500,6 +1500,7 @@ const App = (() => {
 		const translations = await loadTranslations(lang);
 		applyTranslations(translations);
 		if (typeof Narrator !== 'undefined' && Narrator.refreshHint) Narrator.refreshHint();
+		if (window.SmartaDock?.refresh) window.SmartaDock.refresh();
 		// Texty vykreslené z JS (badge na karte hry) sa musia prekresliť po načítaní prekladov
 		renderModeBadge();
 

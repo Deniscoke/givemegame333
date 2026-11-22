@@ -1,0 +1,213 @@
+/* ═══════════════════════════════════════════════════════════════════
+   gIVEMEGAME.IO — SMARTA dock (Phase 8)
+   Pixel portrait + collapsible, non-blocking chat docked bottom-right of
+   the game area (#game-viewport). Behaviour: public/js/smarta-dock.js.
+
+   Placement: the game area scrolls, so the dock is position: fixed and
+   smarta-dock.js feeds it the viewport's edges (--smarta-vp-r / -l / -b);
+   it stays bottom-right inside the game area, never over the left filter
+   panel where the generate button lives. Under 1200px the panels are
+   drawers (z-index 1000+), which sit above the dock (z-index 900).
+   Motion: sprite steps() at <= 4 fps, off under reduced motion and while
+   the tab is hidden. Sizes: body text >= 14px, display text >= 12px.
+   ═══════════════════════════════════════════════════════════════════ */
+.px-smarta {
+	--smarta-frame: 96px;
+	position: fixed;
+	right: calc(var(--smarta-vp-r, 0px) + 12px);
+	bottom: calc(var(--smarta-vp-b, 0px) + 12px);
+	z-index: 900;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: var(--px-space-2, 8px);
+	max-width: calc(100vw - 24px);
+	pointer-events: none; /* only the portrait and the chat take clicks */
+	font-family: var(--font-body);
+}
+.px-smarta > * { pointer-events: auto; }
+.px-smarta[hidden] { display: none; }
+.px-smarta[data-size="s"] { --smarta-frame: 64px; }
+.px-smarta[data-size="l"] { --smarta-frame: 128px; }
+.px-smarta[data-pos="left"] {
+	right: auto;
+	left: calc(var(--smarta-vp-l, 0px) + 12px);
+	align-items: flex-start;
+}
+
+/* The decoration layer lifts every direct child of the game area; keep the dock fixed. */
+body.px-v2 #game-viewport > .px-smarta.px-smarta { position: fixed; z-index: 900; }
+
+/* Room at the bottom of the game area so the last content can scroll above the portrait. */
+body.has-smarta-dock #game-viewport { padding-bottom: calc(var(--px-smarta-room, 112px) + 12px); }
+
+/* ─── Portrait ─────────────────────────────────────────────────────── */
+.px-smarta__portrait,
+.px-smarta__restore {
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+.px-smarta__portrait {
+	display: block;
+	padding: 0;
+	color: inherit;
+	background: var(--surface-raised, #1f5f66);
+	border: var(--px-bw, 3px) solid var(--line, #000);
+	border-radius: var(--px-radius, 0);
+	box-shadow: var(--px-shadow, 4px 4px 0 #000);
+	transition: transform 80ms steps(1);
+}
+.px-smarta__portrait:hover { background: var(--surface-sunken, #123a3f); }
+.px-smarta__portrait:active { transform: translate(2px, 2px); box-shadow: none; }
+.px-smarta__portrait:focus-visible,
+.px-smarta__restore:focus-visible {
+	outline: 3px solid var(--px-focus, #ffe66d);
+	outline-offset: 2px;
+}
+.px-smarta__portrait[hidden],
+.px-smarta__restore[hidden] { display: none; }
+
+.px-smarta__sprite {
+	display: block;
+	width: var(--smarta-frame);
+	height: var(--smarta-frame);
+	overflow: hidden;
+	image-rendering: pixelated;
+}
+.px-smarta__strip {
+	display: block;
+	width: calc(var(--smarta-frame) * 3);
+	height: var(--smarta-frame);
+	animation: px-smarta-idle 4s steps(1, end) infinite;
+}
+.px-smarta[data-speaking] .px-smarta__strip { animation: px-smarta-talk 500ms steps(1, end) infinite; }
+.px-smarta.is-paused .px-smarta__strip { animation-play-state: paused; }
+.px-smarta__c-h { fill: #5c4033; }
+.px-smarta__c-f { fill: #f5d0c5; }
+.px-smarta__c-e { fill: #1a1a1a; }
+.px-smarta__c-m { fill: #e8a598; }
+.px-smarta__c-M { fill: #8a2b3a; }
+.px-smarta__c-b { fill: #6366f1; }
+
+/* Frames: 0 idle, 1 blink, 2 talk. Jumps only (steps), two changes per half second at most. */
+@keyframes px-smarta-idle {
+	0% { transform: translateX(0); }
+	90% { transform: translateX(-33.3333%); }
+	96% { transform: translateX(0); }
+	100% { transform: translateX(0); }
+}
+@keyframes px-smarta-talk {
+	0% { transform: translateX(0); }
+	50% { transform: translateX(-66.6667%); }
+	100% { transform: translateX(0); }
+}
+
+.px-smarta__restore { box-shadow: var(--px-shadow-sm, 2px 2px 0 #000); }
+
+/* ─── Chat window (.px-modal variant, not an overlay: the game stays usable) ── */
+.px-smarta__chat {
+	width: min(340px, calc(100vw - 24px));
+	max-height: min(60dvh, 440px);
+	box-shadow: var(--px-shadow, 4px 4px 0 #000);
+}
+.px-smarta__chat[hidden] { display: none; }
+.px-smarta__chat .px-modal__header { padding: var(--px-space-2, 8px) var(--px-space-3, 12px); }
+.px-smarta__tools { display: flex; gap: var(--px-space-1, 4px); }
+.px-smarta__tools .px-iconbtn.is-muted { background: var(--surface-sunken, #123a3f); opacity: 0.8; }
+.px-smarta__body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--px-space-2, 8px);
+	min-height: 120px;
+	padding: var(--px-space-3, 12px);
+}
+.px-smarta__log {
+	display: flex;
+	flex-direction: column;
+	gap: var(--px-space-2, 8px);
+	overflow-y: auto;
+}
+.px-smarta__log[hidden] { display: none; }
+.px-smarta__msg {
+	max-width: 92%;
+	padding: var(--px-space-2, 8px) var(--px-space-3, 12px);
+	color: var(--on-surface, #fff);
+	background: var(--surface-raised, #1f5f66);
+	border: var(--px-bw-thin, 2px) solid var(--line, #000);
+}
+.px-smarta__msg--user { align-self: flex-end; background: var(--surface-sunken, #123a3f); }
+.px-smarta__msg--bot { align-self: flex-start; }
+.px-smarta__msg.is-pending { opacity: 0.8; }
+.px-smarta__msg.is-error { border-style: dashed; }
+.px-smarta__who {
+	display: block;
+	margin-bottom: 2px;
+	font-size: var(--px-fs-body-sm, 0.875rem);
+	font-weight: 700;
+	color: var(--on-surface-muted, #d6f1f3);
+}
+.px-smarta__text {
+	margin: 0;
+	font-size: var(--px-fs-body, 1rem);
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+
+/* ─── Footer: form and fact button ─────────────────────────────────── */
+.px-smarta__footer { flex-direction: column; align-items: stretch; justify-content: flex-start; }
+.px-smarta__form { display: flex; gap: var(--px-space-2, 8px); }
+.px-smarta__input,
+.px-smarta__select {
+	flex: 1;
+	min-width: 0;
+	min-height: var(--px-hit, 40px);
+	padding: var(--px-space-1, 4px) var(--px-space-2, 8px);
+	font: inherit;
+	font-size: var(--px-fs-body, 1rem);
+	color: var(--on-surface, #fff);
+	background: var(--surface-sunken, #123a3f);
+	border: var(--px-bw-thin, 2px) solid var(--line, #000);
+	border-radius: var(--px-radius, 0);
+}
+.px-smarta__input:focus-visible,
+.px-smarta__select:focus-visible {
+	outline: 3px solid var(--px-focus, #ffe66d);
+	outline-offset: 2px;
+}
+.px-smarta__select { width: 100%; }
+
+/* ─── Settings ─────────────────────────────────────────────────────── */
+.px-smarta__settings { display: grid; gap: var(--px-space-3, 12px); overflow-y: auto; }
+.px-smarta__settings[hidden] { display: none; }
+.px-smarta__settings-title {
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: var(--px-fs-display-sm, 0.75rem);
+	line-height: 1.5;
+}
+.px-smarta__label {
+	display: block;
+	font-size: var(--px-fs-body-sm, 0.875rem);
+	font-weight: 700;
+}
+.px-smarta__label br { display: none; }
+.px-smarta__label .px-smarta__select { display: block; margin-top: var(--px-space-1, 4px); }
+
+/* ─── Small screens: smaller portrait, chat takes the width ───────── */
+@media (max-width: 480px) {
+	.px-smarta { --smarta-frame: 72px; }
+	.px-smarta[data-size="s"] { --smarta-frame: 56px; }
+	.px-smarta[data-size="l"] { --smarta-frame: 88px; }
+	.px-smarta__chat { max-height: min(55dvh, 380px); }
+}
+
+/* Reduced motion: a still portrait, no transitions. */
+@media (prefers-reduced-motion: reduce) {
+	.px-smarta__strip,
+	.px-smarta[data-speaking] .px-smarta__strip { animation: none; }
+	.px-smarta__portrait { transition: none; }
+}
+
+/* ─── Settings tab in the right panel ──────────────────────────────── */
+.narrator-hint-text { margin: var(--px-space-3, 12px) 0; font-size: var(--px-fs-body-sm, 0.875rem); }
+.narrator-usage { margin: var(--px-space-2, 8px) 0 0; font-size: var(--px-fs-body-sm, 0.875rem); }
