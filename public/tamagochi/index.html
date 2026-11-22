@@ -936,9 +936,19 @@
     }
 
     const PET_KEY = 'givemegochi_pet_v1_';
-    let petUid = 'guest';
+    const UID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+    // The full-screen tab gets ?uid=<uid> from the parent so it shares the signed-in slot.
+    const urlUid = new URLSearchParams(location.search).get('uid');
+    let petUid = urlUid && UID_RE.test(urlUid) ? urlUid : 'guest';
 
-    function savePet() {
+    // Unattended = tab hidden or the iframe not on screen (another tool tab is open).
+    // Nothing decays and nothing is saved then, so a pet cannot die while nobody looks.
+    let inView = true;
+    function unattended() { return document.hidden || !inView; }
+
+    // force: the save right as the tab becomes hidden (the state is still the latest).
+    function savePet(force) {
+      if (!force && unattended()) return;
       try { localStorage.setItem(PET_KEY + petUid, JSON.stringify({ v: 1, pet })); } catch (e) {}
     }
 
@@ -954,9 +964,18 @@
       } catch (e) { return null; }
     }
 
-    let pet = loadPet('guest') || createPet();
+    let pet = loadPet(petUid) || createPet();
+
+    // Two live copies (embed + full-screen tab) share one slot: the visible copy owns it.
+    // Reload when becoming visible or when the other copy saves.
+    function reloadPet() {
+      if (minigameActive || unattended()) return;
+      const p = loadPet(petUid);
+      if (p) { pet = p; updateUI(); }
+    }
     window.addEventListener('pagehide', () => savePet());
-    document.addEventListener('visibilitychange', () => { if (document.hidden) savePet(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) savePet(true); else reloadPet(); });
+    window.addEventListener('storage', (e) => { if (e.key === PET_KEY + petUid) reloadPet(); });
 
     function clamp(v, min = 0, max = 100) {
       return Math.max(min, Math.min(max, v));
@@ -1269,6 +1288,7 @@
     }
 
     function gameTick() {
+      if (unattended()) return; // no decay while nobody looks: the pet cannot die unseen
       if (!pet.alive || minigameActive) return;
       tick += 1;
       messageTimer = Math.max(0, messageTimer - 1);
@@ -1592,8 +1612,14 @@
     }
 
     // Skip drawing while the tab is hidden or the iframe is not on screen (low-end laptops).
-    let inView = true;
-    try { new IntersectionObserver((entries) => { inView = entries[entries.length - 1].isIntersecting; }).observe(canvas); } catch (e) {}
+    try {
+      new IntersectionObserver((entries) => {
+        const was = inView;
+        inView = entries[entries.length - 1].isIntersecting;
+        if (was && !inView) savePet(true);
+        if (!was && inView) reloadPet();
+      }).observe(canvas);
+    } catch (e) {}
 
     function render() {
       if (document.hidden || !inView) return;
@@ -1629,9 +1655,9 @@
       if (event.origin !== location.origin || event.source !== window.parent) return;
       const d = event.data;
       if (!d || d.type !== 'pet_syncUser') return;
-      const uid = d.user && typeof d.user.uid === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(d.user.uid) ? d.user.uid : 'guest';
+      const uid = d.user && typeof d.user.uid === 'string' && UID_RE.test(d.user.uid) ? d.user.uid : 'guest';
       if (uid !== petUid) {
-        savePet();
+        savePet(true);
         petUid = uid;
         pet = loadPet(uid) || createPet();
         updateUI();

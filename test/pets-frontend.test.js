@@ -203,3 +203,42 @@ describe('gIVEMEGOCHI postMessage link', () => {
 		assert.match(html, /tamagochi-fullscreen[^>]*target="_blank"|target="_blank"[^>]*tamagochi-fullscreen/);
 	});
 });
+
+describe('Phase 9 review fixes', () => {
+	const tama = read('public/tamagochi/index.html');
+	const petsSrc = read('public/js/pets.js');
+	const css = read('public/ui/px-pets.css');
+
+	it('tamagochi: no decay and no save while hidden or off screen; reload when visible again', () => {
+		assert.match(tama, /function gameTick\(\) \{\n\s*if \(unattended\(\)\) return;/);
+		assert.match(tama, /function unattended\(\) \{ return document\.hidden \|\| !inView; \}/);
+		assert.match(tama, /function savePet\(force\) \{\n\s*if \(!force && unattended\(\)\) return;/);
+		assert.match(tama, /addEventListener\('storage'/);
+		assert.match(tama, /function reloadPet\(\)/);
+		assert.match(tama, /else reloadPet\(\)/);
+	});
+
+	it('tamagochi: the full-screen tab reads ?uid= with the same validation as the sync', () => {
+		assert.match(tama, /URLSearchParams\(location\.search\)\.get\('uid'\)/);
+		assert.match(tama, /UID_RE\.test\(urlUid\)/);
+		assert.equal(Bridge.fullScreenHref('abc-123'), 'tamagochi/index.html?uid=abc-123');
+		assert.equal(Bridge.fullScreenHref(null), 'tamagochi/index.html');
+		assert.equal(Bridge.fullScreenHref('a b&x=1'), 'tamagochi/index.html');
+	});
+
+	it('pets stay behind the left panel from 601px and behind the right panel from 1101px', () => {
+		assert.match(css, /@media \(min-width: 601px\) \{\s*aside\.left-panel \{[^}]*z-index: 5/);
+		assert.match(css, /@media \(min-width: 1101px\) \{\s*aside\.right-panel \{[^}]*z-index: 5/);
+	});
+
+	it('pet settings are reachable from the right panel even when all pets are off', () => {
+		assert.match(read('public/index.html'), /id="pets-panel-settings"/);
+		assert.match(petsSrc, /getElementById\('pets-panel-settings'\)/);
+		assert.match(petsSrc, /function renderPanelSettings/);
+	});
+
+	it('the tip bubble is clamped between the side panels', () => {
+		assert.match(petsSrc, /e\.min \+ 8/);
+		assert.match(petsSrc, /e\.max - w - 8/);
+	});
+});

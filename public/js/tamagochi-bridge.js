@@ -56,6 +56,11 @@
 	 *           sync?: () => void }} deps
 	 * @returns {(event: any) => boolean} true when a coin milestone was accepted
 	 */
+	/** Link of the full-screen tab: only the uid, so both copies use the same save slot. */
+	function fullScreenHref(uid) {
+		return 'tamagochi/index.html' + (typeof uid === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(uid) ? '?uid=' + encodeURIComponent(uid) : '');
+	}
+
 	function createMessageHandler(deps) {
 		const now = deps.now || Date.now;
 		let lastAt = -Infinity;
@@ -76,7 +81,7 @@
 		};
 	}
 
-	const api = { isTrustedMessage, parseMilestone, buildSync, createMessageHandler, MIN_GAP_MS, MILESTONES };
+	const api = { isTrustedMessage, parseMilestone, buildSync, fullScreenHref, createMessageHandler, MIN_GAP_MS, MILESTONES };
 
 	if (typeof root.document === 'undefined') { module.exports = api; return; }
 
@@ -95,7 +100,11 @@
 			const av = user && root.RpgAvatar && root.RpgAvatar.load ? await root.RpgAvatar.load() : null;
 			avatarId = av && av.current_avatar_id ? String(av.current_avatar_id) : null;
 		} catch (e) {}
-		try { iframe.contentWindow.postMessage(buildSync({ user, rpgLevel, avatarId }), root.location.origin); } catch (e) {}
+		const msg = buildSync({ user, rpgLevel, avatarId });
+		// The full-screen tab has no parent to sync from: give it the uid (nothing else).
+		const full = root.document.querySelector('.tamagochi-fullscreen');
+		if (full) full.setAttribute('href', fullScreenHref(msg.user && msg.user.uid));
+		try { iframe.contentWindow.postMessage(msg, root.location.origin); } catch (e) {}
 	}
 
 	const handler = createMessageHandler({
