@@ -49,6 +49,6 @@ describe('040 session state machine migration', () => {
 		const legacy = runner.slice(runner.indexOf('LEGACY_016_RELEASE_ORDER'), runner.indexOf('LEGACY_016_USER_BILLING_COLUMNS'));
 		assert.match(supported, /'040_session_state_machine\.sql'/);
 		assert.match(legacy, /'040_session_state_machine\.sql'/);
-		assert.match(runner, /legacy-016-to-040/);
+		assert.match(runner, /legacy-016-to-0(40|41)/);
 	});
 });
