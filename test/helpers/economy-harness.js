@@ -257,6 +257,9 @@ class FakeDb {
 			return ok([{ cnt: s.tx.filter((t) => t.user_id === params[0] && t.action === 'solo_complete'
 				&& Date.now() - t.created_at.getTime() < 86400000).length }]);
 		}
+		if (sql.startsWith("SELECT COUNT(*)::int AS cnt FROM public.coin_transactions WHERE user_id = $1 AND action = 'pet_challenge' AND created_at >= CURRENT_DATE")) {
+			return ok([{ cnt: todays(params[0]).filter((t) => t.action === 'pet_challenge').length }]);
+		}
 		if (sql.startsWith("SELECT COALESCE((SELECT SUM((metadata->>'boost_uses')::int)")) {
 			const mine = s.tx.filter((t) => t.user_id === params[0]);
 			const granted = mine.filter((t) => t.action === params[1] && t.metadata && 'boost_uses' in t.metadata)

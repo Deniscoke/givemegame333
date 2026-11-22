@@ -1501,6 +1501,7 @@ const App = (() => {
 		applyTranslations(translations);
 		if (typeof Narrator !== 'undefined' && Narrator.refreshHint) Narrator.refreshHint();
 		if (window.SmartaDock?.refresh) window.SmartaDock.refresh();
+		if (window.Pets?.refresh) window.Pets.refresh();
 		// Texty vykreslené z JS (badge na karte hry) sa musia prekresliť po načítaní prekladov
 		renderModeBadge();
 
@@ -2198,12 +2199,7 @@ window.addEventListener('message', (e) => {
 			window.location.href = '/login.html';
 		}
 	}
-	if (e.data?.type === 'tamagochi_coin') {
-		const iframe = document.getElementById('tamagochi-iframe');
-		if (iframe && e.source === iframe.contentWindow && App?.Coins?.award) {
-			App.Coins.award('tamagochi_coin');
-		}
-	}
+	// tamagochi_coin / pet_requestSync: handled with origin + source checks in js/tamagochi-bridge.js
 });
 
 // ─── Spuštění ───

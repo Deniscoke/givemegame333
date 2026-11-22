@@ -1,0 +1,26 @@
+{
+  "tips": [
+    "Veľkým tlačidlom vľavo vytvoríš novú hru.",
+    "Krátke prestávky ti pomôžu viac si zapamätať. Postav sa a pretiahni sa!",
+    "Za každú hru dostaneš mince. Míňaj ich múdro.",
+    "Nevieš, čo hrať? Skús hru prekvapenie.",
+    "Napi sa vody. Tvoj mozog ju má rád.",
+    "Chyby nás učia. Skús to znova!",
+    "Hraj s kamarátmi v spoločnej hre. Je to zábavnejšie.",
+    "Keď postúpiš na vyšší level, odomkneš ďalšie zvieratká ako ja.",
+    "Raz za čas sa na 20 sekúnd pozri od obrazovky.",
+    "Opýtaj sa SMARTY, ak nevieš, ako niečo funguje.",
+    "Učitelia si môžu vybrať režim, ktorý sedí triede.",
+    "Dobre sa dnes vyspi. Oddýchnutý mozog sa učí rýchlejšie."
+  ],
+  "challenges": [
+    { "id": "c1", "q": "Koľko nôh má pavúk?", "options": ["6", "8", "10"], "correct": 1 },
+    { "id": "c2", "q": "Ktorá planéta je najbližšie k Slnku?", "options": ["Venuša", "Mars", "Merkúr"], "correct": 2 },
+    { "id": "c3", "q": "Koľko je 7 x 6?", "options": ["42", "36", "48"], "correct": 0 },
+    { "id": "c4", "q": "Ktoré zviera je cicavec?", "options": ["Žralok", "Delfín", "Losos"], "correct": 1 },
+    { "id": "c5", "q": "Koľko minút má jedna hodina?", "options": ["30", "100", "60"], "correct": 2 },
+    { "id": "c6", "q": "Čo potrebujú rastliny, aby zo svetla vytvorili potravu?", "options": ["Slnečné svetlo", "Cukor", "Soľ"], "correct": 0 },
+    { "id": "c7", "q": "Ktorý oceán je najväčší?", "options": ["Atlantický", "Tichý", "Indický"], "correct": 1 },
+    { "id": "c8", "q": "Koľko je 100 - 37?", "options": ["73", "67", "63"], "correct": 2 }
+  ]
+}

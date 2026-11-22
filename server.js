@@ -16,6 +16,7 @@ const { Pool } = require('pg');
 const { createEduRouter } = require('./lib/edu-routes');
 const { createSessionsRouter } = require('./lib/routes/sessions');
 const { synthesizeSpeech } = require('./lib/tts-providers');
+const { createPetsRouter } = require('./lib/routes/pets');
 const { createSmartaRouter, createDailyCounter: createSmartaDailyCounter } = require('./lib/routes/smarta');
 const { createRateLimiter } = require('./lib/simple-rate-limit');
 const { validateDurationGate } = require('./lib/reward-validation');
@@ -2526,6 +2527,13 @@ const sessionsRouter = createSessionsRouter({
 	sweepOnRequestMs: process.env.VERCEL ? 60 * 1000 : 0,
 });
 app.use('/api/sessions', sessionsRouter);
+// Phase 9: roaming-pet challenge rewards (lib/routes/pets.js).
+app.use('/api/pets', createPetsRouter({
+	coinApiReady,
+	respondCoinApiDisabled,
+	requireSupabaseUser,
+	getPool: () => coinsDbPool,
+}));
 // Phase 6: expire abandoned sessions and refund coins_paid.
 app.locals.sweepExpiredSessions = sessionsRouter.sweepExpired;
 app.locals.resetSessionSweepClock = sessionsRouter.resetSweepClock;
