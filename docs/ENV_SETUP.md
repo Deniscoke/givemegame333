@@ -46,6 +46,7 @@ nevkladaj do frontendu):
 | `SMARTA_CHAT_DAILY_CAP` | Voliteľné. Denný limit AI správ na používateľa (predvolene 40). Počíta sa v pamäti inštancie. |
 | `ELEVENLABS_API_KEY` | Voliteľné. Prémiový hlas ElevenLabs. Potrebuje aj `ELEVENLABS_VOICE_ID`. |
 | `ELEVENLABS_VOICE_ID` | Voliteľné. ID hlasu (len písmená a čísla). |
+| `TTS_DAILY_CHAR_CAP` | Voliteľné. Koľko znakov prémiového hlasu môže jeden používateľ prečítať za deň (predvolené 20000). Potom sa použije hlas prehliadača. |
 | `ELEVENLABS_MODEL_ID` | Voliteľné. Predvolene `eleven_multilingual_v2`. |
 | `OPENAI_TTS_MODEL` | Voliteľné. Predvolene `gpt-4o-mini-tts`. |
 

@@ -248,7 +248,7 @@ const Narrator = (() => {
 							}
 						} else if (res.status === 401 || res.status === 403) {
 							rememberTtsRefusal();
-						} else if (res.status === 502 || res.status === 503) {
+						} else if (res.status === 429 || res.status === 502 || res.status === 503) {
 							premiumDisabledInPage = true;
 						}
 					}

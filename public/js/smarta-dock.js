@@ -137,6 +137,8 @@
 	let settings = normalizeSettings(null);
 	const history = [];
 	let busy = false;
+	// A fact being read aloud must not block the chat (speech can take 20 s+).
+	let factBusy = false;
 	let proNoteShown = false;
 	let resizeObs = null;
 
@@ -365,8 +367,8 @@
 	}
 
 	async function tellFact() {
-		if (busy || !root.Narrator?.tellFact) return;
-		busy = true;
+		if (factBusy || !root.Narrator?.tellFact) return;
+		factBusy = true;
 		const btn = q('#smarta-fact');
 		btn.disabled = true;
 		const pending = addMessage('bot', t('smarta_chat_thinking'), 'is-pending');
@@ -388,7 +390,7 @@
 			pending.classList.add('is-error');
 			pending.querySelector('.px-smarta__text').textContent = t('smarta_chat_error');
 		} finally {
-			busy = false;
+			factBusy = false;
 			btn.disabled = false;
 		}
 	}
@@ -429,6 +431,8 @@
 		q('#smarta-form').addEventListener('submit', (e) => {
 			e.preventDefault();
 			const input = q('#smarta-input');
+			// Keep the typed question while an answer is still on its way.
+			if (busy || !input.value.trim()) return;
 			const text = input.value;
 			input.value = '';
 			send(text);
@@ -448,7 +452,13 @@
 		// The tab in the right panel can bring a hidden dock back.
 		root.document.addEventListener('click', (e) => {
 			const opener = e.target.closest?.('[data-smarta-open]');
-			if (opener) { e.preventDefault(); setState('open'); }
+			if (opener) {
+				e.preventDefault();
+				// On narrow screens the tools drawer and its backdrop sit above the
+				// dock; close them first so the chat is visible and focusable.
+				try { root.GameUI?.closeTools?.(false); } catch (err) { /* drawer optional */ }
+				setState('open');
+			}
 		});
 	}
 

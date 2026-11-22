@@ -16,7 +16,8 @@ const { Pool } = require('pg');
 const { createEduRouter } = require('./lib/edu-routes');
 const { createSessionsRouter } = require('./lib/routes/sessions');
 const { synthesizeSpeech } = require('./lib/tts-providers');
-const { createSmartaRouter } = require('./lib/routes/smarta');
+const { createSmartaRouter, createDailyCounter: createSmartaDailyCounter } = require('./lib/routes/smarta');
+const { createRateLimiter } = require('./lib/simple-rate-limit');
 const { validateDurationGate } = require('./lib/reward-validation');
 const { createAssessmentRouter } = require('./lib/assessment-routes');
 const { createInstitutionRouter } = require('./lib/institution-routes');
@@ -3718,6 +3719,11 @@ app.use('/api/smarta', createSmartaRouter({
 }));
 
 // ─── TTS (Text-to-Speech) — lib/tts-providers.js: ElevenLabs → OpenAI → Web Speech v prehliadači ───
+// Paid TTS (ElevenLabs/OpenAI) is billed per character: cap requests per
+// minute and characters per day for each user, so a loop cannot run up a bill.
+const ttsLimiter = createRateLimiter({ limit: 10, windowMs: 60 * 1000 });
+const ttsCharsToday = createSmartaDailyCounter();
+const TTS_DAILY_CHAR_CAP = Math.max(1000, parseInt(process.env.TTS_DAILY_CHAR_CAP || '', 10) || 20000);
 app.post('/api/tts', async (req, res) => {
 	const ttsUser = await optionalSupabaseUser(req);
 	if (!ttsUser) {
@@ -3744,6 +3750,16 @@ app.post('/api/tts', async (req, res) => {
 	const body = req.body && typeof req.body === 'object' ? req.body : {};
 	const text = typeof body.text === 'string' ? body.text.trim() : '';
 	if (!text) return res.status(400).json({ error: "Pole 'text' je povinné" });
+	const rl = ttsLimiter.check(ttsUser.id);
+	if (!rl.ok) {
+		res.set('Retry-After', String(rl.retryAfterSec));
+		return res.status(429).json({ error: 'Priveľa požiadaviek na hlas. Použi Web Speech.', code: 'TTS_RATE_LIMIT' });
+	}
+	const chars = Math.min(text.length, 4096);
+	if (ttsCharsToday.used(ttsUser.id) + chars > TTS_DAILY_CHAR_CAP) {
+		return res.status(429).json({ error: 'Denný limit prémiového hlasu je vyčerpaný. Použi Web Speech.', code: 'TTS_DAILY_CAP' });
+	}
+	ttsCharsToday.add(ttsUser.id, chars);
 	try {
 		const out = await synthesizeSpeech({
 			text,
