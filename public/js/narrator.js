@@ -1,5 +1,13 @@
 /* ═══════════════════════════════════════════════════════════════════
-   gIVEMEGAME.IO — Narrator module (extracted from script.js Phase 1)
+   gIVEMEGAME.IO — Narrator module (SMARTA voice + facts, Phase 8)
+
+   The SMARTA dock (js/smarta-dock.js) owns the UI. This module owns:
+     • Narrator.fetchFact(opts)  — one educational fact (AI for Pro, local otherwise)
+     • Narrator.speak(text, opts)— read aloud: premium TTS when the plan allows it,
+                                    otherwise the free Web Speech voice
+     • Narrator.tellFact(opts)   — fetchFact + speak + the "listened" coin reward
+     • Narrator.stop(), Narrator.getStyles(), Narrator.getArea()
+   The right-panel SMARTA tab only holds settings (area and style pickers).
 
    Dependencies (globals resolved at call-time, not load-time):
      • ngrokHeaders()      — defined in script.js (top-level)
@@ -8,14 +16,17 @@
      • window.givemegame_t — set by App.setLang() in script.js
      • window.givemegame_currentLang — set by App.setLang() in script.js
 
+   Speaking state is broadcast as the window event "givemegame:smarta-speaking"
+   ({ detail: { speaking } }) so the dock can animate the portrait.
+
    Exposes: window.Narrator  (also assigned to const Narrator in script.js)
    ═══════════════════════════════════════════════════════════════════ */
 
-// ─── Narrator — AI vypraváč (ako Dračí Hlídka: OpenAI TTS + fallback Web Speech)
-// Denný limit: max 10 použití na Smartu na používateľa
+// Denný limit: max 10 zaujímavostí na Smartu na používateľa (coiny navyše kryje denný strop na serveri).
 const SMARTA_DAILY_LIMIT = 10;
 const SMARTA_USAGE_KEY = 'givemegame_smarta_usage';
 const SMARTA_STYLES_KEY = 'givemegame_smarta_styles';
+const SMARTA_TTS_REFUSED_KEY = 'givemegame_smarta_tts_refused';
 
 async function narratorAuthHeaders() {
 	const headers = { ...(typeof ngrokHeaders === 'function' ? ngrokHeaders() : {}), 'Content-Type': 'application/json' };
@@ -31,23 +42,16 @@ async function narratorAuthHeaders() {
 	return headers;
 }
 
-function getSmartaStylesKey() {
+function narratorUid() {
 	try {
 		const raw = sessionStorage.getItem('givemegame_user');
 		const u = raw ? JSON.parse(raw) : null;
-		const uid = (u?.uid && u.uid !== 'guest') ? u.uid : 'anon';
-		return SMARTA_STYLES_KEY + '_' + uid;
-	} catch { return SMARTA_STYLES_KEY + '_anon'; }
+		return (u?.uid && u.uid !== 'guest') ? u.uid : 'anon';
+	} catch { return 'anon'; }
 }
 
-function getSmartaUsageKey() {
-	try {
-		const raw = sessionStorage.getItem('givemegame_user');
-		const u = raw ? JSON.parse(raw) : null;
-		const uid = (u?.uid && u.uid !== 'guest') ? u.uid : 'anon';
-		return SMARTA_USAGE_KEY + '_' + uid;
-	} catch { return SMARTA_USAGE_KEY + '_anon'; }
-}
+function getSmartaStylesKey() { return SMARTA_STYLES_KEY + '_' + narratorUid(); }
+function getSmartaUsageKey() { return SMARTA_USAGE_KEY + '_' + narratorUid(); }
 
 function getSmartaUsage() {
 	const key = getSmartaUsageKey();
@@ -80,8 +84,11 @@ function canUseSmarta() {
 
 const Narrator = (() => {
 	let speechSynth = null;
-	let awardedForCurrent = false;
-	let usePremiumTts = null; // null = skúsiť, true = OK, false = fallback
+	let currentAudio = null;
+	let currentAudioUrl = null;
+	let safetyTimer = null;
+	let finishCurrent = null; // ends the playback in progress (resolves its promise)
+	let premiumDisabledInPage = false; // 502/503 or a blocked play(): stop trying until reload
 	let localFacts = { sk: [], cs: [], en: [], es: [] };
 	const FALLBACK_FACTS = {
 		sk: ['Medúzy existujú na Zemi už viac ako 650 miliónov rokov – sú staršie ako dinosaury!', 'Včely komunikujú tancom.'],
@@ -90,6 +97,7 @@ const Narrator = (() => {
 		en: ['Jellyfish have existed on Earth for over 650 million years – older than dinosaurs!', 'Bees communicate through dance.'],
 		es: ['Las medusas existen en la Tierra desde hace más de 650 millones de años.', 'Las abejas se comunican bailando.']
 	};
+	const _t = (k, f) => (window.givemegame_t || ((key, fb) => fb || key))(k, f);
 
 	async function loadLocalFacts() {
 		try {
@@ -107,6 +115,12 @@ const Narrator = (() => {
 
 	function getLangBcp47(lang) {
 		return window.ReadAloud ? window.ReadAloud.langToBcp47(lang) : (lang === 'sk' ? 'sk-SK' : lang === 'cs' ? 'cs-CZ' : lang === 'de' ? 'de-DE' : lang === 'es' ? 'es-ES' : lang === 'tr' ? 'tr-TR' : 'en-US');
+	}
+
+	function currentLang() {
+		const langMap = { sk: 'sk', cs: 'cs', de: 'de', en: 'en', es: 'es', tr: 'tr' };
+		const active = document.querySelector('.btn-lang.active')?.dataset?.lang || window.givemegame_currentLang || 'sk';
+		return langMap[active] || 'sk';
 	}
 
 	function getPreferredVoice(lang) {
@@ -134,6 +148,216 @@ const Narrator = (() => {
 		return { rate: 0.95, pitch: 1 };
 	}
 
+	// ─── Premium TTS refusal cache ───
+	// Free users get 401/403 from /api/tts. Remember that for the whole browser
+	// session (per account) so we never ask again.
+	function ttsRefusedKey() { return SMARTA_TTS_REFUSED_KEY + '_' + narratorUid(); }
+	function isTtsRefused() {
+		if (premiumDisabledInPage) return true;
+		try { return sessionStorage.getItem(ttsRefusedKey()) === '1'; } catch { return false; }
+	}
+	function rememberTtsRefusal() {
+		try { sessionStorage.setItem(ttsRefusedKey(), '1'); } catch (e) {}
+	}
+
+	function setSpeaking(on) {
+		try { window.dispatchEvent(new CustomEvent('givemegame:smarta-speaking', { detail: { speaking: !!on } })); } catch (e) {}
+	}
+
+	function cleanupAudio() {
+		if (currentAudio) { try { currentAudio.pause(); } catch (e) {} currentAudio.onended = null; currentAudio.onerror = null; currentAudio = null; }
+		if (currentAudioUrl) { try { URL.revokeObjectURL(currentAudioUrl); } catch (e) {} currentAudioUrl = null; }
+	}
+
+	/** Stop whatever SMARTA is saying right now. */
+	function stop() {
+		if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+		cleanupAudio();
+		if (speechSynth) { try { speechSynth.cancel(); } catch (e) {} }
+		if (finishCurrent) { const f = finishCurrent; finishCurrent = null; f(false); }
+		setSpeaking(false);
+	}
+
+	/**
+	 * Read text aloud.
+	 * @param {string} text
+	 * @param {{ lang?: string, styles?: string[], voice?: 'auto'|'browser', muted?: boolean }} [opts]
+	 *   voice 'browser' never calls the server; muted skips the sound completely.
+	 * @returns {Promise<'premium'|'browser'|'muted'|'none'>} resolves when the speech has ended
+	 */
+	async function speak(text, opts = {}) {
+		const clean = String(text || '').trim();
+		if (!clean) return 'none';
+		if (opts.muted) return 'muted';
+		stop();
+		const lang = opts.lang || currentLang();
+		const styles = Array.isArray(opts.styles) ? opts.styles : [];
+
+		return new Promise(async (resolve) => {
+			let done = false;
+			const finish = (completed, mode) => {
+				if (done) return;
+				done = true;
+				if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+				cleanupAudio();
+				finishCurrent = null;
+				setSpeaking(false);
+				resolve(completed ? mode : 'none');
+			};
+			finishCurrent = (completed) => finish(completed, 'none');
+			const armSafety = () => {
+				if (safetyTimer) clearTimeout(safetyTimer);
+				safetyTimer = setTimeout(() => { safetyTimer = null; finish(true, 'none'); }, Math.max(20000, clean.length * 120));
+			};
+
+			// 1. Premium TTS (Pro plan). Skipped for anonymous users, for the "browser voice"
+			//    setting and after a refusal — no request, so no 401/403 noise.
+			if (opts.voice !== 'browser' && !isTtsRefused()) {
+				try {
+					const headers = await narratorAuthHeaders();
+					if (!headers.Authorization) {
+						// anonymous: nothing to cache, just do not ask
+					} else {
+						const ctrl = new AbortController();
+						const to = setTimeout(() => ctrl.abort(), 8000);
+						const res = await fetch('/api/tts', {
+							method: 'POST',
+							headers,
+							body: JSON.stringify({ text: clean, voice: 'marin', styles }),
+							signal: ctrl.signal
+						});
+						clearTimeout(to);
+						if (done) return;
+						if (res.ok) {
+							const blob = await res.blob();
+							if (done) return;
+							const url = URL.createObjectURL(blob);
+							currentAudioUrl = url;
+							const audio = new Audio(url);
+							currentAudio = audio;
+							audio.onended = () => finish(true, 'premium');
+							audio.onerror = () => finish(true, 'premium');
+							try {
+								armSafety();
+								setSpeaking(true);
+								await audio.play();
+								return;
+							} catch (playErr) {
+								premiumDisabledInPage = true;
+								cleanupAudio();
+							}
+						} else if (res.status === 401 || res.status === 403) {
+							rememberTtsRefusal();
+						} else if (res.status === 502 || res.status === 503) {
+							premiumDisabledInPage = true;
+						}
+					}
+				} catch (err) {
+					if (err?.name === 'AbortError') console.warn('[Narrator] TTS timeout — Web Speech');
+					premiumDisabledInPage = true;
+				}
+			}
+			if (done) return;
+
+			// 2. Free voice: Web Speech API, intonation by style
+			if (speechSynth) {
+				speechSynth.cancel();
+				const u = new SpeechSynthesisUtterance(clean);
+				u.lang = getLangBcp47(lang);
+				const { rate, pitch } = getTtsParamsForStyles(styles);
+				u.rate = rate;
+				u.pitch = pitch;
+				const preferred = getPreferredVoice(lang);
+				if (preferred) u.voice = preferred;
+				armSafety();
+				u.onend = () => finish(true, 'browser');
+				u.onerror = () => finish(true, 'browser');
+				setSpeaking(true);
+				speechSynth.speak(u);
+			} else {
+				finish(false, 'none');
+			}
+		});
+	}
+
+	function getStyles() {
+		return Array.from(document.querySelectorAll('input[name="narrator-style"]:checked')).map(cb => cb.value).filter(Boolean);
+	}
+	function getArea() {
+		return document.getElementById('narrator-area')?.value || '';
+	}
+
+	/**
+	 * One educational fact. Pro users get an AI fact, everyone else a local one.
+	 * @returns {Promise<{ fact: string, source: 'openai'|'local', planGate?: string, limited?: boolean }>}
+	 */
+	async function fetchFact(opts = {}) {
+		const lang = opts.lang || currentLang();
+		const area = opts.area !== undefined ? opts.area : getArea();
+		const styles = Array.isArray(opts.styles) ? opts.styles : getStyles();
+		if (!canUseSmarta()) return { fact: '', source: 'local', limited: true };
+
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 15000);
+		let fact = '';
+		let source = 'local';
+		let planGate;
+		try {
+			let url = `/api/random-fact?lang=${lang}`;
+			if (area) url += `&area=${encodeURIComponent(area)}`;
+			if (styles.length) url += '&style=' + encodeURIComponent(styles.join(','));
+			const res = await fetch(url, { headers: await narratorAuthHeaders(), signal: controller.signal });
+			const data = await res.json().catch(() => ({}));
+			fact = data?.fact || '';
+			source = data?.source === 'openai' ? 'openai' : 'local';
+			planGate = data?.planGate;
+			if (source === 'local' && data?._debug) console.error('[Narrator] OpenAI zlyhalo:', data._debug);
+		} catch (err) {
+			console.warn('[Narrator]', err?.name === 'AbortError' ? 'timeout' : err);
+		} finally {
+			clearTimeout(timeoutId);
+		}
+		if (!fact) { fact = getRandomLocalFact(lang); source = 'local'; }
+		if (!fact) throw new Error('Žiadna zaujímavosť');
+		incrementSmartaUsage();
+		refreshHint();
+		return { fact, source, planGate };
+	}
+
+	/**
+	 * Fact + voice + the one-time "listened" coin reward (the server caps it per day).
+	 * @param {{ lang?: string, area?: string, styles?: string[], voice?: 'auto'|'browser', muted?: boolean,
+	 *           onFact?: (r: { fact: string, source: string }) => void }} [opts]
+	 */
+	async function tellFact(opts = {}) {
+		const styles = Array.isArray(opts.styles) ? opts.styles : getStyles();
+		const r = await fetchFact({ ...opts, styles });
+		if (r.limited) {
+			GameUI.toast(_t('smarta_limit_reached', `Dnes si použil/a Smartu ${SMARTA_DAILY_LIMIT}×. Skús zajtra!`));
+			return r;
+		}
+		if (opts.onFact) opts.onFact(r);
+		const mode = await speak(r.fact, { lang: opts.lang, styles, voice: opts.voice, muted: opts.muted });
+		if (mode === 'premium' || mode === 'browser') {
+			try {
+				// window.Coins is set by coins.js (loads before narrator is ever called)
+				if (window.Coins?.award) window.Coins.award('narrator_fact');
+			} catch (e) { console.warn('[Narrator] Coins.award:', e); }
+			GameUI.toast(`🪙 +50 gIVEMECOIN! ${_t('narrator_listened', 'Vypočutá zaujímavosť!')}`);
+		}
+		return { ...r, spoken: mode };
+	}
+
+	function fillAreas(sel, areas) {
+		sel.textContent = '';
+		for (const a of areas) {
+			const o = document.createElement('option');
+			o.value = a.id;
+			o.textContent = a.name;
+			sel.appendChild(o);
+		}
+	}
+
 	async function loadNarratorAreas() {
 		const sel = document.getElementById('narrator-area');
 		if (!sel) return;
@@ -141,7 +365,7 @@ const Narrator = (() => {
 			const res = await fetch('/api/narrator-areas', { headers: ngrokHeaders() });
 			if (res.ok) {
 				const { areas } = await res.json();
-				sel.innerHTML = areas.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+				fillAreas(sel, areas);
 				return;
 			}
 		} catch (e) { console.warn('[Narrator] Areas API:', e); }
@@ -151,33 +375,25 @@ const Narrator = (() => {
 				const rvp = await rvpRes.json();
 				const areas = [{ id: '', name: 'Náhodná oblasť' }];
 				if (rvp.vzdelavaci_oblasti) {
-					for (const [id, v] of Object.entries(rvp.vzdelavaci_oblasti)) {
-						areas.push({ id, name: v.nazev });
-					}
+					for (const [id, v] of Object.entries(rvp.vzdelavaci_oblasti)) areas.push({ id, name: v.nazev });
 				}
 				if (rvp.kompetence) {
-					for (const [id, v] of Object.entries(rvp.kompetence)) {
-						areas.push({ id: 'komp-' + id, name: v.nazev });
-					}
+					for (const [id, v] of Object.entries(rvp.kompetence)) areas.push({ id: 'komp-' + id, name: v.nazev });
 				}
 				if (rvp.prurezova_temata) {
-					for (const [id, name] of Object.entries(rvp.prurezova_temata)) {
-						areas.push({ id: 'tema-' + id, name });
-					}
+					for (const [id, name] of Object.entries(rvp.prurezova_temata)) areas.push({ id: 'tema-' + id, name });
 				}
-				sel.innerHTML = areas.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+				fillAreas(sel, areas);
 			}
 		} catch (e) { console.warn('[Narrator] Areas fallback:', e); }
 	}
 
+	/** Usage counter ("3/10 dnes") in the settings tab, when it is on the page. */
 	function refreshHint() {
-		const btn = document.getElementById('narrator-bot');
-		const hint = btn?.querySelector('.narrator-hint');
-		if (!hint) return;
-		const _t = window.givemegame_t || ((k, f) => f || k);
+		const el = document.getElementById('smarta-usage-hint');
+		if (!el) return;
 		const u = getSmartaUsage();
-		// Vždy zobrazovať X/10 dnes, aby bol limit viditeľný
-		hint.textContent = (_t('smarta_usage_hint', '{count}/{limit} dnes')).replace('{count}', u.count).replace('{limit}', SMARTA_DAILY_LIMIT);
+		el.textContent = (_t('smarta_usage_hint', '{count}/{limit} dnes')).replace('{count}', u.count).replace('{limit}', SMARTA_DAILY_LIMIT);
 	}
 
 	function loadSmartaStyles() {
@@ -193,11 +409,10 @@ const Narrator = (() => {
 	}
 
 	function saveSmartaStyles() {
-		const checked = Array.from(document.querySelectorAll('input[name="narrator-style"]:checked')).map(cb => cb.value);
+		const checked = getStyles();
 		const key = getSmartaStylesKey();
-		try {
-			localStorage.setItem(key, JSON.stringify(checked));
-		} catch (e) {}
+		try { localStorage.setItem(key, JSON.stringify(checked)); } catch (e) {}
+		try { window.dispatchEvent(new CustomEvent('givemegame:smarta-styles', { detail: { styles: checked } })); } catch (e) {}
 	}
 
 	function init() {
@@ -208,241 +423,14 @@ const Narrator = (() => {
 		}
 		loadLocalFacts();
 		loadNarratorAreas();
-		const btn = document.getElementById('narrator-bot');
-		const hint = btn?.querySelector('.narrator-hint');
-		if (!btn) return;
 		loadSmartaStyles();
 		document.querySelectorAll('input[name="narrator-style"]').forEach(cb => {
 			cb.addEventListener('change', saveSmartaStyles);
 		});
-		btn.addEventListener('click', async (e) => {
-			e.preventDefault();
-			e.stopPropagation();
-			if (hint) hint.textContent = 'Načítavam...';
-			try {
-				await onNarratorClick();
-			} finally {
-				refreshHint();
-			}
-		});
 		refreshHint();
 	}
 
-	let playbackEndTimeout = null;
-	function onPlaybackEnd(btn) {
-		if (playbackEndTimeout) { clearTimeout(playbackEndTimeout); playbackEndTimeout = null; }
-		if (btn) btn.classList.remove('speaking');
-		if (!awardedForCurrent) {
-			awardedForCurrent = true;
-			try {
-				// window.Coins is set by coins.js (loads before narrator is ever called)
-				if (window.Coins?.award) window.Coins.award('narrator_fact');
-			} catch (e) { console.warn('[Narrator] Coins.award:', e); }
-			GameUI.toast(`🪙 +50 gIVEMECOIN! ${(window.givemegame_t || ((k,f)=>f||k))('narrator_listened', 'Vypočutá zaujímavosť!')}`);
-		}
-		refreshHint();
-		btn.disabled = false;
-	}
-	function schedulePlaybackEndSafety(btn, ms = 30000) {
-		if (playbackEndTimeout) clearTimeout(playbackEndTimeout);
-		playbackEndTimeout = setTimeout(() => {
-			playbackEndTimeout = null;
-			if (btn && btn.disabled) {
-				console.warn('[Narrator] Safety timeout — re-enabling button');
-				onPlaybackEnd(btn);
-			}
-		}, ms);
-	}
-
-	async function speakAndAward(fact, lang, btn, factEl, styles = []) {
-		if (factEl) {
-			factEl.classList.remove('narrator-fact-placeholder');
-			factEl.setAttribute('aria-hidden', 'true');
-			factEl.innerHTML = '';
-			const p = document.createElement('p');
-			p.textContent = fact;
-			p.style.margin = '0';
-			p.setAttribute('aria-hidden', 'true');
-			factEl.appendChild(p);
-		}
-
-		// 1. Skúsiť OpenAI TTS (ako Dračí Hlídka) — s intonáciou podľa typu osobnosti
-		if (usePremiumTts !== false) {
-			try {
-				const TTS_TIMEOUT_MS = 8000;
-				const ctrl = new AbortController();
-				const to = setTimeout(() => ctrl.abort(), TTS_TIMEOUT_MS);
-				const res = await fetch('/api/tts', {
-					method: 'POST',
-					headers: await narratorAuthHeaders(),
-					body: JSON.stringify({ text: fact, voice: 'marin', styles: Array.isArray(styles) ? styles : [] }),
-					signal: ctrl.signal
-				});
-				clearTimeout(to);
-				if (res.ok) {
-					const blob = await res.blob();
-					const url = URL.createObjectURL(blob);
-					const audio = new Audio(url);
-					schedulePlaybackEndSafety(btn);
-					audio.onended = () => {
-						URL.revokeObjectURL(url);
-						onPlaybackEnd(btn);
-					};
-					audio.onerror = () => {
-						URL.revokeObjectURL(url);
-						onPlaybackEnd(btn);
-					};
-					try {
-						btn.classList.add('speaking');
-						await audio.play();
-						usePremiumTts = true;
-						return;
-					} catch (playErr) {
-						URL.revokeObjectURL(url);
-						usePremiumTts = false;
-					}
-				} else {
-					if (res.status === 503 || res.status === 502) usePremiumTts = false;
-				}
-			} catch (err) {
-				if (err?.name === 'AbortError') console.warn('[Narrator] TTS timeout — fallback na Web Speech');
-				usePremiumTts = false;
-			}
-		}
-
-		// 2. Fallback: Web Speech API s výberom hlasu — intonácia podľa štýlu
-		if (speechSynth) {
-			speechSynth.cancel();
-			const u = new SpeechSynthesisUtterance(fact);
-			u.lang = getLangBcp47(lang);
-			const { rate, pitch } = getTtsParamsForStyles(styles);
-			u.rate = rate;
-			u.pitch = pitch;
-			const preferred = getPreferredVoice(lang);
-			if (preferred) u.voice = preferred;
-			schedulePlaybackEndSafety(btn);
-			u.onend = () => onPlaybackEnd(btn);
-			u.onerror = () => onPlaybackEnd(btn);
-			btn.classList.add('speaking');
-			speechSynth.speak(u);
-		} else {
-			GameUI.toast((window.givemegame_t || ((k,f)=>f||k))('narrator_no_tts', 'Tento prehliadač nepodporuje hlasový výstup.'));
-			btn.disabled = false;
-		}
-	}
-
-	async function onNarratorClick() {
-		const btn = document.getElementById('narrator-bot');
-		const factEl = document.getElementById('narrator-fact');
-		if (!btn) return;
-
-		if (!canUseSmarta()) {
-			const _t = window.givemegame_t || ((k,f)=>f||k);
-			GameUI.toast(_t('smarta_limit_reached', `Dnes si použil/a Smartu ${SMARTA_DAILY_LIMIT}×. Skús zajtra!`));
-			refreshHint();
-			return;
-		}
-
-		btn.disabled = true;
-		if (factEl) {
-			factEl.classList.add('narrator-fact-placeholder');
-			factEl.innerHTML = '<i class="bi bi-hourglass-split"></i><span>Načítavam...</span>';
-		}
-		awardedForCurrent = false;
-
-		const langMap = { sk: 'sk', cs: 'cs', de: 'de', en: 'en', es: 'es' };
-		const activeLang = document.querySelector('.btn-lang.active')?.dataset?.lang || window.givemegame_currentLang || 'cs';
-		const lang = langMap[activeLang] || 'sk';
-		const areaEl = document.getElementById('narrator-area');
-		const area = areaEl?.value || '';
-		const styleCheckboxes = document.querySelectorAll('input[name="narrator-style"]:checked');
-		const styles = Array.from(styleCheckboxes).map(cb => cb.value).filter(Boolean);
-
-		const TIMEOUT_MS = 15000;
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-		try {
-			let url = `/api/random-fact?lang=${lang}`;
-			if (area) url += `&area=${encodeURIComponent(area)}`;
-			if (styles.length) url += '&style=' + encodeURIComponent(styles.join(','));
-			const res = await fetch(url, {
-				headers: await narratorAuthHeaders(),
-				signal: controller.signal
-			});
-			clearTimeout(timeoutId);
-			const data = await res.json().catch(() => ({}));
-			let fact = data?.fact;
-			const source = data?.source || 'local';
-			if (!fact && !res.ok) {
-				console.warn('[Narrator] API error:', res.status, data?.error);
-			}
-			if (data?.planGate === 'smarta_pro_only' && source === 'local') {
-				const _t = window.givemegame_t || ((k, f) => f || k);
-				GameUI.toast(_t('smarta_pro_hint', 'AI Smarta (OpenAI) je v pláne Pro — používam lokálnu zaujímavosť a Web Speech.'));
-			}
-			if (source === 'local' && data?._debug) {
-				console.error('[Narrator] OpenAI zlyhalo:', data._debug);
-				GameUI.toast('⚠️ AI nedostupná: ' + (data._debug || '').slice(0, 60) + '…');
-			}
-			if (!fact) fact = getRandomLocalFact(lang);
-			if (!fact) throw new Error('Žiadna zaujímavosť');
-
-			incrementSmartaUsage();
-
-			console.log('[Narrator] Zaujímavosť:', source === 'openai' ? '🤖 AI (OpenAI)' : '📋 Lokál');
-
-			// 1. Najprv zobraz text dole (výstup) — používateľ vidí zaujímavosť hneď
-			if (factEl) {
-				factEl.classList.remove('narrator-fact-placeholder');
-				factEl.innerHTML = '';
-				const p = document.createElement('p');
-				p.textContent = fact;
-				p.style.margin = '0';
-				factEl.appendChild(p);
-				const badge = document.createElement('span');
-				badge.className = 'narrator-source-badge';
-				badge.textContent = source === 'openai' ? '🤖 AI' : '📋 Lokál';
-				badge.title = source === 'openai' ? 'Vygenerované OpenAI' : 'Lokálna zaujímavosť';
-				factEl.appendChild(badge);
-			}
-
-			// 2. Potom prečítaj nahlas (TTS alebo Web Speech) — s intonáciou podľa štýlu
-			await speakAndAward(fact, lang, btn, null, styles);
-		} catch (err) {
-			clearTimeout(timeoutId);
-			console.warn('[Narrator]', err);
-			const fact = getRandomLocalFact(lang);
-			if (fact) {
-				incrementSmartaUsage();
-				if (factEl) {
-					factEl.classList.remove('narrator-fact-placeholder');
-					factEl.innerHTML = '';
-					const p = document.createElement('p');
-					p.textContent = fact;
-					p.style.margin = '0';
-					factEl.appendChild(p);
-					const badge = document.createElement('span');
-					badge.className = 'narrator-source-badge';
-					badge.textContent = '📋 Lokál';
-					badge.title = 'Lokálna zaujímavosť (API zlyhalo)';
-					factEl.appendChild(badge);
-				}
-				await speakAndAward(fact, lang, btn, null, styles);
-			} else {
-				if (factEl) {
-					factEl.classList.add('narrator-fact-placeholder');
-					const _t = window.givemegame_t || ((k,f)=>f||k);
-					factEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i><span>' + (err.name === 'AbortError' ? _t('narrator_timeout', 'Čas vypršal – skús znova') : (err.message || 'Chyba')) + '</span>';
-				}
-				const _t = window.givemegame_t || ((k,f)=>f||k);
-				GameUI.toast(err.name === 'AbortError' ? _t('narrator_timeout', 'Čas vypršal – skús znova') : (err.message || 'Chyba načítania.'));
-				btn.disabled = false;
-			}
-		}
-	}
-
-	return { init, refreshHint, loadSmartaStyles };
+	return { init, refreshHint, loadSmartaStyles, speak, stop, fetchFact, tellFact, getStyles, getArea, getRandomLocalFact, isTtsRefused };
 })();
 
 // Expose globally so App can reference it as `const Narrator = window.Narrator`
