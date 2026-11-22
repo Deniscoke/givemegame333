@@ -1,0 +1,32 @@
+{
+  "lang": "sk",
+  "greeting": "Ahoj! Som SMARTA. Poradím ti s hrou alebo ti poviem zaujímavosť.",
+  "fallback": "Tomu celkom nerozumiem. Skús sa opýtať, ako vytvoriť hru, ako získať mince alebo ako sa pripojiť ku kamarátom.",
+  "intents": [
+    { "id": "hello", "keywords": ["ahoj", "cau", "cus", "dobry den", "nazdar"], "reply": "Ahoj! Rada ťa vidím. Chceš vytvoriť hru, alebo ti poviem zaujímavosť?" },
+    { "id": "who", "keywords": ["kto si", "ako sa volas", "co si", "smarta"], "reply": "Som SMARTA, pomocníčka v tejto hre. Vysvetlím ti, ako to tu funguje, a poviem ti zaujímavosti." },
+    { "id": "generate", "keywords": ["vytvor", "generuj", "nova hra", "ako zacat", "zacat", "spustit hru"], "reply": "Vyber si mód, nastav filtre a stlač veľké tlačidlo VYTVORIŤ HRU. Ak nevieš, čo chceš, skús Random drop." },
+    { "id": "modes", "keywords": ["mod", "party", "trieda", "chill", "cirkus", "varenie", "meditacia"], "reply": "Módy menia náladu hry: Párty je veselá, Trieda je do školy, Chill je pokojný, ďalej je Cirkus, Varenie a Meditácia. Vyber si v zozname módov." },
+    { "id": "filters", "keywords": ["filter", "vek", "hracov", "squad", "dlzka", "cas hry", "nastavit"], "reply": "Vo filtroch nastavíš vek, počet hráčov a dĺžku hry. Viac možností nájdeš v Rozšírených možnostiach." },
+    { "id": "coins", "keywords": ["minc", "coin", "givemecoin", "body", "odmen", "zarobit", "ziskat"], "reply": "Mince získaš hraním, časovačom a vypočutím zaujímavosti. Za jeden deň ich môžeš získať len obmedzene, takže si ich rozvrhni." },
+    { "id": "join", "keywords": ["pripoj", "kod", "kamarat", "spolu", "lobby", "session", "multiplayer", "viac hracov"], "reply": "Klikni na Pripojiť sa a napíš kód od kamaráta alebo učiteľa. Hru môžete hrať spolu." },
+    { "id": "timer", "keywords": ["casovac", "timer", "minuty", "stopky"], "reply": "Časovač spustíš pri hre. Keď dobehne, hra sa skončí a môžeš si napísať, čo si sa naučil." },
+    { "id": "library", "keywords": ["kniznic", "ulozit", "ulozene", "moje hry", "historia"], "reply": "Svoje hry nájdeš v Knižnici. Tam si ich môžeš znovu otvoriť." },
+    { "id": "voice", "keywords": ["hlas", "citat", "nahlas", "cita", "zvuk", "ticho", "stisit"], "reply": "Text ti prečítam nahlas. Stačí držať Ctrl a kliknúť na text. Hlas vypneš v nastaveniach SMARTY." },
+    { "id": "font", "keywords": ["pismo", "font", "citatelne", "dyslexia", "velke pismo"], "reply": "V nastaveniach si môžeš zapnúť čitateľné písmo. Je jasnejšie a ľahšie sa číta." },
+    { "id": "language", "keywords": ["jazyk", "anglicky", "slovensky", "cesky", "language"], "reply": "Jazyk zmeníš tlačidlami hore v lište. Hra aj ja sa prepneme." },
+    { "id": "teacher", "keywords": ["ucitel", "skola", "pro", "predplatne", "plan"], "reply": "Učitelia môžu mať plán Pro s viacerými funkciami. Podrobnosti nájdeš v nastaveniach účtu." },
+    { "id": "tour", "keywords": ["navod", "tutorial", "pomoc", "help", "nerozumiem", "poradit", "ako to funguje"], "reply": "Návod môžeš spustiť znova v Pomoci. Ukáže ti všetky dôležité tlačidlá." },
+    { "id": "privacy", "keywords": ["adresa", "telefon", "heslo", "priezvisko", "bydlisko", "kde byvas", "email"], "reply": "Osobné údaje, ako adresu, telefón alebo heslo, nikomu nepíš. Ani mne. Ak si nie si istý, spýtaj sa učiteľa alebo rodiča." },
+    { "id": "fact", "keywords": ["zaujimavost", "fakt", "vedel si", "povedz mi nieco", "nieco zaujimave"], "reply": "Stlač tlačidlo Zaujímavosť a poviem ti jednu novú vec." },
+    { "id": "thanks", "keywords": ["dakujem", "diky", "vdaka", "super"], "reply": "Rado sa stalo! Ak budeš niečo potrebovať, som tu." },
+    { "id": "bye", "keywords": ["dovidenia", "zbohom", "bye", "papa"], "reply": "Maj sa pekne! Príď zas." }
+  ],
+  "tips": [
+    "Tip: Ctrl a klik na text ti ho prečíta nahlas.",
+    "Tip: Skús Random drop, keď nevieš, čo hrať.",
+    "Tip: Pred hraním si nastav vek a počet hráčov.",
+    "Tip: Svoje hry nájdeš v Knižnici.",
+    "Tip: Hru môžeš hrať aj s kamarátmi cez kód."
+  ]
+}

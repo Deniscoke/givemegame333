@@ -16,6 +16,7 @@ const { Pool } = require('pg');
 const { createEduRouter } = require('./lib/edu-routes');
 const { createSessionsRouter } = require('./lib/routes/sessions');
 const { synthesizeSpeech } = require('./lib/tts-providers');
+const { createSmartaRouter } = require('./lib/routes/smarta');
 const { validateDurationGate } = require('./lib/reward-validation');
 const { createAssessmentRouter } = require('./lib/assessment-routes');
 const { createInstitutionRouter } = require('./lib/institution-routes');
@@ -3701,6 +3702,20 @@ app.get('/api/random-fact', async (req, res) => {
 	console.error('[API] random-fact: VŠETKY modely zlyhali, fallback local. Posledná chyba:', lastError);
 	res.json({ fact, source: 'local', _debug: lastError });
 });
+
+// ─── SMARTA chat — lib/routes/smarta.js (Pro: gpt-4o-mini, Free: static replies) ───
+app.use('/api/smarta', createSmartaRouter({
+	optionalUser: optionalSupabaseUser,
+	isPaidUser: async (u) => {
+		if (!coinsDbPool) return false;
+		return hasPaidAccess(await getUserBillingState(coinsDbPool, u.id));
+	},
+	getOpenAI: () => {
+		const k = process.env.OPENAI_API_KEY;
+		if (!openai && k && k !== 'sk-your-openai-api-key-here') openai = createOpenAIClient(k);
+		return openai;
+	}
+}));
 
 // ─── TTS (Text-to-Speech) — lib/tts-providers.js: ElevenLabs → OpenAI → Web Speech v prehliadači ───
 app.post('/api/tts', async (req, res) => {

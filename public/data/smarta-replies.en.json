@@ -1,0 +1,32 @@
+{
+  "lang": "en",
+  "greeting": "Hi! I am SMARTA. I can help you with the game or tell you a fun fact.",
+  "fallback": "I did not quite get that. Try asking how to make a game, how to earn coins or how to join your friends.",
+  "intents": [
+    { "id": "hello", "keywords": ["hello", "hi", "hey", "good morning", "good afternoon"], "reply": "Hi! Nice to see you. Do you want to make a game, or shall I tell you a fun fact?" },
+    { "id": "who", "keywords": ["who are you", "your name", "what are you", "smarta"], "reply": "I am SMARTA, the helper in this game. I explain how things work and tell you fun facts." },
+    { "id": "generate", "keywords": ["create", "generate", "make a game", "new game", "how to start", "start", "begin"], "reply": "Pick a mode, set the filters and press the big CREATE GAME button. If you cannot decide, try Random drop." },
+    { "id": "modes", "keywords": ["mode", "party", "classroom", "chill", "circus", "cooking", "meditation"], "reply": "Modes change the mood of the game: Party is fun, Classroom is for school, Chill is calm. There are also Circus, Cooking and Meditation. Choose one in the mode list." },
+    { "id": "filters", "keywords": ["filter", "age", "players", "squad", "length", "duration", "settings"], "reply": "In the filters you set the age, the number of players and the length of the game. More options are under Advanced options." },
+    { "id": "coins", "keywords": ["coin", "givemecoin", "points", "reward", "earn"], "reply": "You get coins by playing, with the timer and by listening to a fun fact. You can earn only so many per day, so plan them well." },
+    { "id": "join", "keywords": ["join", "code", "friend", "together", "lobby", "session", "multiplayer"], "reply": "Press Join and type the code from your friend or teacher. Then you can play together." },
+    { "id": "timer", "keywords": ["timer", "minutes", "stopwatch", "clock"], "reply": "You start the timer during a game. When it ends, you can write down what you learned." },
+    { "id": "library", "keywords": ["library", "saved", "my games", "history", "save"], "reply": "You can find your games in the Library. Open them again from there." },
+    { "id": "voice", "keywords": ["voice", "read aloud", "read", "sound", "mute", "quiet", "audio"], "reply": "I can read text aloud. Hold Ctrl and click the text. You can turn my voice off in the SMARTA settings." },
+    { "id": "font", "keywords": ["font", "readable", "dyslexia", "big text", "letters"], "reply": "In the settings you can switch on the readable font. It is clearer and easier to read." },
+    { "id": "language", "keywords": ["language", "english", "slovak", "czech", "german", "spanish", "turkish"], "reply": "Change the language with the buttons in the top bar. The game and I will switch too." },
+    { "id": "teacher", "keywords": ["teacher", "school", "pro", "subscription", "plan", "paid"], "reply": "Teachers can get the Pro plan with more features. You can find the details in the account settings." },
+    { "id": "tour", "keywords": ["tutorial", "guide", "help", "do not understand", "how does it work", "tour"], "reply": "You can start the tour again in Help. It shows you all the important buttons." },
+    { "id": "privacy", "keywords": ["address", "phone", "password", "surname", "where do you live", "email"], "reply": "Never type personal details like your address, phone number or password. Not even to me. If you are not sure, ask a teacher or a parent." },
+    { "id": "fact", "keywords": ["fact", "fun fact", "did you know", "tell me something", "something interesting"], "reply": "Press the Fun fact button and I will tell you something new." },
+    { "id": "thanks", "keywords": ["thanks", "thank you", "cheers", "great"], "reply": "You are welcome! I am here if you need anything." },
+    { "id": "bye", "keywords": ["bye", "goodbye", "see you", "see you later"], "reply": "Take care! Come back soon." }
+  ],
+  "tips": [
+    "Tip: Ctrl and click on text reads it aloud.",
+    "Tip: Try Random drop when you do not know what to play.",
+    "Tip: Set the age and the number of players before you play.",
+    "Tip: Your games are in the Library.",
+    "Tip: You can play with friends using a code."
+  ]
+}

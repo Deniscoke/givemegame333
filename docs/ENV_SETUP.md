@@ -31,6 +31,28 @@ Všetky reálne tajomstvá patria mimo repozitára. Šablóna
    zatvorený; sessions sa potom upratujú len pri bežných požiadavkách na
    `/api/sessions` (najviac raz za minútu na inštanciu).
 
+## SMARTA: chat a hlas
+
+SMARTA (pomocníčka v rohu hry) funguje bez akejkoľvek konfigurácie: Free a
+neprihlásení používatelia dostanú lokálne odpovede z `public/data/smarta-replies.*.json`
+(nulové tokeny) a hlas z prehliadača (Web Speech). Pro používatelia dostanú AI chat
+a voliteľne prémiový hlas, ak sú nastavené tieto serverové premenné (nikdy ich
+nevkladaj do frontendu):
+
+| Premenná | Význam |
+|---|---|
+| `OPENAI_API_KEY` | Chat SMARTY (gpt-4o-mini, max 150 tokenov, posledných 6 správ) a hlas OpenAI. Bez neho SMARTA odpovedá lokálne. |
+| `SMARTA_CHAT_MODEL` | Voliteľné. Predvolene `gpt-4o-mini`. |
+| `SMARTA_CHAT_DAILY_CAP` | Voliteľné. Denný limit AI správ na používateľa (predvolene 40). Počíta sa v pamäti inštancie. |
+| `ELEVENLABS_API_KEY` | Voliteľné. Prémiový hlas ElevenLabs. Potrebuje aj `ELEVENLABS_VOICE_ID`. |
+| `ELEVENLABS_VOICE_ID` | Voliteľné. ID hlasu (len písmená a čísla). |
+| `ELEVENLABS_MODEL_ID` | Voliteľné. Predvolene `eleven_multilingual_v2`. |
+| `OPENAI_TTS_MODEL` | Voliteľné. Predvolene `gpt-4o-mini-tts`. |
+
+Poradie hlasu: ElevenLabs (ak je nastavený), potom OpenAI, inak Web Speech v
+prehliadači. Prémiový hlas je len pre plán Pro; audio sa cachuje v pamäti
+(LRU, bez databázy).
+
 ## Databázové migrácie (staging ako prvý)
 
 Runner podporuje všetky aktívne `.sql` súbory po `032` v explicitnom poradí a
