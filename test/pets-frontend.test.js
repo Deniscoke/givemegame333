@@ -14,7 +14,6 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
 const Pets = require('../public/js/pets.js');
-const Bridge = require('../public/js/tamagochi-bridge.js');
 const petsData = require('../public/data/pets.json');
 
 describe('pet species data', () => {
@@ -40,16 +39,16 @@ describe('pet species data', () => {
 describe('unlock thresholds', () => {
 	const sp = petsData.species;
 	it('unlocks species exactly at their level', () => {
-		assert.deepEqual(Pets.unlockedSpecies(sp, 1).map((s) => s.id), ['slime']);
-		assert.deepEqual(Pets.unlockedSpecies(sp, 2).map((s) => s.id), ['slime']);
-		assert.deepEqual(Pets.unlockedSpecies(sp, 3).map((s) => s.id), ['slime', 'cat']);
+		assert.deepEqual(Pets.unlockedSpecies(sp, 1).map((s) => s.id), ['frog']);
+		assert.deepEqual(Pets.unlockedSpecies(sp, 2).map((s) => s.id), ['frog']);
+		assert.deepEqual(Pets.unlockedSpecies(sp, 3).map((s) => s.id), ['frog', 'cat']);
 		assert.equal(Pets.unlockedSpecies(sp, 10).length, sp.length);
 	});
 	it('clamps bad levels (guests, NaN) to level 1', () => {
 		assert.equal(Pets.clampLevel(undefined), 1);
 		assert.equal(Pets.clampLevel(-4), 1);
 		assert.equal(Pets.clampLevel(99), 10);
-		assert.deepEqual(Pets.unlockedSpecies(sp, 'x').map((s) => s.id), ['slime']);
+		assert.deepEqual(Pets.unlockedSpecies(sp, 'x').map((s) => s.id), ['frog']);
 	});
 	it('settings: off shows none, one shows a single pet, all caps at 3', () => {
 		assert.deepEqual(Pets.visibleSpecies(sp, 10, { mode: 'off' }), []);
@@ -120,111 +119,9 @@ describe('pets.js performance rules (static)', () => {
 	});
 });
 
-describe('gIVEMEGOCHI postMessage link', () => {
-	const ORIGIN = 'https://givemegame.test';
-	const frameWin = {};
-	const iframe = { contentWindow: frameWin };
-	const ev = (over) => ({ origin: ORIGIN, source: frameWin, data: { type: 'tamagochi_coin', action: 'levelup' }, ...over });
-
-	it('rejects a foreign origin, a foreign source and a missing iframe', () => {
-		assert.equal(Bridge.isTrustedMessage(ev(), frameWin, ORIGIN), true);
-		assert.equal(Bridge.isTrustedMessage(ev({ origin: 'https://evil.test' }), frameWin, ORIGIN), false);
-		assert.equal(Bridge.isTrustedMessage(ev({ origin: 'null' }), frameWin, ORIGIN), false);
-		assert.equal(Bridge.isTrustedMessage(ev({ source: {} }), frameWin, ORIGIN), false);
-		assert.equal(Bridge.isTrustedMessage(ev(), null, ORIGIN), false);
-		assert.equal(Bridge.isTrustedMessage(ev(), frameWin, 'null'), false);
-	});
-
-	function handler(now) {
-		const awards = [];
-		const h = Bridge.createMessageHandler({ getIframe: () => iframe, origin: ORIGIN, award: (s) => awards.push(s), now });
-		return { h, awards };
-	}
-
-	it('awards only for milestones from the trusted iframe', () => {
-		let t = 0;
-		const { h, awards } = handler(() => t);
-		assert.equal(h(ev({ origin: 'https://evil.test' })), false);
-		assert.equal(h(ev({ source: {} })), false);
-		assert.equal(h(ev({ data: { type: 'tamagochi_coin', action: 'tap' } })), false);
-		assert.equal(h(ev({ data: { type: 'tamagochi_coin' } })), false);
-		assert.equal(h(ev({ data: { type: 'other', action: 'levelup' } })), false);
-		assert.deepEqual(awards, []);
-		assert.equal(h(ev()), true);
-		assert.deepEqual(awards, ['tamagochi_coin']);
-	});
-
-	it('limits a runaway child to one milestone per 2 seconds', () => {
-		let t = 10000;
-		const { h, awards } = handler(() => t);
-		assert.equal(h(ev()), true);
-		t += 500;
-		assert.equal(h(ev({ data: { type: 'tamagochi_coin', action: 'minigame' } })), false);
-		t += Bridge.MIN_GAP_MS;
-		assert.equal(h(ev({ data: { type: 'tamagochi_coin', action: 'minigame' } })), true);
-		assert.equal(awards.length, 2);
-	});
-
-	it('answers pet_requestSync only for the trusted iframe', () => {
-		let synced = 0;
-		const h = Bridge.createMessageHandler({ getIframe: () => iframe, origin: ORIGIN, award() {}, sync: () => { synced++; } });
-		h(ev({ origin: 'https://evil.test', data: { type: 'pet_requestSync' } }));
-		assert.equal(synced, 0);
-		h(ev({ data: { type: 'pet_requestSync' } }));
-		assert.equal(synced, 1);
-	});
-
-	it('buildSync sanitizes the user and level', () => {
-		const m = Bridge.buildSync({ user: { uid: 'abc-123', name: '<img onerror=x> Eva' }, rpgLevel: 99, avatarId: '../x' });
-		assert.equal(m.type, 'pet_syncUser');
-		assert.equal(m.rpgLevel, 10);
-		assert.equal(m.avatarId, null);
-		assert.ok(!/[<>=]/.test(m.user.name));
-		assert.equal(Bridge.buildSync({ user: null, rpgLevel: 0, avatarId: null }).user, null);
-		assert.equal(Bridge.buildSync({ user: { uid: 'guest!' }, rpgLevel: 3 }).user, null);
-	});
-
-	it('the child posts to its exact origin, awards on milestones only, and filters incoming messages', () => {
-		const html = read('public/tamagochi/index.html');
-		assert.ok(!/postMessage\([^)]*'\*'/.test(html), 'no wildcard targetOrigin');
-		assert.match(html, /postMessage\(\{ type: 'tamagochi_coin', action \}, location\.origin\)/);
-		assert.match(html, /event\.origin !== location\.origin \|\| event\.source !== window\.parent/);
-		assert.ok(!/notifyParentCoin/.test(html), 'no per-tap coin');
-		assert.equal((html.match(/notifyParentMilestone\('/g) || []).length, 2);
-		assert.ok(!/tailwind/i.test(html), 'Tailwind CDN removed');
-		assert.match(html, /givemegochi_pet_v1_/);
-	});
-
-	it('the parent page no longer trusts a bare window message for coins', () => {
-		const script = read('public/script.js');
-		assert.ok(!/type === 'tamagochi_coin'/.test(script));
-		const html = read('public/index.html');
-		assert.match(html, /<iframe id="tamagochi-iframe"[^>]*tamagochi\/index\.html\?embed=1/);
-		assert.match(html, /tamagochi-fullscreen[^>]*target="_blank"|target="_blank"[^>]*tamagochi-fullscreen/);
-	});
-});
-
 describe('Phase 9 review fixes', () => {
-	const tama = read('public/tamagochi/index.html');
 	const petsSrc = read('public/js/pets.js');
 	const css = read('public/ui/px-pets.css');
-
-	it('tamagochi: no decay and no save while hidden or off screen; reload when visible again', () => {
-		assert.match(tama, /function gameTick\(\) \{\n\s*if \(unattended\(\)\) return;/);
-		assert.match(tama, /function unattended\(\) \{ return document\.hidden \|\| !inView; \}/);
-		assert.match(tama, /function savePet\(force\) \{\n\s*if \(!force && unattended\(\)\) return;/);
-		assert.match(tama, /addEventListener\('storage'/);
-		assert.match(tama, /function reloadPet\(\)/);
-		assert.match(tama, /else reloadPet\(\)/);
-	});
-
-	it('tamagochi: the full-screen tab reads ?uid= with the same validation as the sync', () => {
-		assert.match(tama, /URLSearchParams\(location\.search\)\.get\('uid'\)/);
-		assert.match(tama, /UID_RE\.test\(urlUid\)/);
-		assert.equal(Bridge.fullScreenHref('abc-123'), 'tamagochi/index.html?uid=abc-123');
-		assert.equal(Bridge.fullScreenHref(null), 'tamagochi/index.html');
-		assert.equal(Bridge.fullScreenHref('a b&x=1'), 'tamagochi/index.html');
-	});
 
 	it('pets stay behind the left panel from 601px and behind the right panel from 1101px', () => {
 		assert.match(css, /@media \(min-width: 601px\) \{\s*aside\.left-panel \{[^}]*z-index: 5/);
@@ -240,5 +137,80 @@ describe('Phase 9 review fixes', () => {
 	it('the tip bubble is clamped between the side panels', () => {
 		assert.match(petsSrc, /e\.min \+ 8/);
 		assert.match(petsSrc, /e\.max - w - 8/);
+	});
+});
+
+describe('pets are animals that hop, fly and can be picked up', () => {
+	const src = read('public/js/pets.js');
+	const css = read('public/ui/px-pets.css');
+	it('no robot or slime; every species has a movement kind', () => {
+		const ids = petsData.species.map((x) => x.id);
+		assert.ok(!ids.includes('robot') && !ids.includes('slime'));
+		for (const x of petsData.species) assert.ok(['walk', 'hop', 'fly'].includes(x.move), x.id);
+		assert.ok(petsData.species.some((x) => x.move === 'fly'));
+		assert.ok(petsData.species.some((x) => x.move === 'hop'));
+	});
+	it('drag: pointer capture, a drop falls onto a visible button or the floor, the click after a drag is ignored', () => {
+		assert.match(src, /setPointerCapture/);
+		assert.match(src, /function findPerch\(/);
+		assert.match(src, /elementFromPoint/);
+		assert.match(src, /if \(!p\.dragged\) onPetClick\(p\)/);
+		assert.match(css, /\.px-pet \{ touch-action: none; \}/);
+	});
+	it('hop, fly and drag animations stop under reduced motion', () => {
+		assert.match(css, /@keyframes px-pet-hop/);
+		assert.match(css, /@keyframes px-pet-flap/);
+		assert.match(css, /prefers-reduced-motion: reduce\) \{[^}]*\}\s*\.px-pet svg, \.px-pet\[data-state\] svg \{ animation: none !important; \}/);
+	});
+	it('the gIVEMEGOCHI tab holds the care panel instead of the iframe', () => {
+		const html = read('public/index.html');
+		assert.match(html, /id="pets-care"/);
+		assert.doesNotMatch(html, /tamagochi-iframe|tamagochi-bridge/);
+	});
+});
+
+describe('pet care (needs, poop, XP)', () => {
+	const H = 3600 * 1000;
+	const T0 = 1_700_000_000_000;
+	it('needs fall over real time and poop appears every few hours', () => {
+		const c = Pets.decayCare(Pets.defaultCare(T0), T0 + 10 * H);
+		assert.ok(c.food < 80 && c.clean < 80 && c.fun < 80);
+		assert.equal(c.poop, 2);
+		assert.equal(c.gone, false);
+	});
+	it('a pet whose needs all reach zero leaves; recall halves its XP', () => {
+		const c = Pets.decayCare({ ...Pets.defaultCare(T0), xp: 90 }, T0 + 200 * H);
+		assert.equal(c.gone, true);
+		assert.equal(Pets.moodOf(c), 0);
+		const back = Pets.recall(c, T0 + 200 * H);
+		assert.equal(back.gone, false);
+		assert.equal(back.xp, 45);
+	});
+	it('care actions raise a need and give XP only when needed', () => {
+		const hungry = { ...Pets.defaultCare(T0), food: 20 };
+		const fed = Pets.applyCare(hungry, 'feed', T0);
+		assert.equal(fed.ok, true);
+		assert.equal(fed.care.food, 55);
+		assert.equal(fed.care.xp, 2);
+		const full = Pets.applyCare({ ...Pets.defaultCare(T0), food: 99 }, 'feed', T0);
+		assert.equal(full.ok, false);
+		assert.equal(full.care.xp, 0);
+		assert.equal(Pets.applyCare(Pets.defaultCare(T0), 'scoop', T0).ok, false);
+		assert.equal(Pets.applyCare(Pets.defaultCare(T0), 'hack', T0).ok, false);
+	});
+	it('riddles give pet XP; levels cap at 10', () => {
+		assert.equal(Pets.addXp(Pets.defaultCare(T0), Pets.RIDDLE_XP).xp, 10);
+		assert.equal(Pets.petLevel(0), 1);
+		assert.equal(Pets.petLevel(Pets.XP_PER_LEVEL), 2);
+		assert.equal(Pets.petLevel(99999), 10);
+	});
+	it('normalizeCare rejects junk and future timestamps', () => {
+		const c = Pets.normalizeCare({ xp: -5, food: 900, poop: 99, t: T0 + H, gone: 'yes' }, T0);
+		assert.deepEqual([c.xp, c.food, c.poop, c.t, c.gone], [0, 100, Pets.MAX_POOP, T0, false]);
+	});
+	it('urgentNeed picks the lowest need under 30, poop first', () => {
+		assert.equal(Pets.urgentNeed({ ...Pets.defaultCare(T0), fun: 10, food: 20 }), 'fun');
+		assert.equal(Pets.urgentNeed({ ...Pets.defaultCare(T0), poop: 2, food: 5 }), 'poop');
+		assert.equal(Pets.urgentNeed(Pets.defaultCare(T0)), null);
 	});
 });

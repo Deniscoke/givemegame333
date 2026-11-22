@@ -1,20 +1,22 @@
 {
-  "version": 1,
+  "version": 2,
   "grid": 10,
   "species": [
     {
-      "id": "slime",
+      "id": "frog",
       "unlockLevel": 1,
-      "nameKey": "pet_name_slime",
-      "palette": { "d": "#1d3b2a", "g": "#5ed66b", "w": "#c9f7cd", "e": "#0b1a10" },
+      "move": "hop",
+      "nameKey": "pet_name_frog",
+      "palette": { "d": "#16331d", "g": "#5ed66b", "l": "#d8f5b0", "w": "#ffffff", "e": "#0b1a10" },
       "frames": [
-        ["..........", "..........", "...dddd...", "..dgggwd..", ".dgwggggd.", ".dgeggegd.", ".dggggggd.", ".dggggggd.", ".dddddddd.", ".........."],
-        ["..........", "..........", "..........", "..........", "..dddddd..", ".dgwggggd.", "dgeggggegd", "dggggggggd", "dddddddddd", ".........."]
+        ["..........", ".dd....dd.", "dwed..dwed", "dggddddggd", "dggggggggd", "dgddddddgd", ".dgllllgd.", ".dgllllgd.", "dgd.dd.dgd", "dd......dd"],
+        [".dd....dd.", "dwed..dwed", "dggddddggd", "dggggggggd", "dgddddddgd", ".dgllllgd.", ".dgllllgd.", ".dgllllgd.", "dgd....dgd", "d........d"]
       ]
     },
     {
       "id": "cat",
       "unlockLevel": 3,
+      "move": "walk",
       "nameKey": "pet_name_cat",
       "palette": { "d": "#3a2410", "o": "#f0a04b", "p": "#f58fa6", "e": "#101010", "w": "#ffe3c0" },
       "frames": [
@@ -23,33 +25,36 @@
       ]
     },
     {
-      "id": "robot",
+      "id": "bunny",
       "unlockLevel": 5,
-      "nameKey": "pet_name_robot",
-      "palette": { "d": "#222c3a", "c": "#aab6c6", "b": "#4aa8ff", "y": "#ffe14a" },
+      "move": "hop",
+      "nameKey": "pet_name_bunny",
+      "palette": { "d": "#3b3346", "w": "#f4f1f8", "p": "#f7a1c0", "e": "#101010" },
       "frames": [
-        ["....bb....", "....dd....", ".dddddddd.", ".dccccccd.", ".dcyccycd.", ".dccccccd.", ".dddddddd.", "..dcbbcd..", "..dd..dd..", ".ddd..ddd."],
-        ["....bb....", "....dd....", ".dddddddd.", ".dccccccd.", ".dcyccycd.", ".dccccccd.", ".dddddddd.", "..dcbbcd..", ".dd....dd.", "ddd....ddd"]
+        ["..dd..dd..", "..dpd.dpd.", "..dpd.dpd.", ".dwwwwwwd.", "dwewwwwewd", "dwwwppwwwd", ".dwwwwwwd.", ".dwwwwwwd.", ".dwd..dwd.", ".dd....dd."],
+        [".dd....dd.", ".dpd..dpd.", "..dpddpd..", ".dwwwwwwd.", "dwewwwwewd", "dwwwppwwwd", ".dwwwwwwd.", ".dwwwwwwd.", "dwd....dwd", "dd......dd"]
       ]
     },
     {
       "id": "owl",
       "unlockLevel": 7,
+      "move": "fly",
       "nameKey": "pet_name_owl",
       "palette": { "d": "#2f1e12", "n": "#9a6a3a", "w": "#f3e6c8", "e": "#101010", "y": "#f2b92c" },
       "frames": [
         [".dd....dd.", ".dnddddnd.", ".dnnnnnnd.", "dnwwnnwwnd", "dnwewwewnd", "dnnnnyynnd", ".dnwwwwnd.", ".dnwnnwnd.", "..dnnnnd..", "..yy..yy.."],
-        [".dd....dd.", ".dnddddnd.", ".dnnnnnnd.", "dnwwnnwwnd", "dnwewwewnd", "dnnnnyynnd", ".dnwwwwnd.", ".dnwnnwnd.", "..dnnnnd..", ".yy....yy."]
+        [".dd....dd.", ".dnddddnd.", "ddnnnnnndd", "dnwwnnwwnd", "dnwewwewnd", "nnnnnyynnn", "d.dnwwnd.d", "..dwnnwd..", "..dnnnnd..", ".yy....yy."]
       ]
     },
     {
       "id": "dragon",
       "unlockLevel": 9,
+      "move": "fly",
       "nameKey": "pet_name_dragon",
       "palette": { "d": "#1c3a1c", "g": "#4cc35a", "r": "#ff6b4a", "y": "#ffd84a", "e": "#101010" },
       "frames": [
         ["...d..d...", "..dgddgd..", ".dggggggd.", ".dgeggegd.", ".dggrrggd.", "..dgggggd.", ".dgyyyygd.", ".dgyyyygd.", "..dg..gd..", ".ddd..ddd."],
-        ["...d..d...", "..dgddgd..", ".dggggggd.", ".dgeggegd.", ".dggrrggd.", "..dgggggd.", ".dgyyyygd.", ".dgyyyygd.", ".dg....gd.", "ddd....ddd"]
+        ["...d..d...", "..dgddgd..", "ddggggggdd", "gdgeggegdg", ".dggrrggd.", "..dgggggd.", ".dgyyyygd.", ".dgyyyygd.", ".dg....gd.", "ddd....ddd"]
       ]
     }
   ]
