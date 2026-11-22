@@ -28,7 +28,8 @@ UPDATE public.rpg_level_perks AS p
     ('late_start',     3000),
     ('mentor_day',     5000)
   ) AS v(perk_key, cost)
- WHERE p.perk_key = v.perk_key;
+ WHERE p.perk_key = v.perk_key
+   AND p.coin_cost = 0;  -- re-running keeps prices an admin has changed
 
 COMMENT ON COLUMN public.rpg_level_perks.coin_cost IS
   'Coins debited per use (outside EDU on use, in EDU on teacher approval).';

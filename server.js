@@ -3361,6 +3361,20 @@ app.post('/api/rpg/perks/:key/use', async (req, res) => {
 		let insRows; let balance = null;
 		try {
 			await client.query('BEGIN');
+			// Lock the profile, then re-check the cooldown: two parallel claims would
+			// otherwise both pass the check above and both be charged.
+			await client.query('SELECT 1 FROM public.profiles WHERE id = $1 FOR UPDATE', [user.id]);
+			const { rows: recent } = await client.query(
+				`SELECT 1 FROM public.rpg_perk_uses
+				  WHERE user_id = $1 AND perk_key = $2 AND status IN ('approved', 'auto_approved')
+				    AND COALESCE(decided_at, claimed_at) > now() - make_interval(hours => $3)
+				  LIMIT 1`,
+				[user.id, perkKey, perk.cooldown_hours]
+			);
+			if (recent.length) {
+				await client.query('ROLLBACK');
+				return res.status(429).json({ error: 'Cooldown beží — skús to neskôr.', code: 'COOLDOWN_ACTIVE' });
+			}
 			({ rows: insRows } = await client.query(
 				`INSERT INTO public.rpg_perk_uses (user_id, perk_key, status, school_id, decided_at)
 				 VALUES ($1, $2, $3, $4, CASE WHEN $3 = 'auto_approved' THEN now() ELSE NULL END)

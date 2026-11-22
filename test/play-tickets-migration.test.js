@@ -57,8 +57,8 @@ describe('039 play tickets, reflections, stat XP', () => {
 		assert.ok(SUPPORTED_MIGRATION_ORDER.includes('039_play_tickets_and_stat_xp.sql'));
 		const runner = read('scripts/run-supabase-migrations.js');
 		assert.equal((runner.match(/'039_play_tickets_and_stat_xp\.sql'/g) || []).length, 2);
-		assert.match(runner, /legacy-016-to-0(39|40|41)/);
-		assert.match(read('docs/ENV_SETUP.md'), /legacy-016-to-0(39|40|41)/);
+		assert.match(runner, /legacy-016-to-0(39|40|41|42)/);
+		assert.match(read('docs/ENV_SETUP.md'), /legacy-016-to-0(39|40|41|42)/);
 	});
 });
 
