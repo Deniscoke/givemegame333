@@ -336,6 +336,7 @@ const RpgScreen = (() => {
             <p class="rpg-perks-intro">
               Každý level ti odomkne jeden reálny benefit v škole. Klikni <b>Použiť</b> — ak si v škole
               registrovaný v gIVEMEGAMEEDU, žiadosť pôjde učiteľovi na schválenie. Mimo EDU sa uplatní hneď.
+              <span class="rpg-perks-deal">🤝 Odmeny platia, len ak s nimi súhlasí tvoj učiteľ. Dohodni sa s ním vopred, ktoré odmeny u vás platia.</span>
               <br><span style="opacity:.7">Tvoj level: <b>Lv ${userLevel}</b></span>
             </p>
             <div class="rpg-perks-grid">${rows}</div>
