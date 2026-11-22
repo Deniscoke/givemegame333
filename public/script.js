@@ -856,9 +856,8 @@ const App = (() => {
 		// Přepni CSS třídu na body
 		MODES.forEach(m => document.body.classList.remove(`mode-${m}`));
 		document.body.classList.add(`mode-${mode}`);
-		// data-mode drives the per-mode pixel decoration (public/js/mode-decor.js)
+		// data-mode drives per-mode styling (CSS body[data-mode])
 		document.body.dataset.mode = mode;
-		window.ModeDecor?.set?.(mode);
 
 		// Přepni aktivní tlačítko
 		document.querySelectorAll('.btn-mode').forEach(btn => {
@@ -2199,7 +2198,7 @@ window.addEventListener('message', (e) => {
 			window.location.href = '/login.html';
 		}
 	}
-	// tamagochi_coin / pet_requestSync: handled with origin + source checks in js/tamagochi-bridge.js
+	// The gIVEMEGOCHI iframe was replaced by the pet care panel (js/pets.js); no window messages pay coins.
 });
 
 // ─── Spuštění ───

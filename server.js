@@ -86,7 +86,7 @@ const {
 	cacheControlForPath,
 } = require('./lib/ai-guard');
 const { validateCoinLog, validateDonation, STARTER_GRANT_COINS } = require('./lib/coin-log-policy');
-const { applyCoinLogEntry, grantStarterCoins, applyRobotChallenge, applyDonation } = require('./lib/coin-ledger');
+const { applyCoinLogEntry, grantStarterCoins, applyRobotChallenge, applyDonation, applyPerkCharge } = require('./lib/coin-ledger');
 const PlayTickets = require('./lib/play-tickets');
 const { GAME_COMPETENCY_TO_STAT, getAttributeManifest } = require('./lib/attribute-map');
 const FilterPresets = require('./lib/filter-presets');
@@ -3233,13 +3233,13 @@ app.get('/api/rpg/perks', async (req, res) => {
 
 	try {
 		const { rows: profRows } = await queryCoinsDb(
-			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
+			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp, COALESCE(coins, 0)::int AS coins FROM public.profiles WHERE id = $1', [user.id]
 		);
 		const tier = await getEffectiveTier(coinsDbPool, user.id).catch(() => 'free');
 		const { level } = applyLevelCap(computeRpgLevel(profRows[0]?.rpg_xp || 0), tier);
 
 		const { rows: perks } = await queryCoinsDb(
-			`SELECT level, perk_key, icon, title, description, cooldown_hours, duration_minutes
+			`SELECT level, perk_key, icon, title, description, cooldown_hours, duration_minutes, coin_cost
 			 FROM public.rpg_level_perks ORDER BY level ASC`
 		);
 
@@ -3268,6 +3268,7 @@ app.get('/api/rpg/perks', async (req, res) => {
 				description: p.description,
 				cooldown_hours: p.cooldown_hours,
 				duration_minutes: p.duration_minutes,
+				coin_cost: p.coin_cost || 0,
 				unlocked: level >= p.level,
 				pending: u?.status === 'pending',
 				cooldown_left_ms: cooldownLeftMs,
@@ -3276,7 +3277,7 @@ app.get('/api/rpg/perks', async (req, res) => {
 			};
 		});
 
-		res.json({ user_level: level, perks: items });
+		res.json({ user_level: level, coins: profRows[0]?.coins || 0, perks: items });
 	} catch (err) {
 		console.error('[Perks] GET failed:', err.message);
 		res.status(500).json({ error: 'Nepodarilo sa načítať odmeny', code: 'PERKS_FETCH_ERROR' });
@@ -3294,17 +3295,25 @@ app.post('/api/rpg/perks/:key/use', async (req, res) => {
 
 	try {
 		const { rows: perkRows } = await queryCoinsDb(
-			`SELECT level, perk_key, title, cooldown_hours FROM public.rpg_level_perks WHERE perk_key = $1`,
+			`SELECT level, perk_key, title, cooldown_hours, coin_cost FROM public.rpg_level_perks WHERE perk_key = $1`,
 			[perkKey]
 		);
 		if (!perkRows.length) return res.status(404).json({ error: 'Perk neexistuje', code: 'PERK_NOT_FOUND' });
 		const perk = perkRows[0];
 
 		const { rows: profRows } = await queryCoinsDb(
-			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp FROM public.profiles WHERE id = $1', [user.id]
+			'SELECT COALESCE(rpg_xp, 0)::int AS rpg_xp, COALESCE(coins, 0)::int AS coins FROM public.profiles WHERE id = $1', [user.id]
 		);
 		const tier = await getEffectiveTier(coinsDbPool, user.id).catch(() => 'free');
 		const { level } = applyLevelCap(computeRpgLevel(profRows[0]?.rpg_xp || 0), tier);
+		const cost = perk.coin_cost || 0;
+		// Early, friendly check; the debit below re-checks under a row lock.
+		if ((profRows[0]?.coins || 0) < cost) {
+			return res.status(402).json({
+				error: `Táto odmena stojí ${cost} mincí. Máš ${profRows[0]?.coins || 0}.`,
+				code: 'INSUFFICIENT_COINS', required: cost, balance: profRows[0]?.coins || 0
+			});
+		}
 		if (level < perk.level) {
 			return res.status(403).json({
 				error: `Perk sa odomkne na leveli ${perk.level}. Máš ${level}.`,
@@ -3346,19 +3355,59 @@ app.post('/api/rpg/perks/:key/use', async (req, res) => {
 		const initialStatus = inEduSchool ? 'pending' : 'auto_approved';
 		const schoolId = membership?.school_id || null;
 
-		const { rows: insRows } = await queryCoinsDb(
-			`INSERT INTO public.rpg_perk_uses (user_id, perk_key, status, school_id, decided_at)
-			 VALUES ($1, $2, $3, $4, CASE WHEN $3 = 'auto_approved' THEN now() ELSE NULL END)
-			 RETURNING id, status, claimed_at, decided_at`,
-			[user.id, perkKey, initialStatus, schoolId]
-		);
+		// The claim row and (outside EDU) the debit commit together: a failed
+		// debit leaves no free claim behind. In EDU the teacher's approval debits.
+		const client = await coinsDbPool.connect();
+		let insRows; let balance = null;
+		try {
+			await client.query('BEGIN');
+			// Lock the profile, then re-check the cooldown: two parallel claims would
+			// otherwise both pass the check above and both be charged.
+			await client.query('SELECT 1 FROM public.profiles WHERE id = $1 FOR UPDATE', [user.id]);
+			const { rows: recent } = await client.query(
+				`SELECT 1 FROM public.rpg_perk_uses
+				  WHERE user_id = $1 AND perk_key = $2 AND status IN ('approved', 'auto_approved')
+				    AND COALESCE(decided_at, claimed_at) > now() - make_interval(hours => $3)
+				  LIMIT 1`,
+				[user.id, perkKey, perk.cooldown_hours]
+			);
+			if (recent.length) {
+				await client.query('ROLLBACK');
+				return res.status(429).json({ error: 'Cooldown beží — skús to neskôr.', code: 'COOLDOWN_ACTIVE' });
+			}
+			({ rows: insRows } = await client.query(
+				`INSERT INTO public.rpg_perk_uses (user_id, perk_key, status, school_id, decided_at)
+				 VALUES ($1, $2, $3, $4, CASE WHEN $3 = 'auto_approved' THEN now() ELSE NULL END)
+				 RETURNING id, status, claimed_at, decided_at`,
+				[user.id, perkKey, initialStatus, schoolId]
+			));
+			if (initialStatus === 'auto_approved') {
+				const charge = await applyPerkCharge(client, { userId: user.id, claimId: insRows[0].id, perkKey, cost });
+				if (charge.status !== 'ok') {
+					await client.query('ROLLBACK');
+					return res.status(402).json({
+						error: `Táto odmena stojí ${cost} mincí.`,
+						code: 'INSUFFICIENT_COINS', required: cost, balance: charge.balance ?? 0
+					});
+				}
+				balance = charge.balance;
+			}
+			await client.query('COMMIT');
+		} catch (txErr) {
+			try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ }
+			throw txErr;
+		} finally {
+			client.release();
+		}
 
 		res.json({
 			ok: true,
 			claim_id: insRows[0].id,
 			status: insRows[0].status,
 			needs_approval: initialStatus === 'pending',
-			perk_title: perk.title
+			perk_title: perk.title,
+			coin_cost: cost,
+			balance
 		});
 	} catch (err) {
 		// M6: the partial unique index (migration 036) rejects a second
@@ -3425,17 +3474,44 @@ app.post('/api/edu/perk-requests/:id/decide', async (req, res) => {
 		}
 
 		const newStatus = decision === 'approve' ? 'approved' : 'rejected';
-		const { rows } = await queryCoinsDb(
-			`UPDATE public.rpg_perk_uses
-			    SET status = $1, decided_by = $2, decided_at = now(), teacher_note = $3
-			  WHERE id = $4 AND school_id = $5 AND status = 'pending'
-			  RETURNING id, user_id, perk_key, status, decided_at`,
-			[newStatus, user.id, teacherNote, claimId, membership.school_id]
-		);
-		if (!rows.length) {
-			return res.status(404).json({ error: 'Žiadosť nenájdená alebo už rozhodnutá', code: 'NOT_FOUND' });
+		const client = await coinsDbPool.connect();
+		try {
+			await client.query('BEGIN');
+			const { rows } = await client.query(
+				`UPDATE public.rpg_perk_uses
+				    SET status = $1, decided_by = $2, decided_at = now(), teacher_note = $3
+				  WHERE id = $4 AND school_id = $5 AND status = 'pending'
+				  RETURNING id, user_id, perk_key, status, decided_at`,
+				[newStatus, user.id, teacherNote, claimId, membership.school_id]
+			);
+			if (!rows.length) {
+				await client.query('ROLLBACK');
+				return res.status(404).json({ error: 'Žiadosť nenájdená alebo už rozhodnutá', code: 'NOT_FOUND' });
+			}
+			let charged = 0;
+			if (newStatus === 'approved') {
+				const { rows: perkRows } = await client.query(
+					'SELECT coin_cost FROM public.rpg_level_perks WHERE perk_key = $1', [rows[0].perk_key]
+				);
+				const cost = perkRows[0]?.coin_cost || 0;
+				const charge = await applyPerkCharge(client, { userId: rows[0].user_id, claimId, perkKey: rows[0].perk_key, cost });
+				if (charge.status !== 'ok') {
+					await client.query('ROLLBACK');
+					return res.status(409).json({
+						error: `Žiak už nemá dosť mincí (${cost}). Žiadosť ostáva čakať, môžeš ju zamietnuť.`,
+						code: 'STUDENT_INSUFFICIENT_COINS', required: cost
+					});
+				}
+				charged = charge.charged;
+			}
+			await client.query('COMMIT');
+			res.json({ ok: true, claim: { ...rows[0], coins_charged: charged } });
+		} catch (txErr) {
+			try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ }
+			throw txErr;
+		} finally {
+			client.release();
 		}
-		res.json({ ok: true, claim: rows[0] });
 	} catch (err) {
 		console.error('[Perks] teacher decide failed:', err.message);
 		res.status(500).json({ error: 'Rozhodnutie zlyhalo', code: 'DECIDE_ERROR' });

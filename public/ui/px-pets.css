@@ -54,7 +54,7 @@
 .px-pet[data-state="peek"] { transition-duration: 800ms; transition-timing-function: ease-out; }
 .px-pet:focus-visible { outline: 3px solid var(--focus, #ffd93d); outline-offset: 2px; }
 .px-pet svg { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
-.px-pet[data-dir="l"] svg { transform: scaleX(-1); }
+.px-pet[data-dir="l"] svg { scale: -1 1; }
 .px-pet[data-state="sleep"] svg { opacity: 0.8; }
 .px-pet[data-state="sleep"]::after {
 	content: "z";
@@ -109,6 +109,76 @@
 .px-pets__opt { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .px-pets__select { font: inherit; padding: 4px; }
 
+/* ─── Movement: hop, fly, drag, fall (pets.js sets the data attributes) ── */
+/* The button carries the x/y transform; these animations move only the
+   inner svg, so they never fight the position transition. */
+.px-pet { touch-action: none; }
+.px-pet[data-move="hop"][data-state="walk"] svg { animation: px-pet-hop 0.4s ease-in-out infinite alternate; }
+.px-pet[data-move="walk"][data-state="walk"] svg { animation: px-pet-bob 0.4s steps(2, end) infinite; }
+.px-pet[data-move="fly"][data-state="walk"] { transition-duration: 600ms; transition-timing-function: ease-in-out; }
+.px-pet[data-move="fly"][data-state="walk"] svg { animation: px-pet-flap 0.5s ease-in-out infinite alternate; }
+.px-pet[data-state="idle"] svg { animation: px-pet-breathe 2.4s ease-in-out infinite; }
+.px-pet[data-state="held"] { cursor: grabbing; transition: none; }
+.px-pet[data-state="held"] svg { animation: px-pet-wiggle 0.3s ease-in-out infinite alternate; }
+.px-pet[data-state="fall"] { transition-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+.px-pet[data-land="1"] svg { animation: px-pet-squash 0.25s ease-out; }
+.px-pet[data-happy="1"] svg { animation: px-pet-jump 0.65s ease-out; }
+.px-pet[data-mood="sad"] svg { filter: saturate(0.4) brightness(0.9); }
+.px-pet svg { transform-origin: 50% 100%; }
+
+@keyframes px-pet-hop { from { translate: 0 0; } to { translate: 0 -14px; } }
+@keyframes px-pet-bob { 0% { translate: 0 0; } 50% { translate: 0 -2px; } }
+@keyframes px-pet-flap { from { translate: 0 -4px; rotate: -4deg; } to { translate: 0 4px; rotate: 4deg; } }
+@keyframes px-pet-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.95); } }
+@keyframes px-pet-wiggle { from { rotate: -8deg; } to { rotate: 8deg; } }
+@keyframes px-pet-squash { 0% { transform: scale(1.2, 0.75); } 100% { transform: scale(1, 1); } }
+@keyframes px-pet-jump { 0%, 100% { translate: 0 0; } 40% { translate: 0 -34px; } 70% { translate: 0 0; transform: scale(1.15, 0.85); } }
+
+/* Held or sitting on a button: drawn above the side panels. */
+.px-pets--top { z-index: 950; }
+
+/* Poop on the floor: a small pixel button, click to clean it up. */
+.px-pets__poop {
+	position: absolute;
+	bottom: 8px;
+	width: 20px;
+	height: 16px;
+	padding: 0;
+	border: 0;
+	cursor: pointer;
+	pointer-events: auto;
+	background:
+		linear-gradient(#6b3f1d, #6b3f1d) 8px 0 / 4px 4px no-repeat,
+		linear-gradient(#7d4a22, #7d4a22) 4px 4px / 12px 4px no-repeat,
+		linear-gradient(#6b3f1d, #6b3f1d) 0 8px / 20px 8px no-repeat;
+	image-rendering: pixelated;
+}
+.px-pets__poop:focus-visible { outline: 3px solid var(--focus, #ffd93d); outline-offset: 2px; }
+
+/* ─── Care panel (gIVEMEGOCHI tab) ─────────────────────────────────── */
+.px-care { font-size: 14px; color: var(--text, inherit); }
+.px-care__hint { margin: 0 0 8px; }
+.px-care__tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.px-care__tab {
+	width: 44px; height: 44px; padding: 4px;
+	background: var(--btn-face, #eee);
+	border: 2px solid var(--line, #000);
+	cursor: pointer;
+}
+.px-care__tab[aria-pressed="true"] { background: var(--btn-active, #fff); box-shadow: inset 0 0 0 2px var(--accent, #4f46e5); }
+.px-care__tab svg { width: 100%; height: 100%; display: block; }
+.px-care__tab:focus-visible { outline: 3px solid var(--focus, #ffd93d); outline-offset: 1px; }
+.px-care__name { margin: 0 0 6px; font-weight: 700; }
+.px-care__stat { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 8px; margin-bottom: 6px; }
+.px-care__bar { height: 12px; border: 2px solid var(--line, #000); background: var(--card-bg, #fff); overflow: hidden; }
+.px-care__fill { display: block; height: 100%; background: #3fbf5f; }
+.px-care__fill--low { background: #e5533d; }
+.px-care__poop { margin: 4px 0 8px; }
+.px-care__gone { margin: 8px 0; font-weight: 700; }
+.px-care__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.px-care__actions .px-pets__btn:disabled { opacity: 0.5; cursor: default; }
+
 @media (prefers-reduced-motion: reduce) {
 	.px-pet { transition: none; }
+	.px-pet svg, .px-pet[data-state] svg { animation: none !important; }
 }

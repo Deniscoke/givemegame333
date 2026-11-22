@@ -663,6 +663,12 @@ body.px-v2 #rpg-screen .rpg-coming-soon small {
 	font-size: var(--px-fs-body-sm);
 	letter-spacing: 0;
 }
+/* Perk titles and the intro were light grey on light cards (unreadable in the light theme). */
+body.px-v2 #rpg-screen .rpg-perk-title,
+body.px-v2 #rpg-screen .rpg-perks-intro { color: var(--on-surface); }
+body.px-v2 #rpg-screen .rpg-perk-title { font-weight: 700; }
+body.px-v2 #rpg-screen .rpg-perks-deal { display: block; margin-top: 8px; font-weight: 700; }
+body.px-v2 #rpg-screen .rpg-perk-cost { margin: 0; color: var(--on-surface); font-family: var(--font-body); font-size: var(--px-fs-body-sm); }
 body.px-v2 #rpg-screen .rpg-talent-desc,
 body.px-v2 #rpg-screen .rpg-perk-desc,
 body.px-v2 #rpg-screen .rpg-attr-map-src,

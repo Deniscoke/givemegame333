@@ -19,10 +19,9 @@
 	<link rel="stylesheet" href="/ui/px-motion.css?v=1">
 	<link rel="stylesheet" href="/ui/px-type-floor.css?v=1">
 	<link rel="stylesheet" href="/ui/px-apply.css?v=1">
-	<link rel="stylesheet" href="/ui/px-mode-decor.css?v=1">
 	<link rel="stylesheet" href="/ui/px-tour.css?v=1">
 	<link rel="stylesheet" href="/ui/px-smarta.css?v=1">
-	<link rel="stylesheet" href="/ui/px-pets.css?v=1">
+	<link rel="stylesheet" href="/ui/px-pets.css?v=2">
 	<script>try{if(localStorage.getItem("givemegame_readable_font")==="1")document.documentElement.classList.add("readable-font")}catch(e){}</script>
 </head>
 <body class="mode-party generator-shell px-v2" data-mode="party">
@@ -622,10 +621,7 @@
 				<div id="tool-panel-tamagochi" class="game-tools-panel" role="tabpanel" data-tool-panel="tamagochi" aria-labelledby="tool-tab-tamagochi" hidden>
 				<div class="panel-section tamagochi-section">
 					<label class="panel-label tamagochi-label"><i class="bi bi-heart-pulse"></i> gIVEMEGOCHI</label>
-					<div class="tamagochi-frame-wrap">
-						<iframe id="tamagochi-iframe" class="tamagochi-iframe" src="tamagochi/index.html?embed=1" title="gIVEMEGOCHI" data-i18n-title="tamagochi_iframe_title" loading="lazy" referrerpolicy="no-referrer"></iframe>
-						<a class="tamagochi-fullscreen" href="tamagochi/index.html" target="_blank" rel="noopener" data-i18n="tamagochi_fullscreen">Na celú obrazovku</a>
-					</div>
+					<div id="pets-care" class="px-care"></div>
 					<div id="pets-panel-settings" class="px-pets__panel"></div>
 				</div>
 				</div>
@@ -1004,8 +1000,7 @@
 	<script src="js/px-modal.js?v=1"></script>
 	<script src="js/tour.js?v=1"></script>
 	<script src="js/smarta-dock.js?v=1"></script>
-	<script src="js/pets.js?v=1" defer></script>
-	<script src="js/mode-decor.js?v=1" defer></script>
+	<script src="js/pets.js?v=2" defer></script>
 	<script src="js/game-ui.js?v=17"></script>
 	<script src="js/reflection.js?v=5"></script>
 	<script src="js/session.js?v=14"></script>
@@ -1018,7 +1013,6 @@
 	<script src="js/rpg-screen.js?v=7"></script>
 	<script src="js/rpg-xp-fx.js?v=1"></script>
 	<script src="script.js?v=40"></script>
-	<script src="js/tamagochi-bridge.js?v=1"></script>
 	<script src="cursor-effect.js?v=3"></script>
 
 

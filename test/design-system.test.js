@@ -21,7 +21,7 @@ const { checkAll } = require('../scripts/check-contrast');
 const sprites = require('../scripts/build-px-sprites');
 const typeFloor = require('../scripts/build-px-type-floor');
 
-const PX_FILES = ['px-tokens.css', 'px-components.css', 'px-motion.css', 'px-apply.css', 'px-mode-decor.css', 'px-type-floor.css']
+const PX_FILES = ['px-tokens.css', 'px-components.css', 'px-motion.css', 'px-apply.css', 'px-type-floor.css']
 	.map((f) => `public/ui/${f}`);
 
 describe('tokens and contrast', () => {
@@ -126,7 +126,7 @@ describe('motion', () => {
 		assert.match(guard, /animation-iteration-count:\s*1 !important/);
 		assert.match(guard, /transition-duration:\s*0\.01ms !important/);
 		for (const sel of ['.btn-music.playing', '.btn-generate', '.loading-dice', '.status-indicator', '.coin-icon',
-			'.timer-display.timer-critical', '.robot-result-emoji.success', '.rpg-avatar-idle', '.px-decor__sprite']) {
+			'.timer-display.timer-critical', '.robot-result-emoji.success', '.rpg-avatar-idle']) {
 			assert.ok(guard.includes(sel), sel);
 		}
 	});
@@ -148,78 +148,17 @@ describe('motion', () => {
 	});
 });
 
-describe('mode decoration', () => {
-	const css = stripComments(read('public/ui/px-mode-decor.css'));
-	const js = read('public/js/mode-decor.js');
-
-	test('no canvas, requestAnimationFrame or timers', () => {
-		assert.doesNotMatch(stripComments(js), /canvas|requestAnimationFrame|setInterval|setTimeout/);
-	});
-
-	test('sprites animate with steps() at 4 fps or less', () => {
-		const frames = Number(/steps\((\d+)/.exec(css)[1]);
-		const durations = [...css.matchAll(/(?:animation-duration:\s*|animation:\s*px-decor-frames\s+)([\d.]+)s/g)].map((m) => Number(m[1]));
-		assert.ok(durations.length >= 3);
-		for (const d of durations) assert.ok(frames / d <= 4, `${frames} frames / ${d}s`);
-		assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.px-decor__sprite\s*\{\s*animation:\s*none !important/);
-	});
-
-	test('every mode has sprites a and b, and the files exist', () => {
-		for (const mode of ['party', 'classroom', 'reflection', 'circus', 'cooking', 'meditation']) {
-			for (const slot of ['a', 'b']) assert.match(css, new RegExp(`body\\[data-mode="${mode}"\\] \\.px-decor__sprite--${slot}`), `${mode} ${slot}`);
-		}
-		for (const m of css.matchAll(/url\("\/ui\/decor\/([\w-]+\.svg)"\)/g)) {
-			assert.ok(fs.existsSync(path.join(ROOT, 'public', 'ui', 'decor', m[1])), m[1]);
-		}
-	});
-
-	test('ModeDecor mounts one hidden container, follows the mode and pauses in hidden tabs', () => {
-		const listeners = {};
-		const make = (tag) => {
-			const el = {
-				tagName: tag, children: [], className: '', attrs: {}, isConnected: true,
-				classList: { set: new Set(), toggle(c, on) { on ? this.set.add(c) : this.set.delete(c); }, contains(c) { return this.set.has(c); } },
-				setAttribute(k, v) { this.attrs[k] = v; },
-				appendChild(c) { this.children.push(c); return c; },
-				insertBefore(c) { this.children.unshift(c); return c; },
-				get firstChild() { return this.children[0] || null; },
-			};
-			return el;
-		};
-		const viewport = make('main');
-		const doc = {
-			readyState: 'complete', hidden: false, body: { dataset: {} },
-			getElementById: (id) => (id === 'game-viewport' ? viewport : null),
-			createElement: make,
-			addEventListener: (t, fn) => { listeners[t] = fn; },
-		};
-		const ctx = vm.createContext({ document: doc });
-		ctx.window = ctx;
-		vm.runInContext(js, ctx);
-		assert.equal(viewport.children.length, 1);
-		const box = viewport.children[0];
-		assert.equal(box.attrs['aria-hidden'], 'true');
-		assert.equal(box.children.length, 3);
-		assert.equal(ctx.ModeDecor.set('cooking'), true);
-		assert.equal(doc.body.dataset.mode, 'cooking');
-		assert.equal(ctx.ModeDecor.set('nope'), false);
-		assert.equal(viewport.children.length, 1, 'mounted once');
-		doc.hidden = true;
-		listeners.visibilitychange();
-		assert.equal(box.classList.contains('px-decor--paused'), true);
-	});
-
-	test('setMode keeps body[data-mode] and the decoration in sync', () => {
+describe('index.html applies the design system', () => {
+	test('body[data-mode] follows the mode; the corner decoration is gone', () => {
 		const script = read('public/script.js');
 		assert.match(script, /document\.body\.dataset\.mode = mode;/);
-		assert.match(script, /window\.ModeDecor\?\.set\?\.\(mode\)/);
 		assert.match(html, /<body class="[^"]*px-v2[^"]*" data-mode="party">/);
+		assert.doesNotMatch(html, /mode-decor/);
 	});
-});
 
-describe('index.html applies the design system', () => {
+
 	test('load order: tokens, components, motion, type floor, screen layer; no duplicate Press Start import', () => {
-		const order = ['/ui/px-tokens.css', '/ui/px-components.css', '/ui/px-motion.css', '/ui/px-type-floor.css', '/ui/px-apply.css', '/ui/px-mode-decor.css']
+		const order = ['/ui/px-tokens.css', '/ui/px-components.css', '/ui/px-motion.css', '/ui/px-type-floor.css', '/ui/px-apply.css']
 			.map((href) => html.indexOf(href));
 		order.forEach((pos, i) => {
 			assert.ok(pos > 0, `link ${i} present`);
